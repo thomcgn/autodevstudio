@@ -97,3 +97,22 @@ small{font-size:11px}
 .modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:22px}
 @media(max-width:900px){.workspace{grid-template-columns:205px minmax(0,1fr)}.content{padding:17px}.quick-actions,.run-panel{align-items:flex-start;flex-direction:column}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:660px){.topbar{height:64px;padding:0 12px}.brand small,.version{display:none}.workspace{grid-template-columns:145px minmax(0,1fr)}.sidebar{padding:14px 8px}.content{padding:12px}.tabs{gap:12px}.tabs button{font-size:12px}.metric-grid,.metric-grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}.metric{padding:12px}.metric strong{font-size:17px}.project-heading{align-items:flex-start}.heading-actions button{padding:8px}.sidebar-bottom{font-size:10px}}
+
+
+/* Phase 2.3: compact saved-run browser */
+.history-view{overflow:hidden;gap:16px}
+.history-layout{display:grid;grid-template-columns:minmax(185px,34%) minmax(0,1fr);flex:1;min-height:0;gap:12px}
+.history-list{display:flex;flex-direction:column;gap:8px;overflow:auto;min-height:0;padding-right:4px}
+.history-item{display:flex;flex-direction:column;gap:8px;text-align:left;background:#172135;border:1px solid #2d3b55;min-width:0}
+.history-item.selected{background:#243955;border-color:#76a5ff}
+.history-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.history-item small{color:#91a6c5}
+.outcome{font-size:11px;border-radius:12px;padding:4px 7px;background:#293952;color:#c2d4ef}
+.outcome.success{color:#9de1b6;background:#204332}
+.outcome.failed{color:#ffc2c2;background:#512b36}
+.outcome.interrupted{color:#f8d49a;background:#4e3c29}
+.outcome.running{color:#a2c5ff;background:#274066}
+.history-detail{min-width:0;min-height:0;display:flex;flex-direction:column;background:#121b2c;border:1px solid #2c3c54;border-radius:10px;overflow:hidden}
+.history-detail-head{display:flex;justify-content:space-between;gap:8px;padding:12px 15px;border-bottom:1px solid #2c3c54;font-size:12px}
+.saved-log{white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;flex:1;min-height:0;background:#090f19;color:#bacbe2;padding:15px;margin:0;font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}
+@media(max-width:760px){.history-layout{grid-template-columns:1fr}.history-list{max-height:160px}.history-detail{min-height:220px}.tabs{gap:9px}}
