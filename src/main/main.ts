@@ -5,10 +5,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 interface Project { id: string; name: string; path: string }
-type RunMode = 'status' | 'dry-run';
+type RunMode = 'status' | 'dry-run' | 'execute';
 let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
 let activeRun: string | null = null;
+let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
 const registry = (): string => path.join(app.getPath('userData'), 'projects.json');
 function projects(): Project[] {
@@ -124,30 +125,38 @@ app.whenReady().then(() => {
     persist(projects().filter(p => p.id !== id));
     return true;
   });
-  ipcMain.handle('run:start', (_event, id: string, mode: RunMode) => {
+  ipcMain.handle('run:start', (_event, id: string, mode: RunMode, approval?: string) => {
     if (active) throw new Error('A run is already active');
-    if (mode !== 'status' && mode !== 'dry-run') throw new Error('Only read-only and dry-run operations are allowed in Phase 1');
+    if (mode !== 'status' && mode !== 'dry-run' && mode !== 'execute') throw new Error('Unsupported run mode');
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
+    // Independent main-process check: renderer/UI consent alone is never sufficient.
+    if (mode === 'execute' && approval !== `EXECUTE ${project.name}`) {
+      throw new Error('Explicit project-specific execution approval required');
+    }
     const bin = path.join(project.path, 'node_modules', '.bin', 'tsx');
     if (!fs.existsSync(bin)) throw new Error('Missing local tsx. Run npm install in the project.');
     const runId = randomUUID();
-    const args = mode === 'status' ? [path.join(project.path, 'src/autodev/cli.ts'), 'status'] : [path.join(project.path, 'src/autodev/cli.ts'), 'run', '--dry-run'];
+    const script = path.join(project.path, 'src/autodev/cli.ts');
+    const args = mode === 'status' ? [script, 'status'] : [script, 'run', mode === 'execute' ? '--execute' : '--dry-run'];
     const child = spawn(bin, args, { cwd: project.path, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', env: { ...process.env, FORCE_COLOR: '0' } });
     active = child;
     activeRun = `${id}:${runId}`;
-    send('run:event', { runId, type: 'start', mode, project: project.name, time: Date.now() });
+    activeInfo = { runId, projectId: id, mode, startedAt: Date.now() };
+    send('run:event', { runId, type: 'start', mode, project: project.name, time: activeInfo.startedAt });
     child.stdout?.on('data', (chunk: Buffer) => send('run:event', { runId, type: 'stdout', message: chunk.toString(), time: Date.now() }));
     child.stderr?.on('data', (chunk: Buffer) => send('run:event', { runId, type: 'stderr', message: chunk.toString(), time: Date.now() }));
     child.on('error', error => send('run:event', { runId, type: 'stderr', message: error.message, time: Date.now() }));
     child.on('close', (code, signal) => {
       if (pendingStop) { clearTimeout(pendingStop); pendingStop = null; }
-      active = null; activeRun = null;
+      if (active === child) { active = null; activeRun = null; activeInfo = null; }
       send('run:event', { runId, type: 'exit', code, signal, time: Date.now() });
     });
     return { runId };
   });
   ipcMain.handle('run:stop', () => { if (!active) return false; terminate(); return true; });
   ipcMain.handle('run:active', () => Boolean(active));
+  ipcMain.handle('run:info', () => activeInfo ? { ...activeInfo } : null);
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
