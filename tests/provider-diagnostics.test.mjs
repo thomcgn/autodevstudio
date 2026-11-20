@@ -19,6 +19,7 @@ test('diagnoses installed Kilo, flags and logged-in gh without invoking a model'
   assert.equal(status.kiloVersion,'kilo 1.2.3');
   assert.equal(status.kiloRunCommandReady,true);
   assert.equal(status.agentCatalogReadable,true);
+  assert.equal(status.agentCatalogProblem,null);
   if (process.platform==='linux') {
     assert.equal(status.sandboxTool,'bwrap');
     assert.equal(status.sandboxToolAvailable,true);
@@ -64,4 +65,32 @@ test('agent inventory and sandbox tool failures do not incorrectly report readin
   assert.equal(status.agentCatalogReadable,false);
   assert.equal(status.sandboxToolAvailable,false);
   assert.ok(!JSON.stringify(status).includes('SECRET'));
+});
+
+test('categorizes catalog timeout without exposing provider messages', async () => {
+  const runner = async (bin,args) => {
+    if (bin==='kilo' && args[0]==='--version') return 'kilo 7.8.27';
+    if (bin==='kilo' && args[0]==='run') return '--auto --agent --model --session';
+    if (bin==='kilo' && args[0]==='agent') {
+      const error = new Error('private token must not be revealed');
+      error.killed = true;
+      throw error;
+    }
+    throw new Error('not installed');
+  };
+  const status=await inspectLocalProviders('/fake',runner);
+  assert.equal(status.agentCatalogProblem,'timeout');
+  assert.equal(status.agentCatalogReadable,false);
+  assert.ok(!JSON.stringify(status).includes('private token'));
+});
+
+test('empty successful agent output is not marked ready',async()=>{
+  const status=await inspectLocalProviders('/fake',async(bin,args)=>{
+    if(bin==='kilo'&&args[0]==='--version')return 'kilo 7';
+    if(bin==='kilo'&&args[0]==='run')return '--auto --agent --model --session';
+    if(bin==='kilo'&&args[0]==='agent')return '  ';
+    throw new Error('missing');
+  });
+  assert.equal(status.agentCatalogReadable,false);
+  assert.equal(status.agentCatalogProblem,'empty-output');
 });
