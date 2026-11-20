@@ -1,4 +1,5 @@
-import { captureGitIdentity, type GitIdentity } from './git-identity.ts';
+import { captureGitIdentity } from './git-identity.ts';
+import type { GitIdentity } from './checkpoint-store.ts';
 
 export type IdentityCapture = (directory: string) => Promise<GitIdentity>;
 
