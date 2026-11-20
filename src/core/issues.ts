@@ -29,8 +29,10 @@ export function parseIssues(json: string): StudioIssue[] {
     let url: URL;
     try { url = new URL(item.url); }
     catch { throw new Error('Invalid GitHub issue URL'); }
+    const segments = url.pathname.split('/').filter(Boolean);
     if (url.protocol !== 'https:' || url.hostname !== 'github.com' ||
-      !/^\\/[^/]+\\/[^/]+\\/issues\\/\\d+$/.test(url.pathname)) {
+      segments.length !== 4 || segments[2] !== 'issues' ||
+      !/^[0-9]+$/.test(segments[3])) {
       throw new Error('Invalid GitHub issue URL');
     }
     const labels = Array.isArray(item.labels) ? item.labels.flatMap(label =>
