@@ -67,7 +67,7 @@ function snapshot(id: string): ControllerSnapshot {
   const phase = cp?.phase;
   const checkpoint = cp && typeof cp.issueNumber === 'number' &&
     (phase === 'builder' || phase === 'reviewer' || phase === 'quality-gates' || phase === 'finalize')
-    ? { issueNumber: cp.issueNumber, phase, reason: typeof cp.reason === 'string' ? cp.reason : 'unknown',
+    ? { issueNumber: cp.issueNumber, phase: phase as ControllerPhase, reason: typeof cp.reason === 'string' ? cp.reason : 'unknown',
         sessionId: typeof cp.sessionId === 'string' ? cp.sessionId : null,
         timestamp: typeof cp.timestamp === 'string' ? cp.timestamp : '' } : null;
   let updatedAt: number | null = null;
@@ -143,7 +143,7 @@ app.whenReady().then(() => {
     active = child;
     activeRun = `${id}:${runId}`;
     activeInfo = { runId, projectId: id, mode, startedAt: Date.now() };
-    send('run:event', { runId, type: 'start', mode, project: project.name, time: activeInfo.startedAt });
+    send('run:event', { runId, type: 'start', mode, project: project.name, projectId: id, time: activeInfo.startedAt });
     child.stdout?.on('data', (chunk: Buffer) => send('run:event', { runId, type: 'stdout', message: chunk.toString(), time: Date.now() }));
     child.stderr?.on('data', (chunk: Buffer) => send('run:event', { runId, type: 'stderr', message: chunk.toString(), time: Date.now() }));
     child.on('error', error => send('run:event', { runId, type: 'stderr', message: error.message, time: Date.now() }));
