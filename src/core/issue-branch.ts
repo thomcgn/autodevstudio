@@ -31,6 +31,8 @@ export async function prepareIssueBranch(
   const problems=ready.reasons.filter(reason=>reason!==PROTECTED_REASON);
   if (!ready.clean || !ready.branch || !ready.remoteSlug || problems.length)
     throw new Error('Unsafe branch preparation: '+(problems.join('; ')||'invalid readiness'));
+  if (ready.branch.startsWith('autodev/'))
+    throw new Error('Existing AutoDev branch requires explicit completion or recovery');
   const name='autodev/issue-'+issueNumber;
   if (ready.branch===name) throw new Error('Issue branch already active');
   if ((await git(['branch','--list','--format=%(refname:short)',name],root)).trim())
