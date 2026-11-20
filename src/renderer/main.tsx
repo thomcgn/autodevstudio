@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -16,6 +16,9 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
+  const [diagnostics, setDiagnostics] = useState<ProviderDiagnostics | null>(null);
+  const [checkingProviders, setCheckingProviders] = useState(false);
+  const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [simulating, setSimulating] = useState<number | null>(null);
@@ -79,6 +82,8 @@ function App(): React.JSX.Element {
     setIssuesError('');
     setGitStatus(null);
     setGitError('');
+    setDiagnostics(null);
+    setDiagnosticsError('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -120,6 +125,15 @@ function App(): React.JSX.Element {
     try { setSimulation(await window.studio.simulateIssue(selected, issueNumber)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setSimulating(null); }
+  };
+
+  const checkProviders = async (): Promise<void> => {
+    if (!selected || checkingProviders) return;
+    setCheckingProviders(true);
+    setDiagnosticsError('');
+    try { setDiagnostics(await window.studio.diagnostics(selected)); }
+    catch (error) { setDiagnosticsError(String(error)); }
+    finally { setCheckingProviders(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -244,6 +258,15 @@ function App(): React.JSX.Element {
             <div className="metric"><small>Agent / Modus</small><strong>{busy ? (activeInfo?.mode === 'execute' ? 'Builder → Reviewer' : activeInfo?.mode ?? 'Aktiv') : 'Bereit'}</strong></div>
             <div className="metric"><small>Laufzeit</small><strong className="mono">{duration}</strong></div>
             <div className="metric"><small>Checkpoint</small><strong>{snapshot?.checkpoint ? `#${snapshot.checkpoint.issueNumber} · ${snapshot.checkpoint.phase}` : 'Keiner'}</strong></div>
+          </div>
+          <div className="provider-panel">
+            <div className="provider-heading"><div><h3>Lokale Provider</h3><p>Prüft nur Kilo CLI und GitHub-Anmeldung – keine Modellanfrage, keine Dateiänderungen.</p></div>
+              <button disabled={!selected || checkingProviders} onClick={() => void checkProviders()}>{checkingProviders ? 'Prüfe …' : 'Umgebung prüfen'}</button></div>
+            {diagnosticsError && <p className="error" role="alert">{diagnosticsError}</p>}
+            {diagnostics && <div className="provider-results">
+              <div><strong>Kilo CLI</strong><span>{diagnostics.kiloInstalled ? diagnostics.kiloVersion : 'Nicht gefunden'}</span><small>{diagnostics.kiloRunCommandReady ? 'Benötigte CLI-Optionen erkannt' : 'CLI-Optionen unvollständig oder nicht erkannt'}</small></div>
+              <div><strong>GitHub CLI</strong><span>{diagnostics.ghInstalled ? 'Installiert' : 'Nicht gefunden'}</span><small>{diagnostics.ghAuthenticated ? 'GitHub-Anmeldung erkannt' : 'Keine gültige Anmeldung erkannt'}</small></div>
+            </div>}
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           <div className="run-panel"><div><h3>Legacy-Agentenlauf (Übergang)</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!canRun || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
