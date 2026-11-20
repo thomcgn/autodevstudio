@@ -64,3 +64,13 @@ test('corrupted checkpoint cannot silently appear as no checkpoint',async t=>{
     await assert.rejects(inspectStandaloneStatus(base,repo),/Corrupted checkpoint/);
   } finally {lock.release();}
 });
+
+test('orphaned lock directory is shown as occupied, not free',async t=>{
+  const {base,repo}=setup(t);
+  const {keyForProject}=await import('../src/core/project-lock.ts');
+  const folder=path.join(base,'core-locks',keyForProject(repo)+'.lock');
+  fs.mkdirSync(folder,{recursive:true});
+  const status=await inspectStandaloneStatus(base,repo);
+  assert.equal(status.lock.held,true);
+  assert.equal(status.lock.startedAt,null);
+});
