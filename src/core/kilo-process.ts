@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess, type SpawnOptionsWithoutStdio } from 'node:child_process';
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 
 export type AgentRole = 'planner' | 'builder' | 'reviewer';
 export type KiloStream = 'stdout' | 'stderr';
@@ -16,7 +16,7 @@ export interface KiloInvocation {
   onSessionId?: (sessionId: string) => void;
   onHeartbeat?: (silenceMs: number, elapsedMs: number) => void;
   /** Isolated test injection. Production always uses direct spawn without a shell. */
-  spawnProcess?: (binary: string, args: string[], options: SpawnOptionsWithoutStdio) => ChildProcess;
+  spawnProcess?: (binary: string, args: string[], options: SpawnOptions) => ChildProcess;
 }
 export interface KiloInvocationResult {
   output: string;
