@@ -16,5 +16,5 @@ contextBridge.exposeInMainWorld('studio', {
 });
 export interface StudioEvent {
   runId: string; type: 'start' | 'stdout' | 'stderr' | 'exit';
-  message?: string; code?: number | null; signal?: string | null; mode?: string; project?: string; time: number;
+  message?: string; code?: number | null; signal?: string | null; mode?: string; project?: string; projectId?: string; time: number;
 }
