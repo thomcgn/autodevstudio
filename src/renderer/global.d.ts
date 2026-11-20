@@ -3,6 +3,10 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface ProviderDiagnostics {
+  kiloInstalled: boolean; kiloVersion: string | null; supportedFlags: string[];
+  kiloRunCommandReady: boolean; ghInstalled: boolean; ghAuthenticated: boolean; checkedAt: string;
+}
 export interface GitPreflight {
   root: string; branch: string; head: string; remoteSlug: string | null;
   clean: boolean; canExecute: boolean; reasons: string[];
@@ -32,6 +36,7 @@ declare global {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
     gitPreflight(id: string): Promise<GitPreflight>;
+    diagnostics(id: string): Promise<ProviderDiagnostics>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
