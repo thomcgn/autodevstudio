@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue } from './global';
 import './style.css';
 
-type Tab = 'overview' | 'agents' | 'logs' | 'history';
+type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
 type RunMode = 'status' | 'dry-run' | 'execute';
 interface ActiveRun { projectId: string; mode: string; startedAt: number }
 
@@ -14,6 +14,9 @@ function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>('overview');
   const [events, setEvents] = useState<StudioEvent[]>([]);
   const [history, setHistory] = useState<RunRecord[]>([]);
+  const [issues, setIssues] = useState<StudioIssue[]>([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issuesError, setIssuesError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [historyRun, setHistoryRun] = useState<string | null>(null);
   const [savedLog, setSavedLog] = useState('');
@@ -68,6 +71,8 @@ function App(): React.JSX.Element {
     setSnapshot(null);
     setSnapshotError('');
     setHistory([]);
+    setIssues([]);
+    setIssuesError('');
     setHistoryRun(null);
     setSavedLog('');
     setHistoryError('');
@@ -88,6 +93,15 @@ function App(): React.JSX.Element {
     const timer = setInterval(() => { reload(); refreshHistory(); }, 5000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [selected]);
+
+  const loadIssues = async (): Promise<void> => {
+    if (!selected) return;
+    setIssuesLoading(true);
+    setIssuesError('');
+    try { setIssues(await window.studio.issues(selected)); }
+    catch (error) { setIssuesError(String(error)); }
+    finally { setIssuesLoading(false); }
+  };
 
   const add = async (): Promise<void> => {
     try {
@@ -180,6 +194,7 @@ function App(): React.JSX.Element {
           <button className={tab === 'agents' ? 'active' : ''} aria-current={tab === 'agents' ? 'page' : undefined} onClick={() => setTab('agents')}>Agenten</button>
           <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Live-Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
           <button className={tab === 'history' ? 'active' : ''} aria-current={tab === 'history' ? 'page' : undefined} onClick={() => setTab('history')}>Verlauf</button>
+          <button className={tab === 'issues' ? 'active' : ''} aria-current={tab === 'issues' ? 'page' : undefined} onClick={() => { setTab('issues'); void loadIssues(); }}>Issues</button>
         </nav>
 
         {tab === 'overview' && <div className="view overview">
@@ -234,6 +249,19 @@ function App(): React.JSX.Element {
               </button>)}</div>
               <div className="history-detail"><div className="history-detail-head"><strong>{historyRun ? `Lauf ${historyRun.slice(0, 8)}` : 'Lauf auswählen'}</strong><span className="muted">Gespeichertes Protokoll</span></div><pre className="saved-log">{historyRun ? savedLog || 'Keine Ausgabe gespeichert.' : 'Wähle links einen Lauf aus, um sein Protokoll anzuzeigen.'}</pre></div>
             </div>}
+        </div>}
+
+        {tab === 'issues' && <div className="view issue-view">
+          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Projektunabhängig aus dem lokalen Git-Repository gelesen. Noch keine automatische Bearbeitung.</p></div>
+            <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
+          {issuesError && <div className="error" role="alert">{issuesError}</div>}
+          {issuesLoading ? <div className="empty-state">Issues werden geladen …</div>
+            : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
+              : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
+                  <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
+                  <a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a>
+                </article>)}</div>}
+          <div className="agent-footnote">Der neue Studio-Core ist noch im Aufbau. Issue-Auswahl, Planner, Builder und Reviewer werden erst nach bestandenen Sicherheitsprüfungen freigeschaltet.</div>
         </div>}
 
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}
