@@ -25,7 +25,7 @@ function App(): React.JSX.Element {
     const ticker = setInterval(() => setClock(Date.now()), 1000);
     const unsubscribe = window.studio.onEvent(event => {
       setEvents(previous => [...previous.slice(-1999), event]);
-      if (event.type === 'start') { setBusy(true); setActiveInfo({ projectId: selected, mode: event.mode ?? 'unknown', startedAt: event.time }); }
+      if (event.type === 'start') { setBusy(true); setActiveInfo({ projectId: event.projectId ?? '', mode: event.mode ?? 'unknown', startedAt: event.time }); }
       if (event.type === 'exit') { setBusy(false); setActiveInfo(null); }
     });
     return () => { clearInterval(ticker); unsubscribe(); };
