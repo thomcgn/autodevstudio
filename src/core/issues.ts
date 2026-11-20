@@ -23,9 +23,15 @@ export function parseIssues(json: string): StudioIssue[] {
     if (!value || typeof value !== 'object') throw new Error('Invalid GitHub issue');
     const item = value as Record<string, unknown>;
     if (!Number.isSafeInteger(item.number) || (item.number as number) <= 0 ||
-      typeof item.title !== 'string' || typeof item.url !== 'string' ||
-      !item.url.startsWith('https://github.com/')) {
+      typeof item.title !== 'string' || typeof item.url !== 'string') {
       throw new Error('Invalid GitHub issue fields');
+    }
+    let url: URL;
+    try { url = new URL(item.url); }
+    catch { throw new Error('Invalid GitHub issue URL'); }
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com' ||
+      !/^\\/[^/]+\\/[^/]+\\/issues\\/\\d+$/.test(url.pathname)) {
+      throw new Error('Invalid GitHub issue URL');
     }
     const labels = Array.isArray(item.labels) ? item.labels.flatMap(label =>
       label && typeof label === 'object' && typeof label.name === 'string'
