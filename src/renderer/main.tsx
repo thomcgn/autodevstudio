@@ -213,7 +213,6 @@ function App(): React.JSX.Element {
           : projects.map(p => <button type="button" key={p.id} className={`project ${selected === p.id ? 'selected' : ''}`} onClick={() => { setSelected(p.id); setTab('overview'); }}>
             <strong>{p.name}</strong><small>{p.path}</small><small className={p.hasCore ? 'core-ready' : 'core-missing'}>{p.hasCore ? 'Git-Projekt · Legacy-Controller' : 'Git-Projekt · Studio-Engine'}</small>
           </button>)}</div>
-        <div className="sidebar-bottom"><span className="safe-indicator">● Lokaler Controller</span><small>Keine automatische Ausführung</small></div>
       </aside>
 
       <section className="content">
