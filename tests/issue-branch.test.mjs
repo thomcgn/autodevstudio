@@ -67,3 +67,13 @@ test('rejects mutations made between preflight and branch creation',async t=>{
     assert.equal(git(root,'branch','--show-current'),'main');
   } finally {lock.release();}
 });
+
+test('refuses new run branched from a previous AutoDev issue branch',async t=>{
+  const {base,root}=setup(t);
+  git(root,'switch','-c','autodev/issue-1');
+  const lock=acquireProjectLock(base,root);
+  try {
+    await assert.rejects(prepareIssueBranch(base,root,lock.record.token,2),/explicit completion or recovery/);
+    assert.equal(git(root,'branch','--show-current'),'autodev/issue-1');
+  } finally {lock.release();}
+});
