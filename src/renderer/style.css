@@ -36,8 +36,6 @@ small{font-size:11px}
 .project.selected{background:#23395a;border-color:#628ddd}
 .project strong{font-size:13px}
 .project small{color:#91a6c5;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;width:100%}
-.sidebar-bottom{flex:none;display:grid;gap:5px;padding:13px 5px;border-top:1px solid #29364d;color:#879ab9}
-.safe-indicator{font-size:12px;color:#a3dfb8}
 .content{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;padding:22px 28px 24px}
 .project-heading{display:flex;align-items:center;justify-content:space-between;min-height:54px;gap:16px;flex:none}
 .project-identity{min-width:0}
@@ -96,7 +94,7 @@ small{font-size:11px}
 .modal input{width:100%;padding:12px;color:#fff;background:#0d1320;border:1px solid #61718e;border-radius:8px}
 .modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:22px}
 @media(max-width:900px){.workspace{grid-template-columns:205px minmax(0,1fr)}.content{padding:17px}.quick-actions,.run-panel{align-items:flex-start;flex-direction:column}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:660px){.topbar{height:64px;padding:0 12px}.brand small,.version{display:none}.workspace{grid-template-columns:145px minmax(0,1fr)}.sidebar{padding:14px 8px}.content{padding:12px}.tabs{gap:12px}.tabs button{font-size:12px}.metric-grid,.metric-grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}.metric{padding:12px}.metric strong{font-size:17px}.project-heading{align-items:flex-start}.heading-actions button{padding:8px}.sidebar-bottom{font-size:10px}}
+@media(max-width:660px){.topbar{height:64px;padding:0 12px}.brand small,.version{display:none}.workspace{grid-template-columns:145px minmax(0,1fr)}.sidebar{padding:14px 8px}.content{padding:12px}.tabs{gap:12px}.tabs button{font-size:12px}.metric-grid,.metric-grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}.metric{padding:12px}.metric strong{font-size:17px}.project-heading{align-items:flex-start}.heading-actions button{padding:8px}}
 
 
 /* Phase 2.3: compact saved-run browser */
