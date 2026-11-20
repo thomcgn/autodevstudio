@@ -166,3 +166,13 @@ small{font-size:11px}
 .simulation-scroll .simulation-trace{padding:12px 18px}
 .simulation-scroll .simulation-trace ol{margin:8px 0}
 .simulation-scroll .muted{font-size:12px}
+
+/* Agent guidance stays accessible without adding scroll height to the workspace. */
+.agent-intro{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.agent-intro h2{margin:0}
+.agent-info-trigger{flex:none;padding:7px 11px;font-size:12px}
+.agent-info-modal{width:min(540px,100%)}
+.agent-info-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.agent-info-header h2{margin:0}
+.agent-info-modal h3{margin-top:16px;font-size:14px}
+.agent-info-modal p{font-size:13px;line-height:1.55;color:#b9c9e2}
