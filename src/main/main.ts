@@ -3,9 +3,9 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { assertRunApproved, type RunMode } from './run-policy';
 
 interface Project { id: string; name: string; path: string }
-type RunMode = 'status' | 'dry-run' | 'execute';
 let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
 let activeRun: string | null = null;
@@ -127,13 +127,10 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('run:start', (_event, id: string, mode: RunMode, approval?: string) => {
     if (active) throw new Error('A run is already active');
-    if (mode !== 'status' && mode !== 'dry-run' && mode !== 'execute') throw new Error('Unsupported run mode');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
-    // Independent main-process check: renderer/UI consent alone is never sufficient.
-    if (mode === 'execute' && approval !== `EXECUTE ${project.name}`) {
-      throw new Error('Explicit project-specific execution approval required');
-    }
+    // Main-process authorization is independent of the renderer.
+    assertRunApproved(mode, project.name, approval);
     const bin = path.join(project.path, 'node_modules', '.bin', 'tsx');
     if (!fs.existsSync(bin)) throw new Error('Missing local tsx. Run npm install in the project.');
     const runId = randomUUID();
