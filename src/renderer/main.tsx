@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot } from './global';
+import type { Project, ControllerSnapshot, RunRecord } from './global';
 import './style.css';
 
-type Tab = 'overview' | 'agents' | 'logs';
+type Tab = 'overview' | 'agents' | 'logs' | 'history';
 type RunMode = 'status' | 'dry-run' | 'execute';
 interface ActiveRun { projectId: string; mode: string; startedAt: number }
 
@@ -13,6 +13,10 @@ function App(): React.JSX.Element {
   const [selected, setSelected] = useState(() => localStorage.getItem('autodev:selected') ?? '');
   const [tab, setTab] = useState<Tab>('overview');
   const [events, setEvents] = useState<StudioEvent[]>([]);
+  const [history, setHistory] = useState<RunRecord[]>([]);
+  const [historyError, setHistoryError] = useState('');
+  const [historyRun, setHistoryRun] = useState<string | null>(null);
+  const [savedLog, setSavedLog] = useState('');
   const [activeInfo, setActiveInfo] = useState<ActiveRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [clock, setClock] = useState(Date.now());
@@ -62,6 +66,10 @@ function App(): React.JSX.Element {
     setApproval('');
     setSnapshot(null);
     setSnapshotError('');
+    setHistory([]);
+    setHistoryRun(null);
+    setSavedLog('');
+    setHistoryError('');
     if (!selected) return;
     let cancelled = false;
     const reload = (): void => {
@@ -70,7 +78,13 @@ function App(): React.JSX.Element {
       }).catch(e => { if (!cancelled) setSnapshotError(String(e)); });
     };
     reload();
-    const timer = setInterval(reload, 5000);
+    const refreshHistory = (): void => {
+      void window.studio.history(selected).then(records => {
+        if (!cancelled) { setHistory(records); setHistoryError(''); }
+      }).catch(e => { if (!cancelled) setHistoryError(String(e)); });
+    };
+    refreshHistory();
+    const timer = setInterval(() => { reload(); refreshHistory(); }, 5000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [selected]);
 
@@ -112,6 +126,14 @@ function App(): React.JSX.Element {
     }
   };
 
+  const viewHistoryLog = async (runId: string): Promise<void> => {
+    if (!selected) return;
+    setHistoryRun(runId);
+    setSavedLog('Lade gespeichertes Protokoll …');
+    try { setSavedLog(await window.studio.historyLog(selected, runId)); }
+    catch (e) { setSavedLog(String(e)); }
+  };
+
   const stop = async (): Promise<void> => {
     try { await window.studio.stop(); }
     catch (e) { setError(String(e)); }
@@ -131,7 +153,7 @@ function App(): React.JSX.Element {
   return <div className="studio-shell">
     <header className="topbar">
       <div className="brand"><div className="brand-mark">A</div><div><strong>AutoDev <em>Studio</em></strong><small>Agentensteuerung für lokale Projekte</small></div></div>
-      <div className="topbar-right"><span className="version">v0.2.2</span><span className={`status ${busy ? 'busy' : ''}`}>{busy ? 'Prozess läuft' : 'Bereit'}</span></div>
+      <div className="topbar-right"><span className="version">v0.2.3</span><span className={`status ${busy ? 'busy' : ''}`}>{busy ? 'Prozess läuft' : 'Bereit'}</span></div>
     </header>
 
     <div className="workspace">
@@ -155,7 +177,8 @@ function App(): React.JSX.Element {
         <nav className="tabs" aria-label="Arbeitsbereiche">
           <button className={tab === 'overview' ? 'active' : ''} aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => setTab('overview')}>Übersicht</button>
           <button className={tab === 'agents' ? 'active' : ''} aria-current={tab === 'agents' ? 'page' : undefined} onClick={() => setTab('agents')}>Agenten</button>
-          <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
+          <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Live-Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
+          <button className={tab === 'history' ? 'active' : ''} aria-current={tab === 'history' ? 'page' : undefined} onClick={() => setTab('history')}>Verlauf</button>
         </nav>
 
         {tab === 'overview' && <div className="view overview">
@@ -195,6 +218,19 @@ function App(): React.JSX.Element {
         {tab === 'logs' && <div className="view log-view">
           <div className="log-toolbar"><div><h2>Live-Protokoll</h2><p>{busy ? `Laufender Prozess · ${duration}` : 'Ausgabe des letzten Laufs in dieser Sitzung'}</p></div><button className="quiet" disabled={busy} onClick={() => setEvents([])}>Protokoll leeren</button></div>
           {logs}
+        </div>}
+
+        {tab === 'history' && <div className="view history-view">
+          <div className="view-intro"><h2>Laufhistorie</h2><p>Auf diesem Gerät gespeicherte Läufe – auch nach einem Neustart verfügbar. Maximale Loggröße: 5 MB je Lauf.</p></div>
+          {historyError && <div className="error" role="alert">{historyError}</div>}
+          {history.length === 0 ? <div className="empty-state">Für dieses Projekt sind noch keine Läufe gespeichert.</div> :
+            <div className="history-layout"><div className="history-list">{history.map(record =>
+              <button key={record.runId} className={`history-item ${historyRun === record.runId ? 'selected' : ''}`} onClick={() => void viewHistoryLog(record.runId)}>
+                <span className="history-top"><strong>{record.mode === 'execute' ? 'Agentenlauf' : record.mode === 'dry-run' ? 'Dry-Run' : 'Statusabfrage'}</strong><span className={`outcome ${record.outcome}`}>{record.outcome === 'success' ? 'Erfolgreich' : record.outcome === 'running' ? 'Läuft' : record.outcome === 'interrupted' ? 'Unterbrochen' : 'Fehlgeschlagen'}</span></span>
+                <small>{new Date(record.startedAt).toLocaleString('de-DE')} · {record.endedAt ? `${Math.round((record.endedAt - record.startedAt) / 1000)} s` : 'Noch aktiv'}</small>
+              </button>)}</div>
+              <div className="history-detail"><div className="history-detail-head"><strong>{historyRun ? `Lauf ${historyRun.slice(0, 8)}` : 'Lauf auswählen'}</strong><span className="muted">Gespeichertes Protokoll</span></div><pre className="saved-log">{historyRun ? savedLog || 'Keine Ausgabe gespeichert.' : 'Wähle links einen Lauf aus, um sein Protokoll anzuzeigen.'}</pre></div>
+            </div>}
         </div>}
 
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}
