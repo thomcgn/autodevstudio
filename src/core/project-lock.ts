@@ -37,6 +37,18 @@ export function inspectProjectLock(base: string, projectPath: string): ProjectLo
   return lockOwner(lockDirectory(base, keyForProject(projectPath)));
 }
 
+/** A malformed or ownerless lock must still be shown as occupied: acquisition
+ * refuses its directory and manual recovery is required.
+ */
+export function projectLockDirectoryExists(base: string, projectPath: string): boolean {
+  const dir = lockDirectory(base, keyForProject(projectPath));
+  try { fs.lstatSync(dir); return true; }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
 /** Directory creation is atomic across Studio instances; locked directories are never
  * reclaimed automatically, even when a PID appears dead. Recovery requires explicit action.
  */

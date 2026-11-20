@@ -196,3 +196,11 @@ small{font-size:11px}
   .agents .provider-results>div{padding:8px 10px}
   .agents .run-panel{padding:10px 12px}
 }
+
+/* Real read-only Studio status replaces legacy-core empty states. */
+.studio-status-panel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.studio-status-panel>div{min-width:0;background:#172135;border:1px solid #2d3b55;border-radius:10px;padding:13px;display:flex;flex-direction:column;gap:8px}
+.studio-status-panel small{color:#8ca5c8}
+.studio-status-panel strong{overflow-wrap:anywhere}
+.studio-status-panel p{grid-column:1/-1;font-size:12px}
+@media(max-width:900px){.studio-status-panel{grid-template-columns:repeat(2,minmax(0,1fr))}}
