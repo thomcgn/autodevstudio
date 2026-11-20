@@ -22,7 +22,8 @@ const MAX_ITEMS = 150;
 const ID = /^[a-f0-9-]{36}$/i;
 
 export class RunHistory {
-  constructor(private readonly base: string) {}
+  private readonly base: string;
+  constructor(base: string) { this.base = base; }
 
   private directory(): string {
     const dir = path.join(this.base, 'run-history');
