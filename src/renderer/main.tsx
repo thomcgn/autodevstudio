@@ -27,6 +27,7 @@ function App(): React.JSX.Element {
   const [approval, setApproval] = useState('');
 
   const project = projects.find(p => p.id === selected);
+  const canRun = Boolean(project?.hasCore);
   const elapsed = activeInfo ? Math.max(0, Math.floor((clock - activeInfo.startedAt) / 1000)) : 0;
   const duration = [Math.floor(elapsed / 3600), Math.floor((elapsed % 3600) / 60), elapsed % 60]
     .map(n => String(n).padStart(2, '0')).join(':');
@@ -162,7 +163,7 @@ function App(): React.JSX.Element {
         <div className="project-list">{projects.length === 0
           ? <p className="muted">Noch kein Projekt hinzugefügt.</p>
           : projects.map(p => <button type="button" key={p.id} className={`project ${selected === p.id ? 'selected' : ''}`} onClick={() => { setSelected(p.id); setTab('overview'); }}>
-            <strong>{p.name}</strong><small>{p.path}</small>
+            <strong>{p.name}</strong><small>{p.path}</small><small className={p.hasCore ? 'core-ready' : 'core-missing'}>{p.hasCore ? 'AutoDev Core verfügbar' : 'Git-Projekt · Core fehlt'}</small>
           </button>)}</div>
         <div className="sidebar-bottom"><span className="safe-indicator">● Lokaler Controller</span><small>Keine automatische Ausführung</small></div>
       </aside>
@@ -183,6 +184,7 @@ function App(): React.JSX.Element {
 
         {tab === 'overview' && <div className="view overview">
           <div className="view-intro"><div><h2>Controller-Übersicht</h2><p>Zustand des ausgewählten Projekts · Aktualisierung alle 5 Sekunden</p></div></div>
+          {project && !project.hasCore && <div className="empty-state">Dieses Git-Projekt ist eingebunden. Der AutoDev Core ist hier noch nicht installiert. Statusabfrage, Dry-Run und Agentenläufe sind bis zur Core-Integration deaktiviert. Die Issue-Verwaltung folgt in Phase 2.4.</div>}
           {snapshotError ? <div className="error" role="alert">{snapshotError}</div>
             : !selected ? <div className="empty-state">Wähle links ein Projekt aus.</div>
               : !snapshot ? <div className="empty-state">Lade Controller-Zustand …</div>
@@ -198,7 +200,7 @@ function App(): React.JSX.Element {
                       ? <><span className="checkpoint-indicator">Checkpoint vorhanden</span> Issue #{snapshot.checkpoint.issueNumber} · {snapshot.checkpoint.phase} · {snapshot.checkpoint.reason}</>
                       : <><span className="good-indicator">● Kein offener Checkpoint</span> · Abgeschlossene Issues: {snapshot.processedIssues.join(', ') || 'Keine'}</>}</div>
                   </>}
-          <div className="quick-actions"><div><h3>Sicher ausprobieren</h3><p>Diese Aktionen starten weder Builder noch Git-Push.</p></div><div className="button-group"><button disabled={!selected || busy} onClick={() => void run('status')}>Status abrufen</button><button disabled={!selected || busy} onClick={() => void run('dry-run')}>Dry-Run starten</button></div></div>
+          <div className="quick-actions"><div><h3>Sicher ausprobieren</h3><p>Diese Aktionen starten weder Builder noch Git-Push.</p></div><div className="button-group"><button disabled={!canRun || busy} onClick={() => void run('status')}>Status abrufen</button><button disabled={!canRun || busy} onClick={() => void run('dry-run')}>Dry-Run starten</button></div></div>
           <button className="link-action" disabled={!selected} onClick={() => setTab('agents')}>Zur Agentensteuerung →</button>
         </div>}
 
@@ -210,7 +212,8 @@ function App(): React.JSX.Element {
             <div className="metric"><small>Checkpoint</small><strong>{snapshot?.checkpoint ? `#${snapshot.checkpoint.issueNumber} · ${snapshot.checkpoint.phase}` : 'Keiner'}</strong></div>
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
-          <div className="run-panel"><div><h3>Produktiver Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!project || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
+          <div className="run-panel"><div><h3>Produktiver Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!canRun || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
+          {project && !project.hasCore && <div className="agent-footnote">Für dieses Projekt ist noch kein AutoDev Core vorhanden. Die Agentensteuerung wird erst nach sicherer Integration freigegeben.</div>}
           <div className="agent-footnote">Ein Stopp sendet SIGTERM und erforderlichenfalls SIGKILL. Er ist keine garantierte Checkpoint-Pause. Der Core prüft Wiederaufnahme und Doppelstarts.</div>
           <button className="link-action" onClick={() => setTab('logs')}>Live-Protokoll öffnen →</button>
         </div>}
