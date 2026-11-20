@@ -136,3 +136,11 @@ small{font-size:11px}
 .simulation-trace p,.simulation-trace small{font-size:12px;color:#a2bad4}
 .simulation-trace ol{margin:14px 0;padding-left:25px;display:flex;flex-direction:column;gap:7px;color:#cfdef3}
 .simulation-trace li strong{text-transform:capitalize;color:#90baff}
+
+
+.git-readiness{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-radius:8px;padding:10px 13px;background:#1a273b;border:1px solid #324661;color:#a8bdd6;font-size:12px}
+.git-readiness strong{color:#c8d8ef;white-space:nowrap}
+.git-readiness.ready{background:#18332c;border-color:#35634c}
+.git-readiness.ready strong{color:#a2e2bc}
+.git-readiness.needs-work{background:#332b26;border-color:#6c563b}
+.git-readiness.needs-work strong{color:#f1ce9b}

@@ -9,6 +9,7 @@ import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
+import { inspectGitPreflight } from '../core/git-preflight';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -109,6 +110,11 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:preflight', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    return inspectGitPreflight(project.path);
+  });
   ipcMain.handle('core:issues', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);

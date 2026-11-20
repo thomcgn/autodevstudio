@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('studio', {
   projects: () => ipcRenderer.invoke('project:list'),
   issues: (id: string) => ipcRenderer.invoke('core:issues', id),
+  gitPreflight: (id: string) => ipcRenderer.invoke('core:preflight', id),
   simulateIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:simulate', id, issueNumber),
   workflowStages: () => ipcRenderer.invoke('core:workflow'),
   snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
