@@ -233,8 +233,8 @@ function App(): React.JSX.Element {
 
         {tab === 'overview' && <div className="view overview">
           <div className="view-intro"><div><h2>Controller-Übersicht</h2><p>Zustand des ausgewählten Projekts · Aktualisierung alle 5 Sekunden</p></div></div>
-          {project && !project.hasCore && <div className="empty-state">Dieses Git-Projekt ist eingebunden. AutoDev Studio verwaltet die Issues selbst – ohne Core-Installation im Projekt. Die bisherigen Status-/Dry-Run-Knöpfe verwenden vorübergehend noch den Legacy-Controller aus LaceFrame; die neue Engine wird schrittweise freigegeben.</div>}
-          {snapshotError ? <div className="error" role="alert">{snapshotError}</div>
+          {project && !project.hasCore && <div className="empty-state">Studio-Engine aktiv · GitHub-Issues und sichere Ablauf-Simulation stehen im Reiter „Issues“ bereit. Produktive Agentenläufe sind noch nicht freigegeben.</div>}
+          {project?.hasCore && (snapshotError ? <div className="error" role="alert">{snapshotError}</div>
             : !selected ? <div className="empty-state">Wähle links ein Projekt aus.</div>
               : !snapshot ? <div className="empty-state">Lade Controller-Zustand …</div>
                 : !snapshot.hasState ? <div className="empty-state">Für dieses Projekt existiert noch keine AutoDev-Zustandsdatei.</div>
@@ -248,9 +248,8 @@ function App(): React.JSX.Element {
                     <div className="summary-line">{snapshot.checkpoint
                       ? <><span className="checkpoint-indicator">Checkpoint vorhanden</span> Issue #{snapshot.checkpoint.issueNumber} · {snapshot.checkpoint.phase} · {snapshot.checkpoint.reason}</>
                       : <><span className="good-indicator">● Kein offener Checkpoint</span> · Abgeschlossene Issues: {snapshot.processedIssues.join(', ') || 'Keine'}</>}</div>
-                  </>}
-          <div className="quick-actions"><div><h3>Sicher ausprobieren</h3><p>Diese Aktionen starten weder Builder noch Git-Push.</p></div><div className="button-group"><button disabled={!canRun || busy} onClick={() => void run('status')}>Status abrufen</button><button disabled={!canRun || busy} onClick={() => void run('dry-run')}>Dry-Run starten</button></div></div>
-          <button className="link-action" disabled={!selected} onClick={() => setTab('agents')}>Zur Agentensteuerung →</button>
+                  </>)}
+          {project?.hasCore && <div className="quick-actions"><div><h3>Sicher ausprobieren</h3><p>Diese Aktionen starten weder Builder noch Git-Push.</p></div><div className="button-group"><button disabled={!canRun || busy} onClick={() => void run('status')}>Status abrufen</button><button disabled={!canRun || busy} onClick={() => void run('dry-run')}>Dry-Run starten</button></div></div>}
         </div>}
 
         {tab === 'agents' && <div className="view agents">
@@ -271,7 +270,6 @@ function App(): React.JSX.Element {
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           <div className="run-panel"><div><h3>Legacy-Agentenlauf (Übergang)</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!canRun || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
-          <button className="link-action" onClick={() => setTab('logs')}>Live-Protokoll öffnen →</button>
         </div>}
 
         {tab === 'logs' && <div className="view log-view">
