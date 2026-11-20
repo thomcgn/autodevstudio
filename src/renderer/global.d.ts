@@ -9,6 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface SandboxProbeResult { available: boolean; isolated: boolean; reason: 'passed' | 'unsupported-platform' | 'sandbox-failed' | 'canary-modified' }
 export interface ProviderDiagnostics {
   kiloInstalled: boolean; kiloVersion: string | null; supportedFlags: string[];
   kiloRunCommandReady: boolean; agentCatalogReadable: boolean;
@@ -47,6 +48,7 @@ declare global {
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
+    sandboxProbe(id: string): Promise<SandboxProbeResult>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
