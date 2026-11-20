@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { assertRunApproved, type RunMode } from './run-policy';
+import { RunHistory } from './run-history';
+import { inspectProject } from './project-capabilities';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -12,6 +14,8 @@ let activeRun: string | null = null;
 let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
 const registry = (): string => path.join(app.getPath('userData'), 'projects.json');
+const history = (): RunHistory => new RunHistory(app.getPath('userData'));
+function emitRunEvent(event: Record<string, unknown>): void { send('run:event', event); }
 function projects(): Project[] {
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(registry(), 'utf8'));
@@ -31,8 +35,7 @@ function getProject(id: string): Project {
   const project = projects().find(p => p.id === id);
   if (!project) throw new Error('Project not found');
   const real = fs.realpathSync(project.path);
-  const script = path.join(real, 'src', 'autodev', 'cli.ts');
-  if (!fs.statSync(real).isDirectory() || !fs.existsSync(script)) throw new Error('AutoDev CLI missing in selected project');
+  if (!fs.statSync(real).isDirectory()) throw new Error('Selected project is not a directory');
   return { ...project, path: real };
 }
 type ControllerPhase = 'builder' | 'reviewer' | 'quality-gates' | 'finalize';
@@ -102,7 +105,21 @@ function createWindow(): void {
   window.on('closed', () => { window = null; });
 }
 app.whenReady().then(() => {
-  ipcMain.handle('project:list', () => projects());
+  history().recoverInterrupted();
+  ipcMain.handle('project:list', () => projects().map(project => {
+    try { return { ...project, ...inspectProject(fs.realpathSync(project.path)) }; }
+    catch { return { ...project, isGitRepo: false, hasCore: false }; }
+  }));
+  ipcMain.handle('history:list', (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    getProject(id);
+    return history().list(id);
+  });
+  ipcMain.handle('history:log', (_event, id: string, runId: string) => {
+    if (typeof id !== 'string' || typeof runId !== 'string') throw new Error('Invalid history request');
+    getProject(id);
+    return history().getLog(id, runId);
+  });
   ipcMain.handle('project:snapshot', (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     return snapshot(id);
@@ -111,13 +128,13 @@ app.whenReady().then(() => {
     const selection = await dialog.showOpenDialog(window!, { properties: ['openDirectory'] });
     if (selection.canceled || !selection.filePaths[0]) return null;
     const dir = fs.realpathSync(selection.filePaths[0]);
-    if (!fs.existsSync(path.join(dir, 'src/autodev/cli.ts'))) throw new Error('This directory has no src/autodev/cli.ts');
+    if (!inspectProject(dir).isGitRepo) throw new Error('Select a Git repository root containing .git');
     const existing = projects();
     const present = existing.find(p => p.path === dir);
-    if (present) return present;
+    if (present) return { ...present, ...inspectProject(dir) };
     const project = { id: randomUUID(), name: path.basename(dir), path: dir };
     persist([...existing, project]);
-    return project;
+    return { ...project, ...inspectProject(dir) };
   });
   ipcMain.handle('project:remove', (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid ID');
@@ -129,6 +146,7 @@ app.whenReady().then(() => {
     if (active) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
+    if (!inspectProject(project.path).hasCore) throw new Error('AutoDev Core is not installed in this project');
     // Main-process authorization is independent of the renderer.
     assertRunApproved(mode, project.name, approval);
     const bin = path.join(project.path, 'node_modules', '.bin', 'tsx');
@@ -136,16 +154,37 @@ app.whenReady().then(() => {
     const runId = randomUUID();
     const script = path.join(project.path, 'src/autodev/cli.ts');
     const args = mode === 'status' ? [script, 'status'] : [script, 'run', mode === 'execute' ? '--execute' : '--dry-run'];
-    const child = spawn(bin, args, { cwd: project.path, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', env: { ...process.env, FORCE_COLOR: '0' } });
+    const startedAt = Date.now();
+    history().start({ runId, projectId: id, projectName: project.name, mode, startedAt });
+    let child: ChildProcess;
+    try {
+      child = spawn(bin, args, { cwd: project.path, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', env: { ...process.env, FORCE_COLOR: '0' } });
+    } catch (error) {
+      history().append(runId, 'stderr', String(error));
+      history().finish(runId, 1, null);
+      throw error;
+    }
     active = child;
     activeRun = `${id}:${runId}`;
-    activeInfo = { runId, projectId: id, mode, startedAt: Date.now() };
+    activeInfo = { runId, projectId: id, mode, startedAt };
     send('run:event', { runId, type: 'start', mode, project: project.name, projectId: id, time: activeInfo.startedAt });
-    child.stdout?.on('data', (chunk: Buffer) => send('run:event', { runId, type: 'stdout', message: chunk.toString(), time: Date.now() }));
-    child.stderr?.on('data', (chunk: Buffer) => send('run:event', { runId, type: 'stderr', message: chunk.toString(), time: Date.now() }));
-    child.on('error', error => send('run:event', { runId, type: 'stderr', message: error.message, time: Date.now() }));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const message = chunk.toString();
+      try { history().append(runId, 'stdout', message); } catch (error) { console.error('Run history write failed', error); }
+      emitRunEvent({ runId, type: 'stdout', message, time: Date.now() });
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const message = chunk.toString();
+      try { history().append(runId, 'stderr', message); } catch (error) { console.error('Run history write failed', error); }
+      emitRunEvent({ runId, type: 'stderr', message, time: Date.now() });
+    });
+    child.on('error', error => {
+      try { history().append(runId, 'stderr', error.message); } catch (failure) { console.error('Run history write failed', failure); }
+      emitRunEvent({ runId, type: 'stderr', message: error.message, time: Date.now() });
+    });
     child.on('close', (code, signal) => {
       if (pendingStop) { clearTimeout(pendingStop); pendingStop = null; }
+      try { history().finish(runId, code, signal); } catch (error) { console.error('Run history finalize failed', error); }
       if (active === child) { active = null; activeRun = null; activeInfo = null; }
       send('run:event', { runId, type: 'exit', code, signal, time: Date.now() });
     });

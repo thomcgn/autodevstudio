@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot } from './global';
+import type { Project, ControllerSnapshot, RunRecord } from './global';
 import './style.css';
 
-type Tab = 'overview' | 'agents' | 'logs';
+type Tab = 'overview' | 'agents' | 'logs' | 'history';
 type RunMode = 'status' | 'dry-run' | 'execute';
 interface ActiveRun { projectId: string; mode: string; startedAt: number }
 
@@ -13,6 +13,10 @@ function App(): React.JSX.Element {
   const [selected, setSelected] = useState(() => localStorage.getItem('autodev:selected') ?? '');
   const [tab, setTab] = useState<Tab>('overview');
   const [events, setEvents] = useState<StudioEvent[]>([]);
+  const [history, setHistory] = useState<RunRecord[]>([]);
+  const [historyError, setHistoryError] = useState('');
+  const [historyRun, setHistoryRun] = useState<string | null>(null);
+  const [savedLog, setSavedLog] = useState('');
   const [activeInfo, setActiveInfo] = useState<ActiveRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [clock, setClock] = useState(Date.now());
@@ -23,6 +27,7 @@ function App(): React.JSX.Element {
   const [approval, setApproval] = useState('');
 
   const project = projects.find(p => p.id === selected);
+  const canRun = Boolean(project?.hasCore);
   const elapsed = activeInfo ? Math.max(0, Math.floor((clock - activeInfo.startedAt) / 1000)) : 0;
   const duration = [Math.floor(elapsed / 3600), Math.floor((elapsed % 3600) / 60), elapsed % 60]
     .map(n => String(n).padStart(2, '0')).join(':');
@@ -62,6 +67,10 @@ function App(): React.JSX.Element {
     setApproval('');
     setSnapshot(null);
     setSnapshotError('');
+    setHistory([]);
+    setHistoryRun(null);
+    setSavedLog('');
+    setHistoryError('');
     if (!selected) return;
     let cancelled = false;
     const reload = (): void => {
@@ -70,7 +79,13 @@ function App(): React.JSX.Element {
       }).catch(e => { if (!cancelled) setSnapshotError(String(e)); });
     };
     reload();
-    const timer = setInterval(reload, 5000);
+    const refreshHistory = (): void => {
+      void window.studio.history(selected).then(records => {
+        if (!cancelled) { setHistory(records); setHistoryError(''); }
+      }).catch(e => { if (!cancelled) setHistoryError(String(e)); });
+    };
+    refreshHistory();
+    const timer = setInterval(() => { reload(); refreshHistory(); }, 5000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [selected]);
 
@@ -112,6 +127,14 @@ function App(): React.JSX.Element {
     }
   };
 
+  const viewHistoryLog = async (runId: string): Promise<void> => {
+    if (!selected) return;
+    setHistoryRun(runId);
+    setSavedLog('Lade gespeichertes Protokoll …');
+    try { setSavedLog(await window.studio.historyLog(selected, runId)); }
+    catch (e) { setSavedLog(String(e)); }
+  };
+
   const stop = async (): Promise<void> => {
     try { await window.studio.stop(); }
     catch (e) { setError(String(e)); }
@@ -131,7 +154,7 @@ function App(): React.JSX.Element {
   return <div className="studio-shell">
     <header className="topbar">
       <div className="brand"><div className="brand-mark">A</div><div><strong>AutoDev <em>Studio</em></strong><small>Agentensteuerung für lokale Projekte</small></div></div>
-      <div className="topbar-right"><span className="version">v0.2.2</span><span className={`status ${busy ? 'busy' : ''}`}>{busy ? 'Prozess läuft' : 'Bereit'}</span></div>
+      <div className="topbar-right"><span className="version">v0.2.3</span><span className={`status ${busy ? 'busy' : ''}`}>{busy ? 'Prozess läuft' : 'Bereit'}</span></div>
     </header>
 
     <div className="workspace">
@@ -140,7 +163,7 @@ function App(): React.JSX.Element {
         <div className="project-list">{projects.length === 0
           ? <p className="muted">Noch kein Projekt hinzugefügt.</p>
           : projects.map(p => <button type="button" key={p.id} className={`project ${selected === p.id ? 'selected' : ''}`} onClick={() => { setSelected(p.id); setTab('overview'); }}>
-            <strong>{p.name}</strong><small>{p.path}</small>
+            <strong>{p.name}</strong><small>{p.path}</small><small className={p.hasCore ? 'core-ready' : 'core-missing'}>{p.hasCore ? 'AutoDev Core verfügbar' : 'Git-Projekt · Core fehlt'}</small>
           </button>)}</div>
         <div className="sidebar-bottom"><span className="safe-indicator">● Lokaler Controller</span><small>Keine automatische Ausführung</small></div>
       </aside>
@@ -155,11 +178,13 @@ function App(): React.JSX.Element {
         <nav className="tabs" aria-label="Arbeitsbereiche">
           <button className={tab === 'overview' ? 'active' : ''} aria-current={tab === 'overview' ? 'page' : undefined} onClick={() => setTab('overview')}>Übersicht</button>
           <button className={tab === 'agents' ? 'active' : ''} aria-current={tab === 'agents' ? 'page' : undefined} onClick={() => setTab('agents')}>Agenten</button>
-          <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
+          <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Live-Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
+          <button className={tab === 'history' ? 'active' : ''} aria-current={tab === 'history' ? 'page' : undefined} onClick={() => setTab('history')}>Verlauf</button>
         </nav>
 
         {tab === 'overview' && <div className="view overview">
           <div className="view-intro"><div><h2>Controller-Übersicht</h2><p>Zustand des ausgewählten Projekts · Aktualisierung alle 5 Sekunden</p></div></div>
+          {project && !project.hasCore && <div className="empty-state">Dieses Git-Projekt ist eingebunden. Der AutoDev Core ist hier noch nicht installiert. Statusabfrage, Dry-Run und Agentenläufe sind bis zur Core-Integration deaktiviert. Die Issue-Verwaltung folgt in Phase 2.4.</div>}
           {snapshotError ? <div className="error" role="alert">{snapshotError}</div>
             : !selected ? <div className="empty-state">Wähle links ein Projekt aus.</div>
               : !snapshot ? <div className="empty-state">Lade Controller-Zustand …</div>
@@ -175,7 +200,7 @@ function App(): React.JSX.Element {
                       ? <><span className="checkpoint-indicator">Checkpoint vorhanden</span> Issue #{snapshot.checkpoint.issueNumber} · {snapshot.checkpoint.phase} · {snapshot.checkpoint.reason}</>
                       : <><span className="good-indicator">● Kein offener Checkpoint</span> · Abgeschlossene Issues: {snapshot.processedIssues.join(', ') || 'Keine'}</>}</div>
                   </>}
-          <div className="quick-actions"><div><h3>Sicher ausprobieren</h3><p>Diese Aktionen starten weder Builder noch Git-Push.</p></div><div className="button-group"><button disabled={!selected || busy} onClick={() => void run('status')}>Status abrufen</button><button disabled={!selected || busy} onClick={() => void run('dry-run')}>Dry-Run starten</button></div></div>
+          <div className="quick-actions"><div><h3>Sicher ausprobieren</h3><p>Diese Aktionen starten weder Builder noch Git-Push.</p></div><div className="button-group"><button disabled={!canRun || busy} onClick={() => void run('status')}>Status abrufen</button><button disabled={!canRun || busy} onClick={() => void run('dry-run')}>Dry-Run starten</button></div></div>
           <button className="link-action" disabled={!selected} onClick={() => setTab('agents')}>Zur Agentensteuerung →</button>
         </div>}
 
@@ -187,7 +212,8 @@ function App(): React.JSX.Element {
             <div className="metric"><small>Checkpoint</small><strong>{snapshot?.checkpoint ? `#${snapshot.checkpoint.issueNumber} · ${snapshot.checkpoint.phase}` : 'Keiner'}</strong></div>
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
-          <div className="run-panel"><div><h3>Produktiver Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!project || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
+          <div className="run-panel"><div><h3>Produktiver Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!canRun || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
+          {project && !project.hasCore && <div className="agent-footnote">Für dieses Projekt ist noch kein AutoDev Core vorhanden. Die Agentensteuerung wird erst nach sicherer Integration freigegeben.</div>}
           <div className="agent-footnote">Ein Stopp sendet SIGTERM und erforderlichenfalls SIGKILL. Er ist keine garantierte Checkpoint-Pause. Der Core prüft Wiederaufnahme und Doppelstarts.</div>
           <button className="link-action" onClick={() => setTab('logs')}>Live-Protokoll öffnen →</button>
         </div>}
@@ -195,6 +221,19 @@ function App(): React.JSX.Element {
         {tab === 'logs' && <div className="view log-view">
           <div className="log-toolbar"><div><h2>Live-Protokoll</h2><p>{busy ? `Laufender Prozess · ${duration}` : 'Ausgabe des letzten Laufs in dieser Sitzung'}</p></div><button className="quiet" disabled={busy} onClick={() => setEvents([])}>Protokoll leeren</button></div>
           {logs}
+        </div>}
+
+        {tab === 'history' && <div className="view history-view">
+          <div className="view-intro"><h2>Laufhistorie</h2><p>Auf diesem Gerät gespeicherte Läufe – auch nach einem Neustart verfügbar. Maximale Loggröße: 5 MB je Lauf.</p></div>
+          {historyError && <div className="error" role="alert">{historyError}</div>}
+          {history.length === 0 ? <div className="empty-state">Für dieses Projekt sind noch keine Läufe gespeichert.</div> :
+            <div className="history-layout"><div className="history-list">{history.map(record =>
+              <button key={record.runId} className={`history-item ${historyRun === record.runId ? 'selected' : ''}`} onClick={() => void viewHistoryLog(record.runId)}>
+                <span className="history-top"><strong>{record.mode === 'execute' ? 'Agentenlauf' : record.mode === 'dry-run' ? 'Dry-Run' : 'Statusabfrage'}</strong><span className={`outcome ${record.outcome}`}>{record.outcome === 'success' ? 'Erfolgreich' : record.outcome === 'running' ? 'Läuft' : record.outcome === 'interrupted' ? 'Unterbrochen' : 'Fehlgeschlagen'}</span></span>
+                <small>{new Date(record.startedAt).toLocaleString('de-DE')} · {record.endedAt ? `${Math.round((record.endedAt - record.startedAt) / 1000)} s` : 'Noch aktiv'}</small>
+              </button>)}</div>
+              <div className="history-detail"><div className="history-detail-head"><strong>{historyRun ? `Lauf ${historyRun.slice(0, 8)}` : 'Lauf auswählen'}</strong><span className="muted">Gespeichertes Protokoll</span></div><pre className="saved-log">{historyRun ? savedLog || 'Keine Ausgabe gespeichert.' : 'Wähle links einen Lauf aus, um sein Protokoll anzuzeigen.'}</pre></div>
+            </div>}
         </div>}
 
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}
