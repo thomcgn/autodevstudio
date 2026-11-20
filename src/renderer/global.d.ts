@@ -1,4 +1,8 @@
 import type { StudioEvent } from '../main/preload';
+export interface StudioIssue {
+  number: number; title: string; body: string; url: string; labels: string[];
+}
+export interface WorkflowStageDescription { stage: string; title: string; explanation: string }
 export interface RunRecord {
   runId: string; projectId: string; projectName: string;
   mode: 'status' | 'dry-run' | 'execute'; startedAt: number; endedAt: number | null;
@@ -18,6 +22,8 @@ export interface ControllerSnapshot {
 declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
+    issues(id: string): Promise<StudioIssue[]>;
+    workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
     addProject(): Promise<Project | null>;
     removeProject(id: string): Promise<boolean>;
