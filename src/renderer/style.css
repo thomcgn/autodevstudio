@@ -118,3 +118,12 @@ small{font-size:11px}
 @media(max-width:760px){.history-layout{grid-template-columns:1fr}.history-list{max-height:160px}.history-detail{min-height:220px}.tabs{gap:9px}}
 
 .core-ready{color:#9de1b6!important}.core-missing{color:#edc78d!important}
+
+
+.issue-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.issue-list{min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:9px}
+.issue-item{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px;background:#172135;border:1px solid #2d3b55;border-radius:10px}
+.issue-item b{overflow-wrap:anywhere}
+.issue-item p{font-size:12px;margin-top:6px}
+.issue-item a{color:#93baff;white-space:nowrap}
+@media(max-width:760px){.issue-item{align-items:flex-start;flex-direction:column}.tabs{gap:8px}.tabs button{padding:8px 2px}}
