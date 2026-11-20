@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -31,6 +31,8 @@ function App(): React.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const [snapshot, setSnapshot] = useState<ControllerSnapshot | null>(null);
+  const [studioStatus, setStudioStatus] = useState<StandaloneStatus | null>(null);
+  const [studioStatusError, setStudioStatusError] = useState('');
   const [snapshotError, setSnapshotError] = useState('');
   const [error, setError] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -78,6 +80,8 @@ function App(): React.JSX.Element {
     setApproval('');
     setSnapshot(null);
     setSnapshotError('');
+    setStudioStatus(null);
+    setStudioStatusError('');
     setHistory([]);
     setIssues([]);
     setIssuesError('');
@@ -97,13 +101,19 @@ function App(): React.JSX.Element {
       }).catch(e => { if (!cancelled) setSnapshotError(String(e)); });
     };
     reload();
+    const refreshStandalone = (): void => {
+      void window.studio.studioStatus(selected).then(value => {
+        if (!cancelled) { setStudioStatus(value); setStudioStatusError(''); }
+      }).catch(e => { if (!cancelled) setStudioStatusError(String(e)); });
+    };
+    refreshStandalone();
     const refreshHistory = (): void => {
       void window.studio.history(selected).then(records => {
         if (!cancelled) { setHistory(records); setHistoryError(''); }
       }).catch(e => { if (!cancelled) setHistoryError(String(e)); });
     };
     refreshHistory();
-    const timer = setInterval(() => { reload(); refreshHistory(); }, 5000);
+    const timer = setInterval(() => { reload(); refreshStandalone(); refreshHistory(); }, 5000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [selected]);
 
@@ -232,7 +242,15 @@ function App(): React.JSX.Element {
 
         {tab === 'overview' && <div className="view overview">
           <div className="view-intro"><div><h2>Controller-Übersicht</h2><p>Zustand des ausgewählten Projekts · Aktualisierung alle 5 Sekunden</p></div></div>
-          {project && !project.hasCore && <div className="empty-state">Studio-Engine aktiv · GitHub-Issues und sichere Ablauf-Simulation stehen im Reiter „Issues“ bereit. Produktive Agentenläufe sind noch nicht freigegeben.</div>}
+          {project && !project.hasCore && (studioStatusError ? <div className="error" role="alert">Studio-Status nicht verfügbar: {studioStatusError}</div>
+            : !studioStatus ? <div className="empty-state">Studio-Status wird geladen …</div>
+              : <div className="studio-status-panel">
+                  <div><small>Git-Branch</small><strong>{studioStatus.git.branch || 'Keiner'}</strong></div>
+                  <div><small>Working Tree</small><strong>{studioStatus.git.clean ? 'Sauber' : 'Änderungen vorhanden'}</strong></div>
+                  <div><small>Projektlock</small><strong>{studioStatus.lock.held ? 'Belegt' : 'Frei'}</strong></div>
+                  <div><small>Checkpoint</small><strong>{studioStatus.checkpoint ? `#${studioStatus.checkpoint.issueNumber} · ${studioStatus.checkpoint.stage}` : 'Keiner'}</strong></div>
+                  <p>Studio-Engine · {studioStatus.git.remoteSlug ?? 'Kein unterstütztes GitHub-Remote'} · Produktive Agentenläufe noch nicht freigegeben.</p>
+                </div>)}
           {project?.hasCore && (snapshotError ? <div className="error" role="alert">{snapshotError}</div>
             : !selected ? <div className="empty-state">Wähle links ein Projekt aus.</div>
               : !snapshot ? <div className="empty-state">Lade Controller-Zustand …</div>
