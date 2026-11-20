@@ -1,5 +1,5 @@
 import { inspectGitPreflight, type GitPreflight } from './git-preflight.ts';
-import { inspectProjectLock } from './project-lock.ts';
+import { inspectProjectLock, projectLockDirectoryExists } from './project-lock.ts';
 import { loadCoreCheckpoint } from './checkpoint-store.ts';
 
 export interface StandaloneStatus {
@@ -22,7 +22,7 @@ export async function inspectStandaloneStatus(base: string, projectPath: string)
   const checkpoint = loadCoreCheckpoint(base, projectPath);
   return {
     git,
-    lock: { held: lock !== null, startedAt: lock?.startedAt ?? null },
+    lock: { held: projectLockDirectoryExists(base, projectPath), startedAt: lock?.startedAt ?? null },
     checkpoint: checkpoint ? {
       issueNumber: checkpoint.issueNumber, stage: checkpoint.stage,
       revision: checkpoint.revision, savedAt: checkpoint.savedAt,
