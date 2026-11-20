@@ -11,7 +11,9 @@ export interface SimulationResult {
 }
 export interface ProviderDiagnostics {
   kiloInstalled: boolean; kiloVersion: string | null; supportedFlags: string[];
-  kiloRunCommandReady: boolean; ghInstalled: boolean; ghAuthenticated: boolean; checkedAt: string;
+  kiloRunCommandReady: boolean; agentCatalogReadable: boolean;
+  sandboxTool: 'bwrap' | 'sandbox-exec' | null; sandboxToolAvailable: boolean;
+  ghInstalled: boolean; ghAuthenticated: boolean; checkedAt: string;
 }
 export interface GitPreflight {
   root: string; branch: string; head: string; remoteSlug: string | null;

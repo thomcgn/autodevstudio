@@ -281,7 +281,7 @@ function App(): React.JSX.Element {
               <button disabled={!selected || checkingProviders} onClick={() => void checkProviders()}>{checkingProviders ? 'Prüfe …' : 'Umgebung prüfen'}</button></div>
             {diagnosticsError && <p className="error" role="alert">{diagnosticsError}</p>}
             {diagnostics && <div className="provider-results">
-              <div><strong>Kilo CLI</strong><span>{diagnostics.kiloInstalled ? diagnostics.kiloVersion : 'Nicht gefunden'}</span><small>{diagnostics.kiloRunCommandReady ? 'Benötigte CLI-Optionen erkannt' : 'CLI-Optionen unvollständig oder nicht erkannt'}</small></div>
+              <div><strong>Kilo CLI</strong><span>{diagnostics.kiloInstalled ? diagnostics.kiloVersion : 'Nicht gefunden'}</span><small>{diagnostics.kiloRunCommandReady ? 'CLI-Optionen erkannt' : 'CLI-Optionen unvollständig'} · {diagnostics.agentCatalogReadable ? 'Agentenliste abrufbar' : 'Agentenliste nicht abrufbar'}</small><small>{diagnostics.sandboxTool ? `${diagnostics.sandboxTool}: ${diagnostics.sandboxToolAvailable ? 'Systemwerkzeug gefunden' : 'Nicht gefunden'}` : 'System-Sandbox: noch nicht unterstützt'} · Sandbox noch nicht validiert</small></div>
               <div><strong>GitHub CLI</strong><span>{diagnostics.ghInstalled ? 'Installiert' : 'Nicht gefunden'}</span><small>{diagnostics.ghAuthenticated ? 'GitHub-Anmeldung erkannt' : 'Keine gültige Anmeldung erkannt'}</small></div>
             </div>}
           </div>
