@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('studio', {
   projects: () => ipcRenderer.invoke('project:list'),
+  snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
   addProject: () => ipcRenderer.invoke('project:add'),
   removeProject: (id: string) => ipcRenderer.invoke('project:remove', id),
   start: (id: string, mode: 'status' | 'dry-run') => ipcRenderer.invoke('run:start', id, mode),

@@ -34,6 +34,48 @@ function getProject(id: string): Project {
   if (!fs.statSync(real).isDirectory() || !fs.existsSync(script)) throw new Error('AutoDev CLI missing in selected project');
   return { ...project, path: real };
 }
+type ControllerPhase = 'builder' | 'reviewer' | 'quality-gates' | 'finalize';
+interface ControllerSnapshot {
+  currentIssue: number | null;
+  reviewIteration: number;
+  processedIssues: number[];
+  failedIssues: number[];
+  checkpoint: { issueNumber: number; phase: ControllerPhase; reason: string; sessionId: string | null; timestamp: string } | null;
+  hasState: boolean;
+  updatedAt: number | null;
+}
+function safeJson(file: string): Record<string, unknown> | null {
+  try {
+    const stat = fs.statSync(file);
+    if (!stat.isFile() || stat.size > 1024 * 1024) return null;
+    const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch { return null; }
+}
+function numberArray(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((n): n is number => Number.isSafeInteger(n) && n > 0).slice(0, 1000) : [];
+}
+function snapshot(id: string): ControllerSnapshot {
+  const project = getProject(id);
+  const file = path.join(project.path, '.autodev-state.json');
+  const state = safeJson(file);
+  // Controller stores its own checkpoint both in state and in a separate file.
+  // The separate checkpoint wins if present; no prompt/credentials are exposed to renderer.
+  const saved = safeJson(path.join(project.path, '.autodev-checkpoint.json'));
+  const cp = saved ?? (state?.checkpoint && typeof state.checkpoint === 'object' && !Array.isArray(state.checkpoint) ? state.checkpoint as Record<string, unknown> : null);
+  const phase = cp?.phase;
+  const checkpoint = cp && typeof cp.issueNumber === 'number' &&
+    (phase === 'builder' || phase === 'reviewer' || phase === 'quality-gates' || phase === 'finalize')
+    ? { issueNumber: cp.issueNumber, phase, reason: typeof cp.reason === 'string' ? cp.reason : 'unknown',
+        sessionId: typeof cp.sessionId === 'string' ? cp.sessionId : null,
+        timestamp: typeof cp.timestamp === 'string' ? cp.timestamp : '' } : null;
+  let updatedAt: number | null = null;
+  try { updatedAt = fs.statSync(file).mtimeMs; } catch { /* no saved state */ }
+  return { currentIssue: Number.isSafeInteger(state?.currentIssue) ? state!.currentIssue as number : null,
+    reviewIteration: typeof state?.reviewIteration === 'number' ? state.reviewIteration : 0,
+    processedIssues: numberArray(state?.processedIssues), failedIssues: numberArray(state?.failedIssues),
+    checkpoint, hasState: state !== null, updatedAt };
+}
 function terminate(): void {
   const child = active;
   if (!child) return;
@@ -60,6 +102,10 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   ipcMain.handle('project:list', () => projects());
+  ipcMain.handle('project:snapshot', (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    return snapshot(id);
+  });
   ipcMain.handle('project:add', async () => {
     const selection = await dialog.showOpenDialog(window!, { properties: ['openDirectory'] });
     if (selection.canceled || !selection.filePaths[0]) return null;
