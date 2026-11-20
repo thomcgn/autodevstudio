@@ -8,6 +8,7 @@ import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
 import { WORKFLOW_STAGES } from '../core/workflow';
+import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -115,6 +116,22 @@ app.whenReady().then(() => {
     return listIssues(project.path);
   });
   ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
+  ipcMain.handle('core:simulate', async (_event, projectId: string, issueNumber: number) => {
+    if (typeof projectId !== 'string' || !Number.isSafeInteger(issueNumber) || issueNumber <= 0) {
+      throw new Error('Invalid simulation request');
+    }
+    const project = getProject(projectId);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    // Obtain issue details in the trusted main process rather than accepting a renderer-supplied prompt.
+    const issues = await listIssues(project.path);
+    const issue = issues.find(item => item.number === issueNumber);
+    if (!issue) throw new Error('Issue not found among open issues');
+    // Inert test adapters: no Kilo, Git commit, push or issue close.
+    return orchestrateIssue(
+      { number: issue.number, title: issue.title, body: issue.body },
+      createSimulationAdapters({ failFirstReview: true }),
+    );
+  });
   ipcMain.handle('project:list', () => projects().map(project => {
     try { return { ...project, ...inspectProject(fs.realpathSync(project.path)) }; }
     catch { return { ...project, isGitRepo: false, hasCore: false }; }
