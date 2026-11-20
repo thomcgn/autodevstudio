@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -16,6 +16,8 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
+  const [simulating, setSimulating] = useState<number | null>(null);
+  const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [issuesError, setIssuesError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [historyRun, setHistoryRun] = useState<string | null>(null);
@@ -73,6 +75,7 @@ function App(): React.JSX.Element {
     setHistory([]);
     setIssues([]);
     setIssuesError('');
+    setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
     setHistoryError('');
@@ -101,6 +104,16 @@ function App(): React.JSX.Element {
     try { setIssues(await window.studio.issues(selected)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const simulate = async (issueNumber: number): Promise<void> => {
+    if (!selected || simulating !== null) return;
+    setSimulating(issueNumber);
+    setSimulation(null);
+    setIssuesError('');
+    try { setSimulation(await window.studio.simulateIssue(selected, issueNumber)); }
+    catch (error) { setIssuesError(String(error)); }
+    finally { setSimulating(null); }
   };
 
   const add = async (): Promise<void> => {
@@ -259,8 +272,9 @@ function App(): React.JSX.Element {
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
               : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
                   <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
-                  <a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a>
+                  <div className="issue-actions"><button disabled={simulating !== null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
                 </article>)}</div>}
+          {simulation && <div className="simulation-trace"><h3>Simulation · Issue #{simulation.state.issueNumber}</h3><p>Ergebnis: {simulation.state.stage} · Korrekturrunden: {simulation.state.fixAttempts}</p><ol>{simulation.events.map((event, index) => <li key={index}><strong>{event.stage}</strong> – {event.message}</li>)}</ol><small>Simulation ohne Dateiänderungen, Modellaufrufe, Git-Commits oder GitHub-Mutationen.</small></div>}
           <div className="agent-footnote">Der neue Studio-Core ist noch im Aufbau. Issue-Auswahl, Planner, Builder und Reviewer werden erst nach bestandenen Sicherheitsprüfungen freigeschaltet.</div>
         </div>}
 
