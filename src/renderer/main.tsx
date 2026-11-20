@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -18,6 +18,9 @@ function App(): React.JSX.Element {
   const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
   const [diagnostics, setDiagnostics] = useState<ProviderDiagnostics | null>(null);
   const [checkingProviders, setCheckingProviders] = useState(false);
+  const [sandboxProbe, setSandboxProbe] = useState<SandboxProbeResult | null>(null);
+  const [sandboxChecking, setSandboxChecking] = useState(false);
+  const [sandboxError, setSandboxError] = useState('');
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -89,6 +92,8 @@ function App(): React.JSX.Element {
     setGitError('');
     setDiagnostics(null);
     setDiagnosticsError('');
+    setSandboxProbe(null);
+    setSandboxError('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -145,6 +150,16 @@ function App(): React.JSX.Element {
     try { setDiagnostics(await window.studio.diagnostics(selected)); }
     catch (error) { setDiagnosticsError(String(error)); }
     finally { setCheckingProviders(false); }
+  };
+
+  const verifySandbox = async (): Promise<void> => {
+    if (!selected || sandboxChecking) return;
+    setSandboxChecking(true);
+    setSandboxError('');
+    setSandboxProbe(null);
+    try { setSandboxProbe(await window.studio.sandboxProbe(selected)); }
+    catch { setSandboxError('Sandbox-Test konnte nicht abgeschlossen werden.'); }
+    finally { setSandboxChecking(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -284,6 +299,7 @@ function App(): React.JSX.Element {
               <div><strong>Kilo CLI</strong><span>{diagnostics.kiloInstalled ? diagnostics.kiloVersion : 'Nicht gefunden'}</span><small>{diagnostics.kiloRunCommandReady ? 'CLI-Optionen erkannt' : 'CLI-Optionen unvollständig'} · {diagnostics.agentCatalogReadable ? 'Agentenliste abrufbar' : `Agentenliste: ${diagnostics.agentCatalogProblem === 'timeout' ? 'Zeitüberschreitung' : diagnostics.agentCatalogProblem === 'output-limit' ? 'Ausgabe zu groß' : diagnostics.agentCatalogProblem === 'not-found' ? 'Befehl fehlt' : diagnostics.agentCatalogProblem === 'empty-output' ? 'Leere Ausgabe' : 'CLI-Fehler'}`}</small><small>{diagnostics.sandboxTool ? `${diagnostics.sandboxTool}: ${diagnostics.sandboxToolAvailable ? 'Systemwerkzeug gefunden' : 'Nicht gefunden'}` : 'System-Sandbox: noch nicht unterstützt'} · Sandbox noch nicht validiert</small></div>
               <div><strong>GitHub CLI</strong><span>{diagnostics.ghInstalled ? 'Installiert' : 'Nicht gefunden'}</span><small>{diagnostics.ghAuthenticated ? 'GitHub-Anmeldung erkannt' : 'Keine gültige Anmeldung erkannt'}</small></div>
             </div>}
+            <div className="sandbox-check"><button className="quiet" disabled={!selected || sandboxChecking || diagnostics?.sandboxTool !== 'bwrap' || !diagnostics.sandboxToolAvailable} onClick={() => void verifySandbox()}>{sandboxChecking ? 'Prüfe Sandbox …' : 'Sandbox testen'}</button><span>{sandboxError || (sandboxProbe ? sandboxProbe.isolated ? 'Schreibschutz und Start in Testumgebung bestätigt · Produktiv-Sandbox noch ausstehend' : `Sandbox-Test fehlgeschlagen: ${sandboxProbe.reason}` : 'Separater Test ohne Kilo und ohne Projektänderungen')}</span></div>
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           <div className="run-panel"><div><h3>Legacy-Agentenlauf (Übergang)</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!canRun || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
