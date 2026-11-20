@@ -10,6 +10,7 @@ import { listIssues } from '../core/issues';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
+import { inspectLocalProviders } from '../core/provider-diagnostics';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -110,6 +111,11 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:diagnostics', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    return inspectLocalProviders(project.path);
+  });
   ipcMain.handle('core:preflight', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
