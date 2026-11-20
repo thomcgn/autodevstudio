@@ -1,4 +1,8 @@
 import type { StudioEvent } from '../main/preload';
+export interface SimulationResult {
+  state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
+  events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
+}
 export interface StudioIssue {
   number: number; title: string; body: string; url: string; labels: string[];
 }
@@ -23,6 +27,7 @@ declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
+    simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
     addProject(): Promise<Project | null>;
