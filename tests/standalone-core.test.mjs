@@ -56,3 +56,16 @@ test('malformed GitHub issue data fails closed', () => {
   assert.throws(() => parseIssues('{}'), /Unexpected/);
   assert.throws(() => parseIssues('[{"number":3,"title":"x","url":"file:\/\/etc\/passwd"}]'), /Invalid GitHub/);
 });
+
+test('rejects confusing GitHub lookalike and unsafe issue URLs', () => {
+  for (const url of [
+    'https://github.com.evil.example/owner/repo/issues/1',
+    'http://github.com/owner/repo/issues/1',
+    'https://github.com/owner/repo/pulls/1',
+    'file:///etc/passwd',
+  ]) {
+    assert.throws(() => parseIssues(JSON.stringify([
+      { number: 1, title: 'Fake', url, labels: [] },
+    ])), /Invalid GitHub issue/);
+  }
+});
