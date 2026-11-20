@@ -12,6 +12,7 @@ export interface SimulationResult {
 export interface ProviderDiagnostics {
   kiloInstalled: boolean; kiloVersion: string | null; supportedFlags: string[];
   kiloRunCommandReady: boolean; agentCatalogReadable: boolean;
+  agentCatalogProblem: 'timeout' | 'output-limit' | 'command-failed' | 'not-found' | 'empty-output' | null;
   sandboxTool: 'bwrap' | 'sandbox-exec' | null; sandboxToolAvailable: boolean;
   ghInstalled: boolean; ghAuthenticated: boolean; checkedAt: string;
 }
