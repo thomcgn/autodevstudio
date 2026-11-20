@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -15,6 +15,8 @@ function App(): React.JSX.Element {
   const [events, setEvents] = useState<StudioEvent[]>([]);
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
+  const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
+  const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [simulating, setSimulating] = useState<number | null>(null);
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
@@ -75,6 +77,8 @@ function App(): React.JSX.Element {
     setHistory([]);
     setIssues([]);
     setIssuesError('');
+    setGitStatus(null);
+    setGitError('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -101,6 +105,8 @@ function App(): React.JSX.Element {
     if (!selected) return;
     setIssuesLoading(true);
     setIssuesError('');
+    setGitError('');
+    void window.studio.gitPreflight(selected).then(setGitStatus).catch(e => setGitError(String(e)));
     try { setIssues(await window.studio.issues(selected)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
@@ -267,6 +273,8 @@ function App(): React.JSX.Element {
         {tab === 'issues' && <div className="view issue-view">
           <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Projektunabhängig aus dem lokalen Git-Repository gelesen. Noch keine automatische Bearbeitung.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
+          {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ? 'ready' : 'needs-work'}`}><strong>{gitStatus.canExecute ? 'Git-Bereitschaft: geprüft' : 'Git: Vorbereitung erforderlich'}</strong><span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}{gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Sauberer Feature-Branch'}</span></div>}
+          {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
           {issuesLoading ? <div className="empty-state">Issues werden geladen …</div>
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
