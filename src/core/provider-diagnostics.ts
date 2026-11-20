@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { accessSync, constants } from 'node:fs';
 
 const exec = promisify(execFile);
 export type DiagnosticRunner = (command: string, args: readonly string[], cwd: string) => Promise<string>;
@@ -52,10 +53,13 @@ export async function inspectLocalProviders(
       agentCatalogReadable = true;
     } catch { /* cannot list agents; do not expose raw output */ }
   }
-  if (sandboxTool) {
+  if (sandboxTool === 'sandbox-exec') {
+    try { accessSync('/usr/bin/sandbox-exec', constants.X_OK); sandboxToolAvailable = true; }
+    catch { /* absent */ }
+  } else if (sandboxTool === 'bwrap') {
     try {
       // Version check is harmless and does not create an actual sandbox.
-      await runner(sandboxTool, ['--version'], projectDirectory);
+      await runner('bwrap', ['--version'], projectDirectory);
       sandboxToolAvailable = true;
     } catch { /* binary absent or not executable */ }
   }
