@@ -101,10 +101,10 @@ function App(): React.JSX.Element {
         throw new Error('Projektfreigabe fehlt');
       }
       const token = mode === 'execute' ? approval : undefined;
-      setBusy(true);
-      await window.studio.start(selected, mode, token);
       setEvents([]);
+      setBusy(true);
       setTab('logs');
+      await window.studio.start(selected, mode, token);
       if (mode === 'execute') { setConfirmOpen(false); setApproval(''); }
     } catch (e) {
       setError(String(e));
