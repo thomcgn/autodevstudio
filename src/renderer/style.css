@@ -156,3 +156,13 @@ small{font-size:11px}
 .provider-results span{color:#d7e4f5}
 .provider-results small{color:#95a9c5}
 @media(max-width:800px){.provider-heading{align-items:flex-start;flex-direction:column}.provider-results{grid-template-columns:1fr}}
+
+
+.simulation-modal{width:min(720px,100%);display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 48px)}
+.simulation-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex:none}
+.simulation-heading h2{margin-bottom:6px}
+.simulation-heading .quiet{flex:none}
+.simulation-scroll{overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:12px}
+.simulation-scroll .simulation-trace{padding:12px 18px}
+.simulation-scroll .simulation-trace ol{margin:8px 0}
+.simulation-scroll .muted{font-size:12px}
