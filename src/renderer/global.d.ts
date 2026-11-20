@@ -5,7 +5,7 @@ export interface RunRecord {
   outcome: 'running' | 'success' | 'failed' | 'interrupted';
   exitCode: number | null; signal: string | null; bytesLogged: number; truncated: boolean;
 }
-export interface Project { id: string; name: string; path: string }
+export interface Project { id: string; name: string; path: string; isGitRepo: boolean; hasCore: boolean }
 export interface ControllerSnapshot {
   currentIssue: number | null;
   reviewIteration: number;
