@@ -11,6 +11,7 @@ import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
+import { inspectStandaloneStatus } from '../core/standalone-status';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -115,6 +116,12 @@ app.whenReady().then(() => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
     return inspectLocalProviders(project.path);
+  });
+  ipcMain.handle('core:status', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    return inspectStandaloneStatus(app.getPath('userData'), project.path);
   });
   ipcMain.handle('core:preflight', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
