@@ -4,7 +4,8 @@ contextBridge.exposeInMainWorld('studio', {
   snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
   addProject: () => ipcRenderer.invoke('project:add'),
   removeProject: (id: string) => ipcRenderer.invoke('project:remove', id),
-  start: (id: string, mode: 'status' | 'dry-run') => ipcRenderer.invoke('run:start', id, mode),
+  start: (id: string, mode: 'status' | 'dry-run' | 'execute', approval?: string) => ipcRenderer.invoke('run:start', id, mode, approval),
+  runInfo: () => ipcRenderer.invoke('run:info'),
   stop: () => ipcRenderer.invoke('run:stop'),
   active: () => ipcRenderer.invoke('run:active'),
   onEvent: (callback: (event: StudioEvent) => void) => {
