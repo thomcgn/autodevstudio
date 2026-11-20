@@ -305,7 +305,6 @@ function App(): React.JSX.Element {
                   <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
                   <div className="issue-actions"><button disabled={simulating !== null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
                 </article>)}</div>}
-          {simulation && <div className="simulation-trace"><h3>Simulation · Issue #{simulation.state.issueNumber}</h3><p>Ergebnis: {simulation.state.stage} · Korrekturrunden: {simulation.state.fixAttempts}</p><ol>{simulation.events.map((event, index) => <li key={index}><strong>{event.stage}</strong> – {event.message}</li>)}</ol><small>Simulation ohne Dateiänderungen, Modellaufrufe, Git-Commits oder GitHub-Mutationen.</small></div>}
           <div className="agent-footnote">Die Simulation nutzt bereits den eigenständigen Studio-Workflow. Produktive Builder-/Reviewer-Adapter und die automatische Issue-Abwicklung werden nach zusätzlichen Sicherheitsprüfungen freigegeben.</div>
         </div>}
 
@@ -313,6 +312,18 @@ function App(): React.JSX.Element {
       </section>
     </div>
 
+    {simulation && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setSimulation(null); }}>
+      <div className="modal simulation-modal" role="dialog" aria-modal="true" aria-labelledby="simulation-title">
+        <div className="simulation-heading"><div><h2 id="simulation-title">Simulation · Issue #{simulation.state.issueNumber}</h2>
+          <p>Ergebnis: {simulation.state.stage} · Korrekturrunden: {simulation.state.fixAttempts}</p></div>
+          <button className="quiet" onClick={() => setSimulation(null)}>Schließen</button>
+        </div>
+        <div className="simulation-scroll">
+          <div className="simulation-trace"><ol>{simulation.events.map((event, index) => <li key={index}><strong>{event.stage}</strong> – {event.message}</li>)}</ol></div>
+          <p className="muted">Nur Simulation: keine Dateiänderungen, Modellaufrufe, Git-Commits oder GitHub-Mutationen.</p>
+        </div>
+      </div>
+    </div>}
     {confirmOpen && project && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) { setConfirmOpen(false); setApproval(''); } }}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
         <div className="modal-icon">!</div><h2 id="confirm-title">Produktiven Lauf freigeben?</h2>
