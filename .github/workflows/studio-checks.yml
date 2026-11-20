@@ -22,3 +22,5 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: TypeScript
         run: npm run typecheck
+      - name: Execution approval policy tests
+        run: npm run test:policy
