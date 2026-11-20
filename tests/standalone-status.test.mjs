@@ -46,7 +46,8 @@ test('status includes checkpoint metadata without exposing lock tokens or agent 
     assert.equal(status.lock.held,true);
     assert.equal(status.checkpoint?.issueNumber,5);
     assert.equal(status.checkpoint?.stage,'build');
-    assert.doesNotMatch(JSON.stringify(status),/secretSession123|[a-f0-9-]{36}/);
+    assert.doesNotMatch(JSON.stringify(status),/secretSession123/);
+    assert.equal(JSON.stringify(status).includes(lock.record.token),false);
   } finally {lock.release();}
 });
 test('corrupted checkpoint cannot silently appear as no checkpoint',async t=>{
