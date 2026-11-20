@@ -1,4 +1,10 @@
 import type { StudioEvent } from '../main/preload';
+export interface StandaloneStatus {
+  git: GitPreflight;
+  lock: { held: boolean; startedAt: string | null };
+  checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
+  executionEnabled: false;
+}
 export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
@@ -36,6 +42,7 @@ declare global {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
     gitPreflight(id: string): Promise<GitPreflight>;
+    studioStatus(id: string): Promise<StandaloneStatus>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
