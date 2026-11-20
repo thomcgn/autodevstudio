@@ -6,6 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { assertRunApproved, type RunMode } from './run-policy';
 import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
+import { listIssues } from '../core/issues';
+import { WORKFLOW_STAGES } from '../core/workflow';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -106,6 +108,13 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:issues', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    return listIssues(project.path);
+  });
+  ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
   ipcMain.handle('project:list', () => projects().map(project => {
     try { return { ...project, ...inspectProject(fs.realpathSync(project.path)) }; }
     catch { return { ...project, isGitRepo: false, hasCore: false }; }
