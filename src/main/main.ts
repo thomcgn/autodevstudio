@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { assertRunApproved, type RunMode } from './run-policy';
 import { RunHistory } from './run-history';
+import { inspectProject } from './project-capabilities';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -34,8 +35,7 @@ function getProject(id: string): Project {
   const project = projects().find(p => p.id === id);
   if (!project) throw new Error('Project not found');
   const real = fs.realpathSync(project.path);
-  const script = path.join(real, 'src', 'autodev', 'cli.ts');
-  if (!fs.statSync(real).isDirectory() || !fs.existsSync(script)) throw new Error('AutoDev CLI missing in selected project');
+  if (!fs.statSync(real).isDirectory()) throw new Error('Selected project is not a directory');
   return { ...project, path: real };
 }
 type ControllerPhase = 'builder' | 'reviewer' | 'quality-gates' | 'finalize';
@@ -106,7 +106,10 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
-  ipcMain.handle('project:list', () => projects());
+  ipcMain.handle('project:list', () => projects().map(project => {
+    try { return { ...project, ...inspectProject(fs.realpathSync(project.path)) }; }
+    catch { return { ...project, isGitRepo: false, hasCore: false }; }
+  }));
   ipcMain.handle('history:list', (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     getProject(id);
@@ -125,13 +128,13 @@ app.whenReady().then(() => {
     const selection = await dialog.showOpenDialog(window!, { properties: ['openDirectory'] });
     if (selection.canceled || !selection.filePaths[0]) return null;
     const dir = fs.realpathSync(selection.filePaths[0]);
-    if (!fs.existsSync(path.join(dir, 'src/autodev/cli.ts'))) throw new Error('This directory has no src/autodev/cli.ts');
+    if (!inspectProject(dir).isGitRepo) throw new Error('Select a Git repository root containing .git');
     const existing = projects();
     const present = existing.find(p => p.path === dir);
-    if (present) return present;
+    if (present) return { ...present, ...inspectProject(dir) };
     const project = { id: randomUUID(), name: path.basename(dir), path: dir };
     persist([...existing, project]);
-    return project;
+    return { ...project, ...inspectProject(dir) };
   });
   ipcMain.handle('project:remove', (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid ID');
@@ -143,6 +146,7 @@ app.whenReady().then(() => {
     if (active) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
+    if (!inspectProject(project.path).hasCore) throw new Error('AutoDev Core is not installed in this project');
     // Main-process authorization is independent of the renderer.
     assertRunApproved(mode, project.name, approval);
     const bin = path.join(project.path, 'node_modules', '.bin', 'tsx');
