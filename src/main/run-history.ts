@@ -117,6 +117,7 @@ export class RunHistory {
   }
 
   getLog(projectId: string, id: string): string {
+    if (!ID.test(id)) throw new Error('Invalid run ID');
     const record = this.read(id);
     if (!record || record.projectId !== projectId) throw new Error('Run not found in selected project');
     // Recent tail only; no path from renderer is ever read.
