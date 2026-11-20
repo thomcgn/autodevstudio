@@ -24,8 +24,13 @@ export interface KiloInvocationResult {
   elapsedMs: number;
 }
 export class KiloProcessError extends Error {
-  constructor(message: string, public readonly reason: 'spawn' | 'exit' | 'abort' | 'inactivity' | 'permission',
-    public readonly sessionId: string | null) { super(message); }
+  readonly reason: 'spawn' | 'exit' | 'abort' | 'inactivity' | 'permission';
+  readonly sessionId: string | null;
+  constructor(message: string, reason: KiloProcessError['reason'], sessionId: string | null) {
+    super(message);
+    this.reason = reason;
+    this.sessionId = sessionId;
+  }
 }
 
 const SESSION_PATTERN = /\bsession(?:[ \t]+id)?[ \t]*[:=][ \t]*([a-zA-Z0-9_-]{8,128})/i;
