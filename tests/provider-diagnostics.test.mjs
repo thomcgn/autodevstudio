@@ -8,6 +8,8 @@ test('diagnoses installed Kilo, flags and logged-in gh without invoking a model'
     calls.push({bin,args,cwd});
     if(bin==='kilo' && args[0]==='--version') return 'kilo 1.2.3\n';
     if(bin==='kilo' && args[0]==='run') return 'Usage: kilo run --auto --agent --model --session';
+    if(bin==='kilo' && args[0]==='agent' && args[1]==='list') return 'plan code review';
+    if(bin==='bwrap' && args[0]==='--version') return 'bubblewrap 0.11';
     if(bin==='gh' && args[0]==='--version') return 'gh 2.1';
     if(bin==='gh' && args[0]==='auth') return 'Logged in: hidden-token';
     throw new Error('Unexpected command');
@@ -16,6 +18,11 @@ test('diagnoses installed Kilo, flags and logged-in gh without invoking a model'
   assert.equal(status.kiloInstalled,true);
   assert.equal(status.kiloVersion,'kilo 1.2.3');
   assert.equal(status.kiloRunCommandReady,true);
+  assert.equal(status.agentCatalogReadable,true);
+  if (process.platform==='linux') {
+    assert.equal(status.sandboxTool,'bwrap');
+    assert.equal(status.sandboxToolAvailable,true);
+  }
   assert.equal(status.ghInstalled,true);
   assert.equal(status.ghAuthenticated,true);
   assert.ok(calls.every(x=>x.cwd==='/example/repo'));
@@ -44,4 +51,17 @@ test('rejects incomplete Kilo command support', async () => {
   assert.equal(status.kiloInstalled,true);
   assert.equal(status.kiloRunCommandReady,false);
   assert.equal(status.supportedFlags.includes('--session'),false);
+});
+
+test('agent inventory and sandbox tool failures do not incorrectly report readiness',async()=>{
+  const runner=async(bin,args)=>{
+    if(bin==='kilo'&&args[0]==='--version')return 'kilo 7';
+    if(bin==='kilo'&&args[0]==='run')return '--auto --model --agent --session';
+    throw new Error('unauthorized output: credential SECRET');
+  };
+  const status=await inspectLocalProviders('/fake',runner);
+  assert.equal(status.kiloRunCommandReady,true);
+  assert.equal(status.agentCatalogReadable,false);
+  assert.equal(status.sandboxToolAvailable,false);
+  assert.ok(!JSON.stringify(status).includes('SECRET'));
 });
