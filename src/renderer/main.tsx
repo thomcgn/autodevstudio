@@ -34,6 +34,7 @@ function App(): React.JSX.Element {
   const [snapshotError, setSnapshotError] = useState('');
   const [error, setError] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [agentInfoOpen, setAgentInfoOpen] = useState(false);
   const [approval, setApproval] = useState('');
 
   const project = projects.find(p => p.id === selected);
@@ -253,7 +254,7 @@ function App(): React.JSX.Element {
         </div>}
 
         {tab === 'agents' && <div className="view agents">
-          <div className="view-intro"><div><h2>Agentensteuerung</h2><p>Bestehende produktive Läufe verwenden vorübergehend den LaceFrame-Legacy-Controller. Der unabhängige Studio-Workflow ist bereits separat testbar.</p></div></div>
+          <div className="view-intro agent-intro"><h2>Agentensteuerung</h2><button type="button" className="quiet agent-info-trigger" onClick={() => setAgentInfoOpen(true)} aria-haspopup="dialog" aria-label="Informationen zu Studio-Controller und Prozessstopp">ⓘ Info</button></div>
           <div className="metric-grid three">
             <div className="metric"><small>Agent / Modus</small><strong>{busy ? (activeInfo?.mode === 'execute' ? 'Builder → Reviewer' : activeInfo?.mode ?? 'Aktiv') : 'Bereit'}</strong></div>
             <div className="metric"><small>Laufzeit</small><strong className="mono">{duration}</strong></div>
@@ -270,8 +271,6 @@ function App(): React.JSX.Element {
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           <div className="run-panel"><div><h3>Legacy-Agentenlauf (Übergang)</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={!canRun || busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>
-          {project && !project.hasCore && <div className="agent-footnote">Der neue Studio-Controller ist für alle Git-Projekte vorgesehen. Produktive Agentenläufe bleiben bis zur sicheren Migration des Legacy-Controllers deaktiviert.</div>}
-          <div className="agent-footnote">Ein Stopp sendet SIGTERM und erforderlichenfalls SIGKILL. Er ist keine garantierte Checkpoint-Pause. Der Core prüft Wiederaufnahme und Doppelstarts.</div>
           <button className="link-action" onClick={() => setTab('logs')}>Live-Protokoll öffnen →</button>
         </div>}
 
@@ -312,6 +311,16 @@ function App(): React.JSX.Element {
       </section>
     </div>
 
+    {agentInfoOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAgentInfoOpen(false); }}>
+      <div className="modal agent-info-modal" role="dialog" aria-modal="true" aria-labelledby="agent-info-title" onKeyDown={event => { if (event.key === 'Escape') setAgentInfoOpen(false); }}>
+        <div className="agent-info-header"><h2 id="agent-info-title">Hinweise zur Agentensteuerung</h2><button type="button" className="quiet" onClick={() => setAgentInfoOpen(false)}>Schließen</button></div>
+        <h3>Studio-Controller</h3>
+        <p>Der neue Studio-Controller ist für alle Git-Projekte vorgesehen. Produktive Agentenläufe bleiben bis zur sicheren Migration des Legacy-Controllers deaktiviert.</p>
+        <h3>Stopp und Wiederaufnahme</h3>
+        <p>Ein Stopp sendet SIGTERM und erforderlichenfalls SIGKILL. Er ist keine garantierte Checkpoint-Pause. Der Core prüft Wiederaufnahme und Doppelstarts.</p>
+        <p>Bestehende produktive Läufe verwenden vorübergehend den LaceFrame-Legacy-Controller. Der unabhängige Studio-Workflow ist bereits separat testbar.</p>
+      </div>
+    </div>}
     {simulation && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setSimulation(null); }}>
       <div className="modal simulation-modal" role="dialog" aria-modal="true" aria-labelledby="simulation-title">
         <div className="simulation-heading"><div><h2 id="simulation-title">Simulation · Issue #{simulation.state.issueNumber}</h2>
