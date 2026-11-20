@@ -144,3 +144,15 @@ small{font-size:11px}
 .git-readiness.ready strong{color:#a2e2bc}
 .git-readiness.needs-work{background:#332b26;border-color:#6c563b}
 .git-readiness.needs-work strong{color:#f1ce9b}
+
+
+.provider-panel{border:1px solid #2d3b55;background:#172135;border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.provider-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.provider-heading h3{margin-bottom:4px}
+.provider-heading p{font-size:12px}
+.provider-heading button{white-space:nowrap}
+.provider-results{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.provider-results>div{display:flex;flex-direction:column;gap:5px;background:#101827;border:1px solid #2e3e59;padding:12px;border-radius:8px}
+.provider-results span{color:#d7e4f5}
+.provider-results small{color:#95a9c5}
+@media(max-width:800px){.provider-heading{align-items:flex-start;flex-direction:column}.provider-results{grid-template-columns:1fr}}
