@@ -24,3 +24,26 @@ jobs:
         run: npm run typecheck
       - name: Execution approval policy tests
         run: npm run test:policy
+
+  ui-smoke:
+    name: Renderer click tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Install pinned Playwright test runner without modifying lockfile
+        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Install headless Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Click-test real React UI with mocked IPC
+        run: npm run test:ui
