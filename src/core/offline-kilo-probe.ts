@@ -6,10 +6,26 @@ import { promisify } from 'node:util';
 import { createIsolatedQualityLaunch, type IsolatedQualityLaunch } from './isolated-quality.ts';
 
 const exec=promisify(execFile);
+export type OfflineKiloStage = 'prepare'|'version'|'help';
+export type OfflineKiloDetail = 'mount-or-namespace'|'runtime-library'|'timeout'|'process-exit'|'other';
 export interface OfflineKiloProbeResult {
   passed:boolean;
   reason:'passed'|'unsupported-platform'|'cli-unavailable'|
     'cli-outside-usr'|'sandbox-failed'|'invalid-output';
+  stage:OfflineKiloStage|null;
+  detail:OfflineKiloDetail|null;
+  exitCode:number|null;
+}
+function classifyOfflineKiloError(error:unknown):Pick<OfflineKiloProbeResult,'detail'|'exitCode'>{
+  const e=error as {code?:unknown;killed?:unknown;stderr?:unknown}|null;
+  const exitCode=typeof e?.code==='number'&&Number.isInteger(e.code)&&e.code>=0&&e.code<=255?e.code:null;
+  if(e?.code==='ETIMEDOUT'||e?.killed===true)return {detail:'timeout',exitCode};
+  const stderr=typeof e?.stderr==='string'?e.stderr.slice(0,4096):'';
+  if(/bwrap:.*(?:mount|namespace|operation not permitted|create file|read-only file system)/i.test(stderr))
+    return {detail:'mount-or-namespace',exitCode};
+  if(/cannot find module|no such file or directory|shared librar|cannot open shared object/i.test(stderr))
+    return {detail:'runtime-library',exitCode};
+  return {detail:exitCode===null?'other':'process-exit',exitCode};
 }
 export type KiloVersionExecutor=(launch:IsolatedQualityLaunch)=>Promise<string>;
 const execute:KiloVersionExecutor=async launch=>{
@@ -105,11 +121,15 @@ export async function probeOfflineKiloRuntime(
   executor:KiloVersionExecutor=execute,
   lookup:()=>string|null=()=>discoverKiloInstallation()?.binary??null,
 ):Promise<OfflineKiloProbeResult>{
-  if(process.platform!=='linux')return {passed:false,reason:'unsupported-platform'};
+  const fail=(reason:OfflineKiloProbeResult['reason'],stage:OfflineKiloStage|null=null,
+    detail:OfflineKiloDetail|null=null,exitCode:number|null=null):OfflineKiloProbeResult=>
+      ({passed:false,reason,stage,detail,exitCode});
+  if(process.platform!=='linux')return fail('unsupported-platform');
   let executable:string|null;
-  try{executable=lookup()}catch{return {passed:false,reason:'cli-unavailable'};}
-  if(executable===null)return {passed:false,reason:'cli-unavailable'};
+  try{executable=lookup()}catch{return fail('cli-unavailable','prepare');}
+  if(executable===null)return fail('cli-unavailable','prepare');
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-kilo-runtime-'));
+  let stage:OfflineKiloStage='prepare';
   try {
     fs.mkdirSync(path.join(temp,'.git'));
     const placement=classifyKiloPlacement(executable);
@@ -125,25 +145,25 @@ export async function probeOfflineKiloRuntime(
     const launch=createIsolatedQualityLaunch(temp,'studio-probe');
     const separator=launch.args.indexOf('--');
     if(separator<0||launch.args[separator+1]!=='/usr/bin/npm'||launch.args[separator+2]!=='run')
-      return {passed:false,reason:'sandbox-failed'};
+      return fail('sandbox-failed','prepare');
     const args=launch.args.slice(0,separator);
     if(source)args.push('--dir','/opt','--ro-bind',source,'/opt/kilo');
-    // Two OFFLINE, non-model commands. Never use 'kilo run' without --help,
-    // --auto or project-level config. No network or credentials are mounted.
-    const version=[...args,'--',placement.executable,'--version'];
-    let output:string;
-    try{output=await executor({...launch,args:version})}
-    catch{return {passed:false,reason:'sandbox-failed'};}
-    if(!output.trim()||Buffer.byteLength(output)>4096)
-      return {passed:false,reason:'invalid-output'};
-    const help=[...args,'--',placement.executable,'run','--help'];
-    try{output=await executor({...launch,args:help})}
-    catch{return {passed:false,reason:'sandbox-failed'};}
-    if(!output.trim()||Buffer.byteLength(output)>32*1024 ||
-       !output.includes('--model')||!output.includes('--agent'))
-      return {passed:false,reason:'invalid-output'};
-    return {passed:true,reason:'passed'};
-  }catch{
-    return {passed:false,reason:'sandbox-failed'};
+    // Fixed, offline commands only. No model request, credentials or --auto.
+    for(const [part,command] of [
+      ['version',['--version']],
+      ['help',['run','--help']],
+    ] as const){
+      stage=part;
+      let output:string;
+      try{output=await executor({...launch,args:[...args,'--',placement.executable,...command]});}
+      catch(error){return {...fail('sandbox-failed',stage),...classifyOfflineKiloError(error)};}
+      if(typeof output!=='string'||!output.trim()||
+        Buffer.byteLength(output,'utf8')>(stage==='version'?4096:32*1024)||
+        (stage==='help'&&(!output.includes('--model')||!output.includes('--agent'))))
+        return fail('invalid-output',stage);
+    }
+    return {passed:true,reason:'passed',stage:null,detail:null,exitCode:null};
+  }catch(error){
+    return {...fail('sandbox-failed',stage),...classifyOfflineKiloError(error)};
   }finally{fs.rmSync(temp,{recursive:true,force:true});}
 }
