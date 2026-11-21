@@ -1,9 +1,10 @@
-import { runReadonlyReviewerTool, type ReviewerToolExecutor } from './reviewer-tool-runner.ts';
+import { runReadonlyReviewerTool, ReviewerToolFailure, type ReviewerToolExecutor, type ReviewerToolFailureReason } from './reviewer-tool-runner.ts';
 
 export interface ReviewerToolProbe {
   supported: boolean;
   passed: boolean;
   reason: 'passed' | 'unsupported-platform' | 'tool-failed';
+  detail: ReviewerToolFailureReason | null;
 }
 
 /** Read-only local validation of the actual sandboxed Git binary.
@@ -15,7 +16,7 @@ export async function probeReadonlyReviewerTool(
   executor?: ReviewerToolExecutor,
 ): Promise<ReviewerToolProbe> {
   if (process.platform !== 'linux') {
-    return { supported: false, passed: false, reason: 'unsupported-platform' };
+    return { supported: false, passed: false, reason: 'unsupported-platform', detail: null };
   }
   try {
     const result = await runReadonlyReviewerTool({
@@ -23,8 +24,8 @@ export async function probeReadonlyReviewerTool(
       args: ['--no-pager','status','--porcelain=v1','--untracked-files=all'],
     }, undefined, executor);
     if (!result.isolated || !result.readonly)
-      return { supported: true, passed: false, reason: 'tool-failed' };
-    return { supported: true, passed: true, reason: 'passed' };
+      return { supported: true, passed: false, reason: 'tool-failed', detail: null };
+    return { supported: true, passed: true, reason: 'passed', detail: null };
   } catch {
     return { supported: true, passed: false, reason: 'tool-failed' };
   }
