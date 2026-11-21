@@ -154,8 +154,13 @@ export class FreeQuotaGuard {
     // Write a fail-closed marker FIRST: concurrent processes must see HTTP 429
     // even when another instance currently owns the JSON accounting lock.
     fs.mkdirSync(this.userData,{recursive:true,mode:0o700});
-    if(!markerExists(this.userData))
-      fs.writeFileSync(rateLimitMarker(this.userData),'429',{flag:'wx',mode:0o600});
+    if(!markerExists(this.userData)){
+      try{fs.writeFileSync(rateLimitMarker(this.userData),'429',{flag:'wx',mode:0o600});}
+      catch(error){
+        if((error as NodeJS.ErrnoException).code!=='EEXIST'||!markerExists(this.userData))
+          throw Error('Cannot persist rate-limit marker');
+      }
+    }
     this.withWriteLock(()=>{
       const now=this.clock(),state=trim(this.load(),now);
       state.rateLimited=true;state.blockedUntil=retryAfterMs===null?null:now+retryAfterMs;
