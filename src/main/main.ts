@@ -23,6 +23,8 @@ import { probeLocalReviewModel } from '../core/local-review-model-probe';
 import { probeReviewerCalibration } from '../core/reviewer-calibration-probe';
 import { probeOllamaReadiness } from '../core/ollama-readiness';
 import { fetchKiloFreeModels } from '../core/kilo-free-models';
+import { FreeQuotaGuard } from '../core/free-quota-guard';
+import { probeKiloReviewerCalibration } from '../core/kilo-reviewer-calibration-probe';
 import { loadKiloRoles, saveKiloRoles } from '../core/kilo-role-models';
 
 interface Project { id: string; name: string; path: string }
@@ -124,6 +126,25 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  let kiloCalibrationInProgress=false;
+  ipcMain.handle('core:kilo-reviewer-calibrate', async (_event, id:string) => {
+    if(typeof id!=='string')throw new Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw new Error('Not a Git repository');
+    if(kiloCalibrationInProgress)return {passed:false,reason:'quota-reserve'} as const;
+    kiloCalibrationInProgress=true;
+    try{
+      const selected=loadKiloRoles(app.getPath('userData'),id);
+      if(!selected)return {passed:false,reason:'model-unavailable'} as const;
+      const catalog=await fetchKiloFreeModels();
+      if(!catalog.models.some(item=>item.id===selected.reviewer))
+        return {passed:false,reason:'model-unavailable'} as const;
+      return await probeKiloReviewerCalibration(
+        selected.reviewer,new FreeQuotaGuard(app.getPath('userData')));
+    }catch{
+      return {passed:false,reason:'transport-failed'} as const;
+    }finally{kiloCalibrationInProgress=false;}
+  });
   ipcMain.handle('core:kilo-role-models:get', (_event, id: string) => {
     if(typeof id!=='string')throw new Error('Invalid project ID');
     const project=getProject(id);
