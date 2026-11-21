@@ -95,6 +95,16 @@ try{
     catch{return true;}
   });
   assert.equal(catalogRejected,true,'Kilo catalog requires registered Git project ID');
+  const roleReadRejected=await page.evaluate(async()=>{
+    try{await window.studio.kiloRoleModels('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(roleReadRejected,true);
+  const roleWriteRejected=await page.evaluate(async()=>{
+    try{await window.studio.saveKiloRoleModels('not-a-project',{planner:'x',builder:'x',reviewer:'x'});return false;}
+    catch{return true;}
+  });
+  assert.equal(roleWriteRejected,true);
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{

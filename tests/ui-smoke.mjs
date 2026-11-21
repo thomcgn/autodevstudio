@@ -32,6 +32,8 @@ const success={
   localModelProbe:{passed:true,reason:'passed'},
   reviewerCalibration:{passed:true,reason:'passed'},
   ollamaReadiness:{ready:true,reason:'ready'},
+  kiloRoleModels:null,
+  saveKiloRoleModels:null,
   kiloFreeModels:{checkedAt:'2026-11-21T00:00:00.000Z',models:[
     {id:'nvidia/nemotron-3-ultra-550b-a55b:free',name:'NVIDIA Nemotron 3 Ultra',preferred:true},
     {id:'kilo-auto/free',name:'Auto Free',preferred:false}]},
@@ -74,6 +76,8 @@ async function fixture(page){
       reviewerCalibration:()=>respond('reviewerCalibration'),
       ollamaReadiness:()=>respond('ollamaReadiness'),
       kiloFreeModels:()=>respond('kiloFreeModels'),
+      kiloRoleModels:()=>respond('kiloRoleModels'),
+      saveKiloRoleModels:async(_id,roles)=>{calls.push('saveKiloRoleModels');return structuredClone(roles);},
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
@@ -120,7 +124,11 @@ try {
   assert.equal(await localModelButton.isVisible(),true);
   assert.equal(await localModelButton.isEnabled(),true);
   await click(page,'Free-Modelle laden');
-  await page.getByText('NVIDIA Nemotron 3 Ultra',{exact:false}).waitFor();
+  await page.locator('strong').filter({hasText:'NVIDIA Nemotron 3 Ultra'}).first().waitFor();
+  await page.getByLabel('Modell für reviewer').selectOption('kilo-auto/free');
+  await page.getByRole('button',{name:'Rollenzuordnung speichern'}).click();
+  await page.getByText('Rollenzuordnung gespeichert',{exact:false}).waitFor();
+  assert.equal(await page.getByLabel('Modell für builder').inputValue(),'nvidia/nemotron-3-ultra-550b-a55b:free');
   assert.equal(await page.getByText('nvidia/nemotron-3-ultra-550b-a55b:free',{exact:true}).count(),1);
   await click(page,'Ollama-Verbindung prüfen');
   await page.getByText('Ollama erreichbar · qwen2.5-coder:3b installiert',{exact:false}).waitFor();
