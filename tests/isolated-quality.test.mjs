@@ -29,7 +29,7 @@ test('quality sandbox exposes only its selected writable project while protectin
   const readonly=launch.args.indexOf('/project/.git');
   assert.ok(readonly>writable);
   assert.deepEqual(launch.args.slice(readonly-2,readonly+1),['--ro-bind',path.join(root,'.git'),'/project/.git']);
-  assert.deepEqual(launch.args.slice(-4),['run','--','typecheck']);
+  assert.deepEqual(launch.args.slice(-4),['/usr/bin/npm','run','--','typecheck']);
 });
 test('invalid scripts, missing repository and .git worktree files fail closed',t=>{
   const root=fixture(t);
