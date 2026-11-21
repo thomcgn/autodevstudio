@@ -17,6 +17,10 @@ export interface KiloAdaptersConfig {
   publish: (issue: IssueTask) => Promise<void>;
   /** Allows hermetic tests to inject a provider without invoking Kilo. */
   invoke?: (input: KiloInvocation) => Promise<KiloInvocationResult>;
+  /** Mandatory independent reviewer transport. This must enforce the full
+   * OS-level reviewer isolation before it is supplied in production. The
+   * ordinary Kilo invoke path is deliberately forbidden for reviewers. */
+  invokeReviewer?: (input: KiloInvocation) => Promise<KiloInvocationResult>;
 }
 
 function parseDelimitedObject(output: string): Record<string, unknown> {
@@ -66,8 +70,8 @@ function taskContext(issue: IssueTask): string {
 const JSON_INSTRUCTION = '\nReturn ONLY a final structured result between AUTODEV_JSON_BEGIN and AUTODEV_JSON_END; put a valid JSON object between them.';
 
 export function createKiloWorkflowAdapters(config: KiloAdaptersConfig): WorkflowAdapters {
-  // A distinct reviewer agent is mandatory; a naming distinction alone does not make it
-  // read-only. A later runtime sandbox/policy layer must enforce that before production.
+  // Distinct roles do not imply isolation. A reviewer must use a separate
+  // provider transport and is never launched through the ordinary Kilo runner.
   if (config.reviewer.agent === config.builder.agent ||
       config.reviewer.agent === config.planner.agent) {
     throw new Error('Reviewer must use a separately configured agent');
@@ -77,8 +81,12 @@ export function createKiloWorkflowAdapters(config: KiloAdaptersConfig): Workflow
   }
   const invoke = config.invoke ?? runKilo;
   const run = (role: AgentRole, prompt: string): Promise<KiloInvocationResult> => {
+    if (role === 'reviewer' && !config.invokeReviewer) {
+      throw new Error('Independent reviewer transport is mandatory; unsandboxed Kilo reviewer forbidden');
+    }
     const roleConfig = config[role];
-    return invoke({
+    const transport = role === 'reviewer' ? config.invokeReviewer! : invoke;
+    return transport({
       cwd: config.cwd,
       role, agent: roleConfig.agent, model: roleConfig.model,
       prompt, inactivityTimeoutMs: config.inactivityTimeoutMs,
