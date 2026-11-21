@@ -1,6 +1,7 @@
 import {runGuardedEvidenceReview,type GuardedReviewDependencies} from './guarded-evidence-review.ts';
 import {loadCoreCheckpoint,saveCoreCheckpoint,type GitIdentity} from './checkpoint-store.ts';
 import {inspectProjectLock} from './project-lock.ts';
+import {saveReviewedEvidenceProof} from './review-approval-proof.ts';
 import {captureGitIdentity} from './git-identity.ts';
 import type {EvidenceOnlyReviewerTransport} from './evidence-only-reviewer.ts';
 import type {IssueTask,PlanResult,BuildResult} from './orchestrator.ts';
@@ -60,6 +61,9 @@ export async function reviewAndCheckpointQuality(
     runId:cp.runId,issueNumber:cp.issueNumber,stage:'quality',
     git:currentGit,sessions:cp.sessions,reviewPassed:true,qualityPassed:false,
   },revision);
+  // A reviewed PASS without its immutable fingerprint receipt must never
+  // satisfy a later Quality gate, even if a crash occurred after checkpointing.
+  saveReviewedEvidenceProof(base,projectPath,lockToken,next,result.evidenceFingerprint);
   return {kind:'quality-pending',issueNumber:issue.number,
     reviewedFingerprint:result.evidenceFingerprint,
     checkpointRevision:next.revision,publishAuthorized:false};
