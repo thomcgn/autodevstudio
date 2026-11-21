@@ -14,10 +14,11 @@ export interface QuotaPauseResult {
 }
 /** The caller must already hold the project lock and have saved a checkpoint.
  * No checkout, commit, publish or inference runs while entering pause.
+ * Strict mode: an unknown provider remainder MUST create a pause.
  */
 export function pauseForQuota(base:string,projectPath:string,lockToken:string,
   currentGit:GitIdentity,guard:FreeQuotaGuard,phase:QuotaPhase='normal'):QuotaPauseResult {
-  const decision=guard.decide(phase);
+  const decision=guard.decide(phase,true);
   if(decision.allowed)throw Error('No quota pause required');
   const checkpoint=loadCoreCheckpoint(base,projectPath);
   if(!checkpoint)throw Error('Cannot pause without durable checkpoint');
@@ -35,7 +36,8 @@ export function pauseForQuota(base:string,projectPath:string,lockToken:string,
     quotaReason:decision.reason as QuotaPauseResult['quotaReason'],retryAt:decision.retryAt};
 }
 /** An expired timer NEVER resumes work. Resume requires current quota permission,
- * exact saved revision, locked project and Git identity. Publish remains manual.
+ * exact saved revision, locked project and Git identity, and freshly
+ * provider-verified remaining quota. Publish remains manual.
  */
 export function assertQuotaResume(base:string,projectPath:string,lockToken:string,
   expectedRevision:number,currentGit:GitIdentity,guard:FreeQuotaGuard,
@@ -45,7 +47,7 @@ export function assertQuotaResume(base:string,projectPath:string,lockToken:strin
   const checkpoint=loadCoreCheckpoint(base,projectPath);
   if(!checkpoint||checkpoint.revision!==expectedRevision)throw Error('Stale quota checkpoint');
   assertCoreResumeEligible(checkpoint,projectPath,currentGit);
-  const decision:QuotaDecision=guard.decide(phase);
+  const decision:QuotaDecision=guard.decide(phase,true);
   if(!decision.allowed)throw Error('Quota remains unavailable: '+decision.reason);
   return checkpoint;
 }
