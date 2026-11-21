@@ -40,7 +40,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Install pinned Playwright test runner without modifying lockfile
-        run: npm install --no-save --package-lock=false @playwright/test@1.56.1
+        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Install headless Chromium
