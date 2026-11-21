@@ -9,6 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface FullPipelineProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'setup-failed' | 'pipeline-failed' }
 export interface QualityScriptProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'script-failed' | 'missing-expected-write' | 'git-metadata-modified' }
 export interface IsolatedQualityProbe { supported: boolean; passed: boolean; reason: 'passed' | 'unsupported-platform' | 'npm-unavailable' | 'sandbox-failed' | 'invalid-output'; stage: 'prepare' | 'node' | 'npm' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'command-exit' | 'timeout' | 'other' | null; exitCode: number | null }
 export interface ReviewerToolProbe { supported: boolean; passed: boolean; reason: 'passed' | 'unsupported-platform' | 'tool-failed'; detail: 'mountpoint-failed' | 'runtime-library-missing' | 'git-repository-rejected' | 'git-command-failed' | 'timeout' | 'sandbox-launch-failed' | null }
@@ -55,6 +56,7 @@ declare global {
     reviewerProbe(id: string): Promise<ReviewerToolProbe>;
     qualityProbe(id: string): Promise<IsolatedQualityProbe>;
     qualityScriptProbe(id: string): Promise<QualityScriptProbeResult>;
+    fullPipelineProbe(id: string): Promise<FullPipelineProbeResult>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
