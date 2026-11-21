@@ -233,3 +233,8 @@ small{font-size:11px}
 .readiness-steps span{color:#b0c5df;overflow-wrap:anywhere}
 .readiness-steps>small{grid-column:1/-1;color:#97acc8;font-size:11px}
 @media(max-width:900px){.readiness-steps{grid-template-columns:1fr}}
+
+
+.local-fallback-choice{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#c5d6ef;min-width:0;line-height:1.5}
+.local-fallback-choice input{flex:none;margin-top:3px;width:16px;height:16px}
+.local-fallback-choice span{overflow-wrap:anywhere}
