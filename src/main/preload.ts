@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('studio', {
   reviewerCalibration: (id: string) => ipcRenderer.invoke('core:reviewer-calibration', id),
   ollamaReadiness: (id: string) => ipcRenderer.invoke('core:ollama-readiness', id),
   kiloFreeModels: (id: string) => ipcRenderer.invoke('core:kilo-free-models', id),
+  kiloFreeUsage: (id: string) => ipcRenderer.invoke('core:kilo-free-usage', id),
   kiloRoleModels: (id: string) => ipcRenderer.invoke('core:kilo-role-models:get', id),
   kiloReviewerCalibrate: (id: string) => ipcRenderer.invoke('core:kilo-reviewer-calibrate', id),
   saveKiloRoleModels: (id: string, roles: {planner:string;builder:string;reviewer:string}) => ipcRenderer.invoke('core:kilo-role-models:save', id, roles),
