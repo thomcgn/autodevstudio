@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -50,6 +50,9 @@ function App(): React.JSX.Element {
   const [roleModelsMessage, setRoleModelsMessage] = useState('');
   const [kiloCalibration, setKiloCalibration] = useState<ReviewerCalibrationResult | null>(null);
   const [kiloCalibrating, setKiloCalibrating] = useState(false);
+  const [readiness, setReadiness] = useState<FreeRunReadiness | null>(null);
+  const [checkingReadiness, setCheckingReadiness] = useState(false);
+  const [readinessError, setReadinessError] = useState('');
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -140,6 +143,8 @@ function App(): React.JSX.Element {
     setDraftRoleModels({planner:'',builder:'',reviewer:''});
     setRoleModelsMessage('');
     setKiloCalibration(null);
+    setReadiness(null);
+    setReadinessError('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -281,6 +286,16 @@ function App(): React.JSX.Element {
     }
   };
 
+  const checkFreeRunReadiness = async (): Promise<void> => {
+    if(!selected||checkingReadiness)return;
+    setCheckingReadiness(true);
+    setReadiness(null);
+    setReadinessError('');
+    try{setReadiness(await window.studio.freeRunReadiness(selected));}
+    catch{setReadinessError('Modell-/Kontingentprüfung fehlgeschlagen · keine Ausführung freigegeben');}
+    finally{setCheckingReadiness(false);}
+  };
+
   const calibrateKiloFreeReviewer = async (): Promise<void> => {
     if(!selected||!savedRoleModels||kiloCalibrating)return;
     setKiloCalibration(null);
@@ -298,6 +313,7 @@ function App(): React.JSX.Element {
       const saved=await window.studio.saveKiloRoleModels(selected,draftRoleModels);
       setSavedRoleModels(saved);
       setKiloCalibration(null);
+      setReadiness(null);
       setRoleModelsMessage('Rollenzuordnung gespeichert · Ausführung weiterhin gesperrt');
     }catch{
       setRoleModelsMessage('Speichern abgelehnt: Kilo-Free-Katalog nicht erreichbar oder Modell nicht mehr kostenlos');
@@ -508,6 +524,26 @@ function App(): React.JSX.Element {
                 <div className="button-group"><button disabled={savingRoleModels||!draftRoleModels.planner||!draftRoleModels.builder||!draftRoleModels.reviewer}
                   onClick={()=>void saveRoleModels()}>{savingRoleModels?'Speichere …':'Rollenzuordnung speichern'}</button></div>
                 {roleModelsMessage && <p role="status">{roleModelsMessage}</p>}
+                {savedRoleModels && <div className="readiness-panel">
+                  <div className="sandbox-check">
+                    <button type="button" className="quiet" disabled={checkingReadiness}
+                      onClick={()=>void checkFreeRunReadiness()}>{checkingReadiness?'Prüfe Konfiguration …':'Modell-/Kontingentbereitschaft prüfen'}</button>
+                    <span>Nur Free-Katalog und lokalen Zähler lesen · keine Modellanfragen, kein Git-Zugriff</span>
+                  </div>
+                  {readinessError && <p role="alert">{readinessError}</p>}
+                  {readiness && <div role="status" className="readiness-steps">
+                    {readiness.roles.map(item=><div key={item.role}>
+                      <strong>{item.role==='planner'?'Planner':item.role==='builder'?'Builder':'Reviewer'}</strong>
+                      <span>{item.reason==='ready'?'Modell und Quote geprüft':
+                        item.reason==='remaining-unknown'?'Echte Kilo-Restquote nicht verfügbar':
+                        item.reason==='reviewer-not-independent'?'Reviewer nutzt dasselbe Modell wie Builder':
+                        item.reason==='model-no-longer-free'?'Modell nicht mehr als Free bestätigt':
+                        item.reason==='429-blocked'?'Kilo-429-Sperre aktiv':
+                        item.reason==='reserve-protected'?'5-%-Reserve geschützt':'Modell noch nicht konfiguriert'}</span>
+                    </div>)}
+                    <small>Produktive Ausführung weiterhin gesperrt. Eine positive Modellprüfung ersetzt weder Sandbox noch Quality Gates.</small>
+                  </div>}
+                </div>}
                 {savedRoleModels && <div className="sandbox-check">
                   <button type="button" className="quiet" disabled={kiloCalibrating||kiloModelLoading}
                     onClick={()=>void calibrateKiloFreeReviewer()}>{kiloCalibrating?'Prüfe Kilo Reviewer …':'Kilo-Free-Reviewer kalibrieren'}</button>
