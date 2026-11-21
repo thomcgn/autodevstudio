@@ -14,6 +14,7 @@ import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
+import { probeIsolatedQualityRuntime } from '../core/isolated-quality-probe';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -114,6 +115,12 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:quality-probe', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    return probeIsolatedQualityRuntime();
+  });
   ipcMain.handle('core:reviewer-probe', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
