@@ -20,6 +20,7 @@ import { probeFullStandalonePipeline } from '../core/full-pipeline-probe';
 import { probeOfflineKiloRuntime } from '../core/offline-kilo-probe';
 import { probeOfflineReviewerSandbox } from '../core/offline-reviewer-probe';
 import { probeLocalReviewModel } from '../core/local-review-model-probe';
+import { probeReviewerCalibration } from '../core/reviewer-calibration-probe';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -121,6 +122,16 @@ function createWindow(): void {
 app.whenReady().then(() => {
   history().recoverInterrupted();
   // Explicit user-triggered fixture only. Never reads a selected repository.
+  let calibrationInProgress = false;
+  ipcMain.handle('core:reviewer-calibration', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    if (calibrationInProgress) return {passed:false,reason:'busy'} as const;
+    calibrationInProgress = true;
+    try { return await probeReviewerCalibration(); }
+    finally { calibrationInProgress = false; }
+  });
   ipcMain.handle('core:local-model-probe', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
