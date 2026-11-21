@@ -24,6 +24,7 @@ import { probeReviewerCalibration } from '../core/reviewer-calibration-probe';
 import { probeOllamaReadiness } from '../core/ollama-readiness';
 import { fetchKiloFreeModels } from '../core/kilo-free-models';
 import { FreeQuotaGuard } from '../core/free-quota-guard';
+import { inspectFreeRunReadiness } from '../core/free-run-readiness';
 import { probeKiloReviewerCalibration } from '../core/kilo-reviewer-calibration-probe';
 import { loadKiloRoles, saveKiloRoles } from '../core/kilo-role-models';
 
@@ -126,6 +127,16 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:free-run-readiness', async (_event,id:string) => {
+    if(typeof id!=='string')throw new Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw new Error('Not a Git repository');
+    const roles=loadKiloRoles(app.getPath('userData'),id);
+    // Catalog lookup reads only public data; it never invokes free models.
+    const catalog=await fetchKiloFreeModels();
+    const quota=new FreeQuotaGuard(app.getPath('userData')).snapshot();
+    return inspectFreeRunReadiness(roles,catalog.models,quota);
+  });
   ipcMain.handle('core:kilo-free-usage', (_event,id:string) => {
     if(typeof id!=='string')throw new Error('Invalid project ID');
     const project=getProject(id);
