@@ -1,6 +1,5 @@
 import type { IssueTask, QualityResult } from './orchestrator.ts';
 import type { QualityGateConfig } from './quality-gates.ts';
-import type { ReviewEvidence } from './review-evidence.ts';
 import type { EvidenceAwareWorkflowAdapters } from './integrity-guarded-adapters.ts';
 import { createIntegrityGuardedAdapters } from './integrity-guarded-adapters.ts';
 import { collectReviewEvidence } from './review-evidence.ts';
@@ -37,7 +36,7 @@ export function createIsolatedQualityWorkflowAdapters(
 ): WorkflowAdapters {
   if (!Array.isArray(config.scripts) || config.scripts.length === 0)
     throw new Error('Explicitly approved isolated quality scripts required');
-  if (adapters.quality !== undefined)
+  if ('quality' in adapters)
     throw new Error('Quality callback must be supplied by isolated controller only');
   return createIntegrityGuardedAdapters(
     config.projectPath,
