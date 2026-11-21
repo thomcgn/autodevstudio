@@ -45,7 +45,7 @@ export async function probeLocalReviewModel(
     const message=error instanceof Error?error.message:'';
     if(/HTTP 404|unavailable/.test(message))
       return {passed:false,reason:'model-unavailable'};
-    if(/review|verdict|JSON|Ollama tools|completion/i.test(message))
+    if(/^(?:Invalid reviewer|Reviewer output|Reviewer verdict|Invalid Ollama JSON|Ollama tools|Ollama completion|Malformed reviewer|Review verdict|Unexpected reviewer)/i.test(message))
       return {passed:false,reason:'invalid-verdict'};
     return {passed:false,reason:'request-failed'};
   }
