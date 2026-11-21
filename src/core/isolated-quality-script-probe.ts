@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { runIsolatedQualityGates } from './isolated-quality-gates.ts';
-import { runIsolatedNpmScript, type IsolatedQualityLaunch } from './isolated-quality.ts';
+import { runIsolatedNpmScript } from './isolated-quality.ts';
 import type { QualityScriptRunner } from './quality-gates.ts';
 
 export interface QualityScriptProbeResult {
