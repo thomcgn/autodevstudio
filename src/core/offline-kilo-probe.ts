@@ -31,11 +31,21 @@ export type KiloVersionExecutor=(launch:IsolatedQualityLaunch)=>Promise<string>;
 const execute:KiloVersionExecutor=async launch=>{
   const result=await exec(launch.binary,launch.args,{
     cwd:launch.cwd,encoding:'utf8',windowsHide:true,shell:false,
-    timeout:10000,maxBuffer:32*1024,env:{PATH:'/usr/bin:/bin',LANG:'C'},
+    timeout:10000,maxBuffer:128*1024,env:{PATH:'/usr/bin:/bin',LANG:'C'},
   });
-  return result.stdout;
+  // Some CLI versions write help to stderr even when exiting successfully.
+  return result.stdout+result.stderr;
 };
 
+/** Offline CLI help may be ANSI-colored or written to stderr.
+ * Accept only recognisable run-command help, not arbitrary nonempty output.
+ */
+export function isKiloRunHelp(output:string):boolean{
+  if(typeof output!=='string'||Buffer.byteLength(output,'utf8')>128*1024)return false;
+  const clean=output.replace(/\x1b\[[0-9;]*m/g,'');
+  return /--model\b/.test(clean)&&/--agent\b/.test(clean)&&
+    /(?:kilo\s+run|run kilo|run with a message)/i.test(clean);
+}
 export interface KiloInstallation {
   /** Canonical executable path determined from PATH; never renderer input. */
   binary: string;
@@ -148,20 +158,28 @@ export async function probeOfflineKiloRuntime(
       return fail('sandbox-failed','prepare');
     const args=launch.args.slice(0,separator);
     if(source)args.push('--dir','/opt','--ro-bind',source,'/opt/kilo');
-    // Fixed, offline commands only. No model request, credentials or --auto.
-    for(const [part,command] of [
-      ['version',['--version']],
-      ['help',['run','--help']],
-    ] as const){
-      stage=part;
-      let output:string;
-      try{output=await executor({...launch,args:[...args,'--',placement.executable,...command]});}
-      catch(error){return {...fail('sandbox-failed',stage),...classifyOfflineKiloError(error)};}
-      if(typeof output!=='string'||!output.trim()||
-        Buffer.byteLength(output,'utf8')>(stage==='version'?4096:32*1024)||
-        (stage==='help'&&(!output.includes('--model')||!output.includes('--agent'))))
-        return fail('invalid-output',stage);
+    // Fixed, offline commands only. A syntax-help failure cannot authorize
+    // model use, but the official alternate 'kilo help run' can corroborate
+    // supported flags without needing credentials or actual model execution.
+    stage='version';
+    let output:string;
+    try{output=await executor({...launch,args:[...args,'--',placement.executable,'--version']});}
+    catch(error){return {...fail('sandbox-failed',stage),...classifyOfflineKiloError(error)};}
+    if(typeof output!=='string'||!output.trim()||Buffer.byteLength(output,'utf8')>4096)
+      return fail('invalid-output',stage);
+    stage='help';
+    let firstError:unknown=null;
+    for(const command of [['run','--help'],['help','run']] as const){
+      try{
+        output=await executor({...launch,args:[...args,'--',placement.executable,...command]});
+        if(isKiloRunHelp(output)){
+          firstError=null;
+          break;
+        }
+      }catch(error){firstError=error;}
     }
+    if(firstError)return {...fail('sandbox-failed',stage),...classifyOfflineKiloError(firstError)};
+    if(!isKiloRunHelp(output))return fail('invalid-output',stage);
     return {passed:true,reason:'passed',stage:null,detail:null,exitCode:null};
   }catch(error){
     return {...fail('sandbox-failed',stage),...classifyOfflineKiloError(error)};

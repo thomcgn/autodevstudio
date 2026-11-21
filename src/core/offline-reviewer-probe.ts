@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createOfflineReviewerSandboxLaunch, type OfflineReviewerSandboxLaunch } from './offline-reviewer-sandbox.ts';
-import { discoverKiloInstallation } from './offline-kilo-probe.ts';
+import { discoverKiloInstallation, isKiloRunHelp } from './offline-kilo-probe.ts';
 
 const exec=promisify(execFile);
 export type ReviewerProbeStage = 'runtime' | 'help' | 'policy';
@@ -21,9 +21,9 @@ export type ReviewerHelpExecutor=(launch:OfflineReviewerSandboxLaunch)=>Promise<
 const run:ReviewerHelpExecutor=async launch=>{
   const result=await exec(launch.binary,launch.args,{
     cwd:launch.cwd,shell:false,windowsHide:true,timeout:10000,
-    maxBuffer:32*1024,encoding:'utf8',env:{PATH:'/usr/bin:/bin',LANG:'C'},
+    maxBuffer:128*1024,encoding:'utf8',env:{PATH:'/usr/bin:/bin',LANG:'C'},
   });
-  return result.stdout;
+  return result.stdout+result.stderr;
 };
 /** Offline staged diagnosis. We do NOT show raw CLI output, stderr, config,
  * home paths or provider data. The no-policy stages distinguish Bubblewrap/CLI
@@ -47,6 +47,7 @@ function classifyFailure(error:unknown):Pick<OfflineReviewerProbeResult,'detail'
 function deriveStageLaunch(
   launch:OfflineReviewerSandboxLaunch,
   stage:ReviewerProbeStage,
+  alternative=false,
 ):OfflineReviewerSandboxLaunch{
   const delimiter=launch.args.indexOf('--');
   const envAt=launch.args.indexOf('KILO_CONFIG_CONTENT');
@@ -59,7 +60,8 @@ function deriveStageLaunch(
   if(stage==='runtime')
     return {...launch,args:[...stripped,'--',command,'--version']};
   if(stage==='help')
-    return {...launch,args:[...stripped,'--',command,'run','--help']};
+    return {...launch,args:[...stripped,'--',command,...(alternative?['help','run']:['run','--help'])]};
+  if(alternative)return {...launch,args:[...launch.args.slice(0,delimiter),'--',command,'help','run']};
   return launch;
 }
 export async function probeOfflineReviewerSandbox(
@@ -80,14 +82,25 @@ export async function probeOfflineReviewerSandbox(
     const launch=createOfflineReviewerSandboxLaunch(scratch,kilo,'kilocode/reviewer-probe');
     for(const next of ['runtime','help','policy'] as const){
       stage=next;
-      let output:string;
-      try{output=await executor(deriveStageLaunch(launch,stage))}
-      catch(error){return {...failed('sandbox-failed',stage),...classifyFailure(error)};}
-      const length=typeof output==='string'?Buffer.byteLength(output,'utf8'):Infinity;
-      const valid=length>0&&length<=32*1024&&
-        (stage==='runtime'?/^\s*(?:kilo\s+)?v?\d+\.\d+\.\d+/i.test(output):
-          output.includes('--model')&&output.includes('--agent'));
-      if(!valid)return failed('invalid-output',stage);
+      if(stage==='runtime'){
+        let version:string;
+        try{version=await executor(deriveStageLaunch(launch,stage));}
+        catch(error){return {...failed('sandbox-failed',stage),...classifyFailure(error)};}
+        if(typeof version!=='string'||Buffer.byteLength(version)>4096||
+          !/^\s*(?:kilo\s+)?v?\d+\.\d+\.\d+/i.test(version))
+          return failed('invalid-output',stage);
+        continue;
+      }
+      let help='';
+      let lastError:unknown=null;
+      for(const fallback of [false,true]){
+        try{
+          help=await executor(deriveStageLaunch(launch,stage,fallback));
+          if(isKiloRunHelp(help)){lastError=null;break;}
+        }catch(error){lastError=error;}
+      }
+      if(lastError)return {...failed('sandbox-failed',stage),...classifyFailure(lastError)};
+      if(!isKiloRunHelp(help))return failed('invalid-output',stage);
     }
     return {passed:true,reason:'passed',stage:null,detail:null,exitCode:null};
   }catch(error){
