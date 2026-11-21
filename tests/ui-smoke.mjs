@@ -29,6 +29,7 @@ const success={
   fullPipelineProbe:{passed:true,reason:'passed'},
   offlineKiloProbe:{passed:true,reason:'passed',stage:null,detail:null,exitCode:null},
   offlineReviewerProbe:{passed:true,reason:'passed',stage:null,detail:null,exitCode:null},
+  localModelProbe:{passed:true,reason:'passed'},
 };
 const names=[
   'Sandbox testen','Reviewer-Tool testen','Quality-Sandbox testen',
@@ -64,6 +65,7 @@ async function fixture(page){
       fullPipelineProbe:()=>respond('fullPipelineProbe'),
       offlineKiloProbe:()=>respond('offlineKiloProbe'),
       offlineReviewerProbe:()=>respond('offlineReviewerProbe'),
+      localModelProbe:()=>respond('localModelProbe'),
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
@@ -85,7 +87,8 @@ async function click(page,name){
     ({'Umgebung prüfen':'diagnostics','Sandbox testen':'sandboxProbe',
       'Reviewer-Tool testen':'reviewerProbe','Quality-Sandbox testen':'qualityProbe',
       'Quality-Skript testen':'qualityScriptProbe','Gesamtworkflow testen':'fullPipelineProbe',
-      'Kilo-Laufzeit testen':'offlineKiloProbe','Reviewer-Sandbox testen':'offlineReviewerProbe'})[name]);
+      'Kilo-Laufzeit testen':'offlineKiloProbe','Reviewer-Sandbox testen':'offlineReviewerProbe',
+      'Lokales Review-Modell testen':'localModelProbe'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -100,12 +103,20 @@ try {
   await fixture(page);
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
+  // Real local inference is self-contained: its button MUST be available
+  // without re-clicking all seven independent sandbox readiness probes.
+  const localModelButton=page.getByRole('button',{name:'Lokales Review-Modell testen',exact:true});
+  assert.equal(await localModelButton.isVisible(),true);
+  assert.equal(await localModelButton.isEnabled(),true);
+  await click(page,'Lokales Review-Modell testen');
+  await page.getByText('Ollama-Modell antwortet strukturiert',{exact:false}).waitFor();
   await fullChain(page);
   for(const sentence of [
     'Schreibschutz und Start in Testumgebung bestätigt',
     'Git-Prozess isoliert gestartet','npm in isolierter Testumgebung gestartet',
     'Testskript isoliert ausgeführt','Lokaler Trockenlauf erfolgreich',
     'Kilo-Version und Run-Aufrufsyntax offline geprüft','Reviewer-CLI isoliert',
+    'Ollama-Modell antwortet strukturiert',
   ])assert.equal(await page.getByText(sentence,{exact:false}).count()>0,true,sentence);
   assert.equal(await page.getByText('Legacy-Agentenlauf').count(),0);
   // An invalid Kilo result must NOT make the independent reviewer button vanish.
@@ -126,6 +137,12 @@ try {
   await page.getByText('Reviewer-Sandbox: Reviewer-Konfiguration fehlgeschlagen',{exact:false}).waitFor();
   const text=await page.locator('body').innerText();
   assert.equal(text.includes('/home/tom/.local/npm'),false);
+  // The model call is deliberate, not on page load or workspace selection.
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.localModelProbe={passed:false,reason:'invalid-verdict'};
+  });
+  await click(page,'Lokales Review-Modell testen');
+  await page.getByText('Modellantwort entspricht noch nicht dem Reviewer-Format',{exact:false}).waitFor();
   // Switching projects resets all probe state and does not carry PASS badges across projects.
   await page.getByRole('button',{name:/another-repo/}).click();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
