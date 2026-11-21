@@ -11,7 +11,6 @@ function fixture(t){
   const base=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-workflow-lock-'));
   const projectPath=path.join(base,'project');
   fs.mkdirSync(projectPath);
-  t.after(()=>fs.rmSync(base,{recursive:true,force:true}));
   return {base,projectPath};
 }
 function adapters(onPublish=async()=>{}){
@@ -27,7 +26,7 @@ const issue={number:3,title:'Issue',body:''};
 test('requires a live owned lock for every workflow step',async t=>{
   const {base,projectPath}=fixture(t);
   const owned=acquireProjectLock(base,projectPath);
-  t.after(()=>{try{owned.release()}catch{}});
+  t.after(()=>{try{owned.release()}catch{};fs.rmSync(base,{recursive:true,force:true});});
   const guarded=createProjectLockGuardedAdapters({
     base,projectPath,token:owned.record.token,
   },adapters());
@@ -40,7 +39,7 @@ test('requires a live owned lock for every workflow step',async t=>{
 test('rejects wrong token and never launches planner',async t=>{
   const {base,projectPath}=fixture(t);
   const owned=acquireProjectLock(base,projectPath);
-  t.after(()=>owned.release());
+  t.after(()=>{try{owned.release()}catch{};fs.rmSync(base,{recursive:true,force:true});});
   let started=false;
   const guarded=createProjectLockGuardedAdapters({base,projectPath,token:'unowned'},{
     ...adapters(),planner:async()=>{started=true;return {summary:'plan',steps:['one']};},
@@ -52,7 +51,7 @@ test('rejects lock replacement during asynchronous quality stage before publish'
   const {base,projectPath}=fixture(t);
   const owned=acquireProjectLock(base,projectPath);
   let released=false, published=false;
-  t.after(()=>{if(!released)try{owned.release()}catch{}});
+  t.after(()=>{if(!released)try{owned.release()}catch{};fs.rmSync(base,{recursive:true,force:true});});
   const guarded=createProjectLockGuardedAdapters({base,projectPath,token:owned.record.token},
     {...adapters(async()=>{published=true;}),quality:async()=>{
       owned.release();released=true;
