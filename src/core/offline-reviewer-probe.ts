@@ -87,7 +87,7 @@ export async function probeOfflineReviewerSandbox(
         try{version=await executor(deriveStageLaunch(launch,stage));}
         catch(error){return {...failed('sandbox-failed',stage),...classifyFailure(error)};}
         if(typeof version!=='string'||Buffer.byteLength(version)>4096||
-          !/^\\s*(?:kilo\\s+)?v?\\d+\\.\\d+\\.\\d+/i.test(version))
+          !/^\s*(?:kilo\s+)?v?\d+\.\d+\.\d+/i.test(version))
           return failed('invalid-output',stage);
         continue;
       }
