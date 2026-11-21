@@ -15,6 +15,9 @@ export function classifySandboxError(error: unknown): NonNullable<SandboxProbeRe
   if (/loopback.*(?:operation not permitted|permission denied)|RTM_NEWADDR/i.test(stderr)) return 'network-setup-denied';
   if (/(?:user namespace|namespace|uid map|gid map).*(?:operation not permitted|permission denied|not allowed)|no permissions to create new namespace/i.test(stderr)) return 'namespace-permission-denied';
   if (/(?:mount|bind|ro-bind).*(?:failed|permission denied|no such file or directory|operation not permitted)/i.test(stderr)) return 'mount-setup-failed';
+  if (item?.code === 40) return 'canary-read-failed';
+  if (item?.code === 41) return 'write-protection-failed';
+  if (item?.code === 42) return 'canary-verification-failed';
   if (typeof item?.code === 'number') return 'probe-command-failed';
   return 'unknown';
 }
@@ -22,7 +25,8 @@ export interface SandboxProbeResult {
   available: boolean;
   isolated: boolean;
   reason: 'passed' | 'unsupported-platform' | 'sandbox-failed' | 'canary-modified';
-  detail: 'namespace-permission-denied' | 'network-setup-denied' | 'mount-setup-failed' | 'probe-command-failed' | 'timeout' | 'unknown' | null;
+  detail: 'namespace-permission-denied' | 'network-setup-denied' | 'mount-setup-failed' | 'canary-read-failed' | 'write-protection-failed' | 'canary-verification-failed' | 'probe-command-failed' | 'timeout' | 'unknown' | null;
+  exitCode: number | null;
 }
 
 /** A deliberate local smoke-test, not a production sandbox and not a model run.
@@ -38,7 +42,7 @@ export async function probeBubblewrap(
   },
 ): Promise<SandboxProbeResult> {
   if (process.platform !== 'linux')
-    return { available: false, isolated: false, reason: 'unsupported-platform', detail: null };
+    return { available: false, isolated: false, reason: 'unsupported-platform', detail: null, exitCode: null };
 
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'autodev-sandbox-probe-'));
   const canary = path.join(temp, 'canary.txt');
@@ -63,10 +67,14 @@ export async function probeBubblewrap(
     catch (error) { runnerFailure = error; }
     // Even if an injected or defective runner claims PASS, verify host canary.
     if (fs.readFileSync(canary, 'utf8') !== 'original')
-      return { available: true, isolated: false, reason: 'canary-modified', detail: null };
-    return runnerFailure !== null
-      ? { available: true, isolated: false, reason: 'sandbox-failed', detail: classifySandboxError(runnerFailure) }
-      : { available: true, isolated: true, reason: 'passed', detail: null };
+      return { available: true, isolated: false, reason: 'canary-modified', detail: null, exitCode: null };
+    if (runnerFailure !== null) {
+      const code = (runnerFailure as { code?: unknown }).code;
+      const exitCode = typeof code === 'number' && Number.isInteger(code) && code >= 0 && code <= 255 ? code : null;
+      return { available: true, isolated: false, reason: 'sandbox-failed',
+        detail: classifySandboxError(runnerFailure), exitCode };
+    }
+    return { available: true, isolated: true, reason: 'passed', detail: null, exitCode: null };
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }

@@ -18,7 +18,7 @@ test('sandbox probe never targets a selected Git project or calls a model', asyn
   });
   if (process.platform === 'linux') {
     assert.equal(seen,1);
-    assert.deepEqual(outcome,{available:true,isolated:true,reason:'passed',detail:null});
+    assert.deepEqual(outcome,{available:true,isolated:true,reason:'passed',detail:null,exitCode:null});
   } else assert.equal(outcome.reason,'unsupported-platform');
 });
 
@@ -63,4 +63,17 @@ test('failure result contains only stable diagnostic enum, not raw error',async(
   assert.equal(result.detail,'namespace-permission-denied');
   assert.ok(!JSON.stringify(result).includes('secret'));
   assert.ok(!JSON.stringify(result).includes('/private'));
+});
+
+test('classifies distinct canary read, protection and verification exits',async()=>{
+  assert.equal(classifySandboxError({code:40,stderr:''}),'canary-read-failed');
+  assert.equal(classifySandboxError({code:41,stderr:''}),'write-protection-failed');
+  assert.equal(classifySandboxError({code:42,stderr:''}),'canary-verification-failed');
+});
+test('provides only validated numeric exit code for failures',async()=>{
+  if(process.platform!=='linux') return;
+  const result=await probeBubblewrap(async()=>{const error=new Error('local private path');error.code=40;throw error;});
+  assert.equal(result.exitCode,40);
+  assert.equal(result.detail,'canary-read-failed');
+  assert.ok(!JSON.stringify(result).includes('private'));
 });
