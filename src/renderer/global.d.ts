@@ -10,7 +10,7 @@ export interface SimulationResult {
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
 export interface OfflineReviewerProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'sandbox-failed' | 'invalid-output'; stage: 'runtime' | 'help' | 'policy' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'permission-or-config' | 'timeout' | 'process-exit' | 'other' | null; exitCode: number | null }
-export interface OfflineKiloProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'cli-outside-usr' | 'sandbox-failed' | 'invalid-output' }
+export interface OfflineKiloProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'cli-outside-usr' | 'sandbox-failed' | 'invalid-output'; stage: 'prepare' | 'version' | 'help' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'timeout' | 'process-exit' | 'other' | null; exitCode: number | null }
 export interface FullPipelineProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'setup-failed' | 'pipeline-failed' }
 export interface QualityScriptProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'script-failed' | 'missing-expected-write' | 'git-metadata-modified' }
 export interface IsolatedQualityProbe { supported: boolean; passed: boolean; reason: 'passed' | 'unsupported-platform' | 'npm-unavailable' | 'sandbox-failed' | 'invalid-output'; stage: 'prepare' | 'node' | 'npm' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'command-exit' | 'timeout' | 'other' | null; exitCode: number | null }
