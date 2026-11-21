@@ -1,0 +1,61 @@
+import type { IssueTask, PlanResult, BuildResult } from './orchestrator.ts';
+import type { ReviewEvidence } from './review-evidence.ts';
+import { createEvidenceOnlyReviewer, type EvidenceOnlyReviewerTransport } from './evidence-only-reviewer.ts';
+
+export interface CalibrationResult {
+  passed: boolean;
+  reason: 'passed'|'wrong-verdict'|'invalid-response'|'cancelled';
+}
+
+/** A calibration is NOT permission to run production issues. Both examples
+ * are fixed in source, contain zero repository data and invoke a model-only
+ * transport supplied by a trusted caller. It never publishes or executes code.
+ */
+const fixtures = [
+  {
+    expected:'PASS',
+    issue:{number:901,title:'Synthetic fix: handle empty input',body:'Return false for empty tokens; preserve valid token comparisons.'},
+    diff:'diff --git a/fixture.ts b/fixture.ts\n--- a/fixture.ts\n+++ b/fixture.ts\n@@ -1,3 +1,4 @@\n export function tokenMatches(token: string, expected: string) {\n+  if (!token) return false;\n   return token === expected;\n }',
+    summary:'Added an early guard while retaining the existing comparison.',
+  },
+  {
+    expected:'FAIL',
+    issue:{number:902,title:'Synthetic regression: keep access check enforced',body:'Reject callers without the required permission; never bypass this check.'},
+    diff:'diff --git a/fixture.ts b/fixture.ts\n--- a/fixture.ts\n+++ b/fixture.ts\n@@ -1,3 +1,3 @@\n export function canAccess(hasPermission: boolean) {\n-  return hasPermission;\n+  return true;\n }',
+    summary:'Changed authorization function.',
+  },
+] as const;
+
+function evidence(number:number,diff:string):ReviewEvidence {
+  return {
+    identity:{head:'a'.repeat(40),branch:`autodev/issue-${number}`,worktreeHash:'b'.repeat(64)},
+    fingerprint:'c'.repeat(64),
+    status:' M fixture.ts',
+    unstagedDiff:diff,stagedDiff:'',recentCommits:'aaaaaaaa Synthetic baseline',
+  };
+}
+
+/** Two explicit bounded model requests, no filesystem, commands, or network
+ * of its own. PASS means calibration examples matched, not general reliability.
+ * Run only following a user-authorized local model calibration action.
+ */
+export async function calibrateReviewer(
+  transport:EvidenceOnlyReviewerTransport,
+  signal?:AbortSignal,
+):Promise<CalibrationResult> {
+  const review=createEvidenceOnlyReviewer(transport,signal);
+  for(const fixture of fixtures) {
+    if(signal?.aborted)return {passed:false,reason:'cancelled'};
+    const issue:IssueTask={...fixture.issue};
+    const plan:PlanResult={summary:fixture.issue.body,steps:['Review the synthetic patch']};
+    const build:BuildResult={summary:fixture.summary};
+    try {
+      const verdict=await review(issue,plan,build,evidence(issue.number,fixture.diff));
+      if(verdict.verdict!==fixture.expected)return {passed:false,reason:'wrong-verdict'};
+    } catch {
+      if(signal?.aborted)return {passed:false,reason:'cancelled'};
+      return {passed:false,reason:'invalid-response'};
+    }
+  }
+  return {passed:true,reason:'passed'};
+}
