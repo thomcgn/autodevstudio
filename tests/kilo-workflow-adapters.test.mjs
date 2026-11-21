@@ -47,6 +47,11 @@ test('adapter routes planner/builder/reviewer separately and feeds FAIL back to 
     onSessionId: (role,id)=>sessions.push([role,id]),
     qualityGate: async ()=>{checked++;return {passed:true,summary:'tests pass'};},
     publish: async ()=>{publications++;},
+    invokeReviewer: async invocation=>{
+      invocations.push(invocation);
+      invocation.onSessionId('reviewer12345');
+      throw new Error('Reviewer cannot reach normal Kilo transport');
+    },
     invoke: async invocation=>{
       invocations.push(invocation);
       invocation.onSessionId(invocation.role + '12345');
@@ -81,13 +86,35 @@ test('inconsistent reviewer PASS never reaches quality or publish', async () => 
     onSessionId:()=>{},
     qualityGate:async()=>{qualified++;return {passed:true,summary:'ok'};},
     publish:async()=>{published++;},
+    invokeReviewer:async input=>({
+      output:wrap({verdict:'PASS',blockers:10,summary:'Not really'}),
+      sessionId:null,elapsedMs:1,
+    }),
     invoke:async input=>({
-      output:input.role==='planner'?wrap({summary:'plan',steps:['step']}):
-        input.role==='builder'?'completed':wrap({verdict:'PASS',blockers:10,summary:'Not really'}),
+      output:input.role==='planner'?wrap({summary:'plan',steps:['step']}):'completed',
       sessionId:null,elapsedMs:1,
     }),
   });
   await assert.rejects(orchestrateIssue({number:1,title:'Issue',body:''},adapters),/zero blockers/);
+  assert.equal(qualified,0);
+  assert.equal(published,0);
+});
+
+test('missing isolated reviewer transport blocks review before any quality or publish',async()=>{
+  let reviewedOnNormalTransport=false,qualified=0,published=0;
+  const adapters=createKiloWorkflowAdapters({
+    cwd:'/any/repo',planner:{agent:'planner',model:'m'},builder:{agent:'builder',model:'m'},
+    reviewer:{agent:'reviewer',model:'m'},inactivityTimeoutMs:1000,
+    onSessionId:()=>{},
+    qualityGate:async()=>{qualified++;return {passed:true,summary:'ok'};},
+    publish:async()=>{published++;},
+    invoke:async input=>{
+      if(input.role==='reviewer')reviewedOnNormalTransport=true;
+      return {output:input.role==='planner'?wrap({summary:'plan',steps:['step']}):'built',sessionId:null,elapsedMs:1};
+    },
+  });
+  await assert.rejects(orchestrateIssue({number:1,title:'Issue',body:''},adapters),/Independent reviewer transport is mandatory/);
+  assert.equal(reviewedOnNormalTransport,false);
   assert.equal(qualified,0);
   assert.equal(published,0);
 });
