@@ -22,6 +22,7 @@ import { probeOfflineReviewerSandbox } from '../core/offline-reviewer-probe';
 import { probeLocalReviewModel } from '../core/local-review-model-probe';
 import { probeReviewerCalibration } from '../core/reviewer-calibration-probe';
 import { probeOllamaReadiness } from '../core/ollama-readiness';
+import { fetchKiloFreeModels } from '../core/kilo-free-models';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -122,6 +123,12 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:kilo-free-models', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    return fetchKiloFreeModels();
+  });
   ipcMain.handle('core:ollama-readiness', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
