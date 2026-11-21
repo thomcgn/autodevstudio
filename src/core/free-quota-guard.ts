@@ -78,12 +78,14 @@ export class FreeQuotaGuard {
       blockedBy429:state.rateLimited,
       observedAt:state.observedAt};
   }
-  decide(phase:QuotaPhase):QuotaDecision {
+  decide(phase:QuotaPhase,requireVerified=false):QuotaDecision {
     const state=this.snapshot(),now=this.clock();
     if(state.blockedBy429)return {allowed:false,reason:'rate-limit',retryAt:state.resetAt};
     // A reset deadline does not PROVE quota has recovered. An actual successful
     // provider response must re-establish availability before continuing.
     const available=state.remainingVerified;
+    if(requireVerified&&available===null)
+      return {allowed:false,reason:'unknown-remaining',retryAt:null};
     if(available!==null&&available<=(phase==='normal'?RESERVED_REQUESTS:0))
       return {allowed:false,reason:'reserve',retryAt:state.resetAt};
     if(state.usedLocal>=(phase==='normal'?HOURLY_LIMIT-RESERVED_REQUESTS:HOURLY_LIMIT))
@@ -93,8 +95,8 @@ export class FreeQuotaGuard {
     return {allowed:true,reason:'allowed',retryAt:null};
   }
   /** Call immediately BEFORE a Kilo inference session: no retries or model switching. */
-  recordAttempt(phase:QuotaPhase='normal'):void {
-    const decision=this.decide(phase);
+  recordAttempt(phase:QuotaPhase='normal',requireVerified=false):void {
+    const decision=this.decide(phase,requireVerified);
     if(!decision.allowed)throw Error('Quota checkpoint required: '+decision.reason);
     const now=this.clock(),state=trim(this.load(),now);
     state.events.push(now);
