@@ -47,3 +47,22 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Click-test real React UI with mocked IPC
         run: npm run test:ui
+
+  desktop-smoke:
+    name: Packaged Electron integration (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install desktop dependencies
+        run: npm ci
+      - name: Install pinned Playwright test runner without lockfile changes
+        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
+      - name: Build standalone desktop app
+        run: npm run package
+      - name: Native Electron desktop click and IPC smoke
+        run: xvfb-run -a npm run test:desktop
