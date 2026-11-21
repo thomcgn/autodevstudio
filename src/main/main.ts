@@ -21,6 +21,7 @@ import { probeOfflineKiloRuntime } from '../core/offline-kilo-probe';
 import { probeOfflineReviewerSandbox } from '../core/offline-reviewer-probe';
 import { probeLocalReviewModel } from '../core/local-review-model-probe';
 import { probeReviewerCalibration } from '../core/reviewer-calibration-probe';
+import { recordLocalReviewCalibration } from '../core/local-review-calibration-record';
 import { probeOllamaReadiness } from '../core/ollama-readiness';
 import { fetchKiloFreeModels } from '../core/kilo-free-models';
 import { FreeQuotaGuard } from '../core/free-quota-guard';
@@ -222,8 +223,15 @@ app.whenReady().then(() => {
     if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
     if (calibrationInProgress) return {passed:false,reason:'busy'} as const;
     calibrationInProgress = true;
-    try { return await probeReviewerCalibration(); }
-    finally { calibrationInProgress = false; }
+    try {
+      const userData=app.getPath('userData');
+      // A fresh attempt revokes any previous PASS before contacting the model.
+      recordLocalReviewCalibration(userData,id,false);
+      const result=await probeReviewerCalibration();
+      if(result.passed===true&&result.reason==='passed')
+        recordLocalReviewCalibration(userData,id,true);
+      return result;
+    } finally { calibrationInProgress = false; }
   });
   ipcMain.handle('core:local-model-probe', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
