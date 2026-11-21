@@ -56,3 +56,22 @@ test('unknown provider and untracked changes cannot reach model transport',async
     {...evidence,status:'?? unsafe.ts'}),/Untracked/);
   assert.equal(requested,false);
 });
+
+test('cloud provider remains explicitly selected and never forwards gateway key in prompt',async()=>{
+  const response='AUTODEV_JSON_BEGIN\n{"verdict":"FAIL","blockers":1,"feedback":"No unit tests"}\nAUTODEV_JSON_END';
+  const transport=createSelectedReviewerTransport({
+    provider:'kilo-gateway',model:'anthropic/claude-sonnet-4.5',
+    gatewayKey:()=> 'valid-test-gateway-key',
+  },async(url,options)=>{
+    assert.equal(url,'https://ai-gateway.kilo.ai/api/v1/chat/completions');
+    assert.equal(options.headers.Authorization,'Bearer valid-test-gateway-key');
+    assert.equal(options.body.includes('valid-test-gateway-key'),false);
+    const payload=JSON.parse(options.body);
+    assert.equal(payload.tool_choice,'none');
+    return new Response(JSON.stringify({choices:[{
+      message:{role:'assistant',content:response},finish_reason:'stop',
+    }]}),{status:200});
+  },id);
+  const result=await createEvidenceOnlyReviewer(transport)(issue,plan,build,evidence);
+  assert.equal(result.verdict,'FAIL');
+});
