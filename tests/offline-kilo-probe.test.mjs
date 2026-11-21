@@ -139,7 +139,7 @@ test('missing model/agent CLI options fails closed, without running a model',asy
     assert.deepEqual(launch.args.slice(-2),['run','--help']);
     return 'Usage: kilo run --only-help\n';
   },()=>binary);
-  assert.equal(n,2);
+  assert.equal(n,3);
   assert.deepEqual(result,{passed:false,reason:'invalid-output',stage:'help',detail:null,exitCode:null});
 });
 
@@ -175,4 +175,22 @@ test('CLI help that exits nonzero is not treated as a valid result',async t=>{
   assert.equal(result.stage,'help');
   assert.equal(result.detail,'process-exit');
   assert.equal(result.exitCode,1);
+});
+
+test('official kilo help run fallback succeeds when run --help exits unsuccessfully',async t=>{
+  const {binary}=fixture(t,'npm');
+  if(process.platform!=='linux')return;
+  const calls=[];
+  const result=await probeOfflineKiloRuntime(async launch=>{
+    const argv=launch.args.slice(launch.args.indexOf('--')+2);
+    calls.push(argv);
+    if(argv.join(' ')==='--version')return 'kilo 7.8.27\n';
+    if(argv.join(' ')==='run --help'){
+      const e=new Error('no stderr returned');e.code=254;throw e;
+    }
+    assert.deepEqual(argv,['help','run']);
+    return '\x1b[32mkilo run\x1b[0m --agent reviewer --model provider/model\n';
+  },()=>binary);
+  assert.deepEqual(calls,[['--version'],['run','--help'],['help','run']]);
+  assert.equal(result.passed,true);
 });
