@@ -12,8 +12,10 @@ export type ReviewerToolFailureReason =
   | 'git-command-failed' | 'timeout' | 'sandbox-launch-failed';
 
 export class ReviewerToolFailure extends Error {
-  constructor(readonly reason: ReviewerToolFailureReason) {
+  readonly reason: ReviewerToolFailureReason;
+  constructor(reason: ReviewerToolFailureReason) {
     super('Isolated reviewer tool failed; result cannot count as PASS');
+    this.reason = reason;
   }
 }
 /** No raw stderr, paths or credentials cross the trust boundary. */
