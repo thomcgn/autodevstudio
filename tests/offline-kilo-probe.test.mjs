@@ -54,7 +54,7 @@ test('verified npm package alone is exposed read-only, not host home',async t=>{
     return 'Usage: kilo run --agent <name> --model <model>\n';
   },()=>binary);
   if(process.platform==='linux'){
-    assert.deepEqual(result,{passed:true,reason:'passed'});
+    assert.deepEqual(result,{passed:true,reason:'passed',stage:null,detail:null,exitCode:null});
     assert.equal(called,2);
   }else assert.equal(called,0);
 });
@@ -80,7 +80,7 @@ test('standalone Kilo copies exactly one executable into private staging',async 
     return 'Usage: kilo run --agent <name> --model <model>\n';
   },()=>binary);
   if(process.platform==='linux'){
-    assert.deepEqual(result,{passed:true,reason:'passed'});
+    assert.deepEqual(result,{passed:true,reason:'passed',stage:null,detail:null,exitCode:null});
     assert.equal(called,2);
   }else assert.equal(called,0);
 });
@@ -140,5 +140,39 @@ test('missing model/agent CLI options fails closed, without running a model',asy
     return 'Usage: kilo run --only-help\n';
   },()=>binary);
   assert.equal(n,2);
-  assert.deepEqual(result,{passed:false,reason:'invalid-output'});
+  assert.deepEqual(result,{passed:false,reason:'invalid-output',stage:'help',detail:null,exitCode:null});
+});
+
+test('version succeeds but help fails with classified status and no raw stderr',async t=>{
+  const {binary}=fixture(t,'npm');
+  if(process.platform!=='linux')return;
+  const calls=[];
+  const result=await probeOfflineKiloRuntime(async launch=>{
+    const kind=launch.args.at(-1)==='--version'?'version':'help';
+    calls.push(kind);
+    if(kind==='version')return 'kilo 7.8.27\n';
+    const error=new Error('SECRET /home/user/.config/kilo');
+    error.code=254;
+    error.stderr='missing dependency: cannot find module /home/user/private';
+    throw error;
+  },()=>binary);
+  assert.deepEqual(calls,['version','help']);
+  assert.deepEqual(result,{passed:false,reason:'sandbox-failed',stage:'help',detail:'runtime-library',exitCode:254});
+  assert.ok(!JSON.stringify(result).includes('/home/user'));
+});
+test('CLI help that exits nonzero is not treated as a valid result',async t=>{
+  const {binary}=fixture(t,'npm');
+  if(process.platform!=='linux')return;
+  let count=0;
+  const result=await probeOfflineKiloRuntime(async launch=>{
+    count++;
+    if(launch.args.at(-1)==='--version')return 'kilo 7.8.27\n';
+    const error=new Error('non-zero');
+    error.code=1;
+    throw error;
+  },()=>binary);
+  assert.equal(count,2);
+  assert.equal(result.stage,'help');
+  assert.equal(result.detail,'process-exit');
+  assert.equal(result.exitCode,1);
 });
