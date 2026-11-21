@@ -85,6 +85,11 @@ try{
     catch{return true;}
   });
   assert.equal(calibrationRejected,true,'Calibration requires registered Git project ID');
+  const ollamaRejected=await page.evaluate(async()=>{
+    try{await window.studio.ollamaReadiness('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(ollamaRejected,true,'Ollama preflight requires registered Git project ID');
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{
