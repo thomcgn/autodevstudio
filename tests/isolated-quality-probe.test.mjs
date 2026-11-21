@@ -11,6 +11,9 @@ test('tests isolated Node then npm, never executing project scripts',async()=>{
     calls.push(launch.args.slice(-3));
     assert.equal(launch.binary,'bwrap');
     assert.ok(launch.args.includes('--unshare-net'));
+    assert.ok(launch.args.includes('--unshare-pid'));
+    assert.equal(launch.args[launch.args.indexOf('--proc')+1],'/proc');
+    assert.ok(!launch.args.includes('/proc/self/exe'), 'do not bind host executable');
     assert.ok(launch.args.includes('--clearenv'));
     assert.ok(launch.args.includes('/project/.git'));
     assert.ok(!launch.args.includes('/home'));
