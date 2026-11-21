@@ -31,6 +31,7 @@ const success={
   offlineReviewerProbe:{passed:true,reason:'passed',stage:null,detail:null,exitCode:null},
   localModelProbe:{passed:true,reason:'passed'},
   reviewerCalibration:{passed:true,reason:'passed'},
+  ollamaReadiness:{ready:true,reason:'ready'},
 };
 const names=[
   'Sandbox testen','Reviewer-Tool testen','Quality-Sandbox testen',
@@ -68,6 +69,7 @@ async function fixture(page){
       offlineReviewerProbe:()=>respond('offlineReviewerProbe'),
       localModelProbe:()=>respond('localModelProbe'),
       reviewerCalibration:()=>respond('reviewerCalibration'),
+      ollamaReadiness:()=>respond('ollamaReadiness'),
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
@@ -91,7 +93,8 @@ async function click(page,name){
       'Quality-Skript testen':'qualityScriptProbe','Gesamtworkflow testen':'fullPipelineProbe',
       'Kilo-Laufzeit testen':'offlineKiloProbe','Reviewer-Sandbox testen':'offlineReviewerProbe',
       'Lokales Review-Modell testen':'localModelProbe',
-      'Reviewer kalibrieren (2 Modellanfragen)':'reviewerCalibration'})[name]);
+      'Reviewer kalibrieren (2 Modellanfragen)':'reviewerCalibration',
+      'Ollama-Verbindung prüfen':'ollamaReadiness'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -111,6 +114,8 @@ try {
   const localModelButton=page.getByRole('button',{name:'Lokales Review-Modell testen',exact:true});
   assert.equal(await localModelButton.isVisible(),true);
   assert.equal(await localModelButton.isEnabled(),true);
+  await click(page,'Ollama-Verbindung prüfen');
+  await page.getByText('Ollama erreichbar · qwen2.5-coder:3b installiert',{exact:false}).waitFor();
   await click(page,'Lokales Review-Modell testen');
   await page.getByText('Ollama-Modell antwortet strukturiert',{exact:false}).waitFor();
   const calibrationButton=page.getByRole('button',{name:'Reviewer kalibrieren (2 Modellanfragen)',exact:true});
@@ -175,6 +180,16 @@ try {
   });
   await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
   await page.getByText('Modellantwort nicht im geforderten Reviewer-JSON-Format (Testfall 2/2)',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.ollamaReadiness={ready:false,reason:'model-missing'};
+  });
+  await click(page,'Ollama-Verbindung prüfen');
+  await page.getByText('Ollama erreichbar, aber qwen2.5-coder:3b fehlt',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.ollamaReadiness={ready:false,reason:'unreachable'};
+  });
+  await click(page,'Ollama-Verbindung prüfen');
+  await page.getByText('Ollama auf 127.0.0.1:11434 nicht erreichbar',{exact:false}).waitFor();
   // Switching projects resets all probe state and does not carry PASS badges across projects.
   await page.getByRole('button',{name:/another-repo/}).click();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
