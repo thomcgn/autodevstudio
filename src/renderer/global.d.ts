@@ -9,6 +9,13 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface FreeRunReadiness {
+  roles: Array<{role:'planner'|'builder'|'reviewer';model:string|null;reason:
+    'ready'|'not-configured'|'model-no-longer-free'|'429-blocked'|
+    'remaining-unknown'|'reserve-protected'|'reviewer-not-independent'}>;
+  modelAndQuotaReady:boolean;executionEnabled:false;
+  countedLocally:number;remainingVerified:number|null;
+}
 export interface KiloFreeUsage {
   source:'provider-verified'|'local-observation'|'unknown';
   limit:number;reserve:number;usedLocal:number;
@@ -78,6 +85,7 @@ declare global {
     ollamaReadiness(id: string): Promise<OllamaReadinessResult>;
     kiloFreeModels(id: string): Promise<KiloFreeCatalog>;
     kiloFreeUsage(id: string): Promise<KiloFreeUsage>;
+    freeRunReadiness(id: string): Promise<FreeRunReadiness>;
     kiloRoleModels(id: string): Promise<KiloRoleModels | null>;
     kiloReviewerCalibrate(id: string): Promise<ReviewerCalibrationResult>;
     saveKiloRoleModels(id: string, roles: KiloRoleModels): Promise<KiloRoleModels>;

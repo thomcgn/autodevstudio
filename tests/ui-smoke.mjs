@@ -34,6 +34,11 @@ const success={
   ollamaReadiness:{ready:true,reason:'ready'},
   kiloRoleModels:null,
   kiloReviewerCalibration:{passed:true,reason:'passed'},
+  freeRunReadiness:{roles:[
+    {role:'planner',model:'nvidia/nemotron-3-ultra-550b-a55b:free',reason:'remaining-unknown'},
+    {role:'builder',model:'nvidia/nemotron-3-ultra-550b-a55b:free',reason:'remaining-unknown'},
+    {role:'reviewer',model:'kilo-auto/free',reason:'remaining-unknown'}],
+    modelAndQuotaReady:false,executionEnabled:false,countedLocally:2,remainingVerified:null},
   kiloFreeUsage:{source:'local-observation',limit:200,reserve:10,usedLocal:2,remainingVerified:null,resetAt:null,blockedBy429:false,observedAt:1},
   saveKiloRoleModels:null,
   kiloFreeModels:{checkedAt:'2026-11-21T00:00:00.000Z',models:[
@@ -80,6 +85,7 @@ async function fixture(page){
       kiloFreeModels:()=>respond('kiloFreeModels'),
       kiloRoleModels:()=>respond('kiloRoleModels'),
       kiloReviewerCalibrate:()=>respond('kiloReviewerCalibration'),
+      freeRunReadiness:()=>respond('freeRunReadiness'),
       kiloFreeUsage:()=>respond('kiloFreeUsage'),
       saveKiloRoleModels:async(_id,roles)=>{calls.push('saveKiloRoleModels');return structuredClone(roles);},
       addProject:async()=>null,removeProject:async()=>true,
@@ -109,7 +115,8 @@ async function click(page,name){
       'Ollama-Verbindung prüfen':'ollamaReadiness',
       'Free-Modelle laden':'kiloFreeModels',
       'Kilo-Free-Reviewer kalibrieren':'kiloReviewerCalibration',
-      'Kilo-Requests anzeigen':'kiloFreeUsage'})[name]);
+      'Kilo-Requests anzeigen':'kiloFreeUsage',
+      'Modell-/Kontingentbereitschaft prüfen':'freeRunReadiness'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -137,6 +144,9 @@ try {
   await page.getByLabel('Modell für reviewer').selectOption('kilo-auto/free');
   await page.getByRole('button',{name:'Rollenzuordnung speichern'}).click();
   await page.getByText('Rollenzuordnung gespeichert',{exact:false}).waitFor();
+  await click(page,'Modell-/Kontingentbereitschaft prüfen');
+  assert.equal(await page.getByText('Echte Kilo-Restquote nicht verfügbar',{exact:false}).count(),3);
+  await page.getByText('Produktive Ausführung weiterhin gesperrt',{exact:false}).waitFor();
   await click(page,'Kilo-Free-Reviewer kalibrieren');
   await page.getByText('Kilo-Reviewer hat zwei synthetische PASS/FAIL-Fälle richtig erkannt',{exact:false}).waitFor();
   await page.evaluate(()=>{
