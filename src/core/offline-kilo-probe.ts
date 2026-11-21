@@ -19,37 +19,100 @@ const execute:KiloVersionExecutor=async launch=>{
   });
   return result.stdout;
 };
-/** Offline test of the CLI binary, never a model invocation. Only the
- * verified /usr-installed CLI can be exposed; never mount the host HOME,
- * configured provider secrets, other projects or network.
- *
- * This is a runtime capability check only, not proof of safe Kilo model use.
+
+export interface KiloInstallation {
+  /** Canonical executable path determined from PATH; never renderer input. */
+  binary: string;
+}
+
+/** Resolve only an executable named kilo from the current process PATH.
+ * No shell, no npm execution, no Home or provider config inspection.
+ */
+export function discoverKiloInstallation(
+  envPath:string|undefined=process.env.PATH,
+):KiloInstallation|null{
+  for(const dir of (envPath??'').split(path.delimiter)){
+    if(!dir || !path.isAbsolute(dir))continue;
+    const candidate=path.join(dir,'kilo');
+    try {
+      const binary=fs.realpathSync(candidate);
+      const stat=fs.statSync(binary);
+      if(!stat.isFile()||!fs.constants.X_OK)continue;
+      fs.accessSync(binary,fs.constants.X_OK);
+      return {binary};
+    }catch {/* not an executable candidate */}
+  }
+  return null;
+}
+export interface KiloPackagePlacement {
+  kind:'system'|'package'|'standalone';
+  executable:string;
+  sourceDirectory?:string;
+}
+/** Never mount a home ancestor. A user-installed npm package is eligible only
+ * if its package.json explicitly identifies @kilocode/cli and its executable
+ * lives inside that exact package; otherwise copy just the standalone binary.
+ */
+export function classifyKiloPlacement(binary:string):KiloPackagePlacement{
+  const canonical=fs.realpathSync(binary);
+  if(!fs.statSync(canonical).isFile())throw new Error('Kilo executable not a file');
+  if(canonical.startsWith('/usr/'))
+    return {kind:'system',executable:canonical};
+  let directory=path.dirname(canonical);
+  for(let i=0;i<8;i++){
+    const pkg=path.join(directory,'package.json');
+    try {
+      const stat=fs.lstatSync(pkg);
+      if(stat.isFile()&&!stat.isSymbolicLink()&&stat.size<=128*1024){
+        const data:unknown=JSON.parse(fs.readFileSync(pkg,'utf8'));
+        if(data&&typeof data==='object'&&!Array.isArray(data)&&
+          (data as {name?:unknown}).name==='@kilocode/cli'){
+          const relative=path.relative(directory,canonical);
+          if(relative&&relative!=='.'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative))
+            return {kind:'package',executable:'/opt/kilo/'+relative,sourceDirectory:directory};
+        }
+      }
+    }catch {/* not a matching package root */}
+    const parent=path.dirname(directory);
+    if(parent===directory)break;
+    directory=parent;
+  }
+  return {kind:'standalone',executable:'/opt/kilo/kilo'};
+}
+/** Offline test only. The sandbox receives either /usr, one verified Kilo npm
+ * package (read-only), or a COPY of one standalone executable (read-only).
+ * It never receives the host HOME, credentials, runtime sockets or network.
  */
 export async function probeOfflineKiloRuntime(
   executor:KiloVersionExecutor=execute,
-  lookup:()=>string|null=()=>{
-    if(!fs.existsSync('/usr/bin/kilo'))return null;
-    return fs.realpathSync('/usr/bin/kilo');
-  },
+  lookup:()=>string|null=()=>discoverKiloInstallation()?.binary??null,
 ):Promise<OfflineKiloProbeResult>{
   if(process.platform!=='linux')return {passed:false,reason:'unsupported-platform'};
   let executable:string|null;
   try{executable=lookup()}catch{return {passed:false,reason:'cli-unavailable'};}
   if(executable===null)return {passed:false,reason:'cli-unavailable'};
-  if(!executable.startsWith('/usr/')||executable.includes('/../'))
-    return {passed:false,reason:'cli-outside-usr'};
   const temp=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-kilo-runtime-'));
   try {
     fs.mkdirSync(path.join(temp,'.git'));
+    const placement=classifyKiloPlacement(executable);
+    let source:string|undefined=placement.sourceDirectory;
+    if(placement.kind==='standalone'){
+      const isolated=path.join(temp,'isolated-cli');
+      fs.mkdirSync(isolated,{mode:0o700});
+      const copy=path.join(isolated,'kilo');
+      fs.copyFileSync(fs.realpathSync(executable),copy);
+      fs.chmodSync(copy,0o500);
+      source=isolated;
+    }
     const launch=createIsolatedQualityLaunch(temp,'studio-probe');
     const separator=launch.args.indexOf('--');
     if(separator<0||launch.args[separator+1]!=='/usr/bin/npm'||launch.args[separator+2]!=='run')
       return {passed:false,reason:'sandbox-failed'};
-    const probeLaunch:IsolatedQualityLaunch={
-      ...launch,args:[...launch.args.slice(0,separator+1),'/usr/bin/kilo','--version'],
-    };
+    const args=launch.args.slice(0,separator);
+    if(source)args.push('--dir','/opt','--ro-bind',source,'/opt/kilo');
+    args.push('--',placement.executable,'--version');
     let output:string;
-    try{output=await executor(probeLaunch)}
+    try{output=await executor({...launch,args})}
     catch{return {passed:false,reason:'sandbox-failed'};}
     if(!output.trim()||Buffer.byteLength(output)>4096)
       return {passed:false,reason:'invalid-output'};
