@@ -120,6 +120,21 @@ try{
     catch{return true;}
   });
   assert.equal(readinessRejected,true,'Free run readiness requires registered Git project ID');
+  const fallbackReadRejected=await page.evaluate(async()=>{
+    try{await window.studio.localReviewFallback('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(fallbackReadRejected,true,'Local fallback read requires authorized project');
+  const fallbackWriteRejected=await page.evaluate(async()=>{
+    try{await window.studio.setLocalReviewFallback('not-a-project',true);return false;}
+    catch{return true;}
+  });
+  assert.equal(fallbackWriteRejected,true,'Local fallback opt-in requires authorized project');
+  const previewRejected=await page.evaluate(async()=>{
+    try{await window.studio.freeRoutePreview('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(previewRejected,true,'Route preview requires authorized Git project');
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{
