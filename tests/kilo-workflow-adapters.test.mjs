@@ -50,7 +50,11 @@ test('adapter routes planner/builder/reviewer separately and feeds FAIL back to 
     invokeReviewer: async invocation=>{
       invocations.push(invocation);
       invocation.onSessionId('reviewer12345');
-      throw new Error('Reviewer cannot reach normal Kilo transport');
+      reviews++;
+      return { output: reviews===1
+        ? wrap({verdict:'FAIL',blockers:1,feedback:'Fix missing test'})
+        : wrap({verdict:'PASS',blockers:0,summary:'Confirmed fixed'}),
+        sessionId:'review12345',elapsedMs:100 };
     },
     invoke: async invocation=>{
       invocations.push(invocation);
@@ -59,11 +63,7 @@ test('adapter routes planner/builder/reviewer separately and feeds FAIL back to 
         return { output: wrap({summary:'The plan',steps:['Implement change']}), sessionId:'plan12345',elapsedMs:100 };
       if (invocation.role === 'builder')
         return { output:'Builder reports changes; no commits made',sessionId:'build12345',elapsedMs:100 };
-      reviews++;
-      return { output: reviews===1
-        ? wrap({verdict:'FAIL',blockers:1,feedback:'Fix missing test'})
-        : wrap({verdict:'PASS',blockers:0,summary:'Confirmed fixed'}),
-        sessionId:'review12345',elapsedMs:100 };
+      throw new Error('Reviewer cannot reach normal Kilo transport');
     },
   });
   const result = await orchestrateIssue({number:5,title:'Implement agent',body:'A task'}, adapters);
