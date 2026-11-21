@@ -9,7 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
-export interface SandboxProbeResult { available: boolean; isolated: boolean; reason: 'passed' | 'unsupported-platform' | 'sandbox-failed' | 'canary-modified' }
+export interface SandboxProbeResult { available: boolean; isolated: boolean; reason: 'passed' | 'unsupported-platform' | 'sandbox-failed' | 'canary-modified'; detail: 'namespace-permission-denied' | 'network-setup-denied' | 'mount-setup-failed' | 'probe-command-failed' | 'timeout' | 'unknown' | null }
 export interface ProviderDiagnostics {
   kiloInstalled: boolean; kiloVersion: string | null; supportedFlags: string[];
   kiloRunCommandReady: boolean; agentCatalogReadable: boolean;
