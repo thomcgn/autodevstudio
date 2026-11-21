@@ -48,7 +48,7 @@ test('categorizes known Linux namespace and mount failures without leaking stder
 });
 test('creates private writable tmpfs before binding canary read-only into it',async()=>{
   if(process.platform!=='linux') return;
-  await probeBubblewrap(async(args)=>{
+  const result = await probeBubblewrap(async(args)=>{
     const tmpIndex = args.indexOf('--tmpfs');
     const bindIndex = args.indexOf('/tmp/probe');
     assert.ok(tmpIndex >= 0 && bindIndex > tmpIndex);
@@ -56,6 +56,7 @@ test('creates private writable tmpfs before binding canary read-only into it',as
     assert.equal(args[bindIndex - 2], '--ro-bind');
     assert.ok(!args.includes('/probe'), 'mountpoint must not be under readonly root');
   });
+  assert.equal(result.isolated, true, 'fake successful sandbox runner must pass validated argument layout');
 });
 test('failure result contains only stable diagnostic enum, not raw error',async()=>{
   if(process.platform!=='linux') return;
