@@ -79,6 +79,12 @@ try{
     catch{return true;}
   });
   assert.equal(rejected,true,'Invalid project ID must be rejected in Main');
+  // Calibration must reject unauthorized identifiers before touching Ollama.
+  const calibrationRejected=await page.evaluate(async()=>{
+    try{await window.studio.reviewerCalibration('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(calibrationRejected,true,'Calibration requires registered Git project ID');
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{
