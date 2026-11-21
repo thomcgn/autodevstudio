@@ -19,14 +19,16 @@ function executable(){
     .filter(d=>d.isDirectory()&&d.name.endsWith('-linux-x64'));
   assert.equal(dirs.length,1,'Expected exactly one packaged Linux Electron app');
   const dir=path.join(output,dirs[0].name);
-  const binaries=fs.readdirSync(dir).filter(name=>{
+  // Electron ships multiple ELF helpers (crashpad, sandbox, etc.).
+  // Only the application executable is a valid smoke-test target.
+  for(const name of ['autodev-studio','AutoDev Studio']){
     const file=path.join(dir,name);
-    try{return fs.statSync(file).isFile() && (fs.statSync(file).mode&0o111)!==0 &&
-      fs.readFileSync(file).subarray(0,4).equals(Buffer.from([0x7f,0x45,0x4c,0x46]));}
-    catch{return false;}
-  });
-  assert.equal(binaries.length,1,'Expected one executable ELF in Electron package root');
-  return path.join(dir,binaries[0]);
+    if(fs.existsSync(file)&&fs.statSync(file).isFile()&&
+      (fs.statSync(file).mode&0o111)!==0 &&
+      fs.readFileSync(file).subarray(0,4).equals(Buffer.from([0x7f,0x45,0x4c,0x46])))
+      return file;
+  }
+  throw new Error('Packaged app executable not found (helper binaries excluded)');
 }
 let app;
 const pageErrors=[];
