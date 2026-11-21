@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('studio', {
   reviewerProbe: (id: string) => ipcRenderer.invoke('core:reviewer-probe', id),
   qualityProbe: (id: string) => ipcRenderer.invoke('core:quality-probe', id),
   qualityScriptProbe: (id: string) => ipcRenderer.invoke('core:quality-script-probe', id),
+  fullPipelineProbe: (id: string) => ipcRenderer.invoke('core:full-pipeline-probe', id),
   simulateIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:simulate', id, issueNumber),
   workflowStages: () => ipcRenderer.invoke('core:workflow'),
   snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
