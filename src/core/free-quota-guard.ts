@@ -38,14 +38,19 @@ export class FreeQuotaGuard {
   private readonly clock:()=>number;
   constructor(userData:string,clock:()=>number=Date.now){this.userData=userData;this.clock=clock;}
   private load():Stored{
+    const file=statePath(this.userData);
+    try{fs.statSync(file);}
+    catch(error){
+      if((error as NodeJS.ErrnoException).code==='ENOENT')return empty();
+      throw Error('Quota state inaccessible: manual recovery required');
+    }
     try{
-      const file=statePath(this.userData);
-      if(fs.statSync(file).size>MAX_STATE_BYTES)return empty();
+      if(fs.statSync(file).size>MAX_STATE_BYTES)throw Error('Invalid quota state');
       const raw:unknown=JSON.parse(fs.readFileSync(file,'utf8'));
-      if(!raw||typeof raw!=='object'||Array.isArray(raw))return empty();
+      if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid quota state');
       const obj=raw as Record<string,unknown>;
       if(!Array.isArray(obj.events)||obj.events.length>HOURLY_LIMIT+100||
-        !obj.events.every(finiteInt)||!finiteInt(obj.observedAt))return empty();
+        !obj.events.every(finiteInt)||!finiteInt(obj.observedAt))throw Error('Invalid quota state');
       const v=obj.verified;
       const verified=v&&typeof v==='object'&&!Array.isArray(v)&&
         finiteInt((v as Record<string,unknown>).remaining)&&
@@ -54,7 +59,7 @@ export class FreeQuotaGuard {
       return {events:obj.events as number[],observedAt:obj.observedAt as number,
         verified,blockedUntil:finiteInt(obj.blockedUntil)?obj.blockedUntil:null,
         rateLimited:obj.rateLimited===true};
-    }catch{return empty();}
+    }catch{throw Error('Quota state corrupt: manual recovery required');}
   }
   private persist(state:Stored):void{
     fs.mkdirSync(this.userData,{recursive:true,mode:0o700});
