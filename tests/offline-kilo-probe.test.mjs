@@ -45,13 +45,17 @@ test('verified npm package alone is exposed read-only, not host home',async t=>{
     assert.ok(mount>0);
     assert.equal(launch.args[mount-2],'--ro-bind');
     assert.equal(path.basename(launch.args[mount-1]),'cli');
-    assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/bin/kilo','--version']);
-    assert.ok(!launch.args.includes('run'));
-    return 'kilo 1.0.0\n';
+    if(launch.args.at(-1)==='--version'){
+      assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/bin/kilo','--version']);
+      return 'kilo 1.0.0\n';
+    }
+    assert.deepEqual(launch.args.slice(-4),['--','/opt/kilo/bin/kilo','run','--help']);
+    assert.ok(!launch.args.includes('--auto'));
+    return 'Usage: kilo run --agent <name> --model <model>\n';
   },()=>binary);
   if(process.platform==='linux'){
     assert.deepEqual(result,{passed:true,reason:'passed'});
-    assert.equal(called,1);
+    assert.equal(called,2);
   }else assert.equal(called,0);
 });
 test('standalone Kilo copies exactly one executable into private staging',async t=>{
@@ -68,8 +72,12 @@ test('standalone Kilo copies exactly one executable into private staging',async 
     assert.deepEqual(fs.readdirSync(copiedDir),['kilo']);
     assert.equal(fs.readFileSync(path.join(copiedDir,'kilo'),'utf8'),
       fs.readFileSync(binary,'utf8'));
-    assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/kilo','--version']);
-    return 'kilo 1.0.0\n';
+    if(launch.args.at(-1)==='--version'){
+      assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/kilo','--version']);
+      return 'kilo 1.0.0\n';
+    }
+    assert.deepEqual(launch.args.slice(-4),['--','/opt/kilo/kilo','run','--help']);
+    return 'Usage: kilo run --agent <name> --model <model>\n';
   },()=>binary);
   if(process.platform==='linux'){
     assert.deepEqual(result,{passed:true,reason:'passed'});
@@ -119,4 +127,18 @@ test('fallback does not inspect arbitrary home directories or execute package ma
   t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   fs.writeFileSync(path.join(home,'kilo'),'#!/bin/sh\nexit 0\n',{mode:0o755});
   assert.equal(discoverKiloInstallation('',home),null);
+});
+
+test('missing model/agent CLI options fails closed, without running a model',async t=>{
+  const {binary}=fixture(t,'npm');
+  if(process.platform!=='linux')return;
+  let n=0;
+  const result=await probeOfflineKiloRuntime(async launch=>{
+    n++;
+    if(launch.args.at(-1)==='--version')return 'kilo 7.8.27\n';
+    assert.deepEqual(launch.args.slice(-2),['run','--help']);
+    return 'Usage: kilo run --only-help\n';
+  },()=>binary);
+  assert.equal(n,2);
+  assert.deepEqual(result,{passed:false,reason:'invalid-output'});
 });
