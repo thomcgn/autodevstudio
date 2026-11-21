@@ -47,10 +47,30 @@ test('drift and stale revisions prevent resuming from safe checkpoint',()=>{
   assert.throws(()=>assertQuotaResume(f.base,f.project,'invalid-token',2,f.git,f.guard),/owned/);
  }finally{f.close();}
 });
-test('no checkpoint is created while quota remains available',()=>{
+test('no checkpoint is created when provider verifies healthy quota',()=>{
  const f=fixture();
  try{
+  f.guard.recordProviderQuota(120,Date.now()+3600000);
   assert.throws(()=>pauseForQuota(f.base,f.project,f.lock.record.token,f.git,f.guard),/No quota pause/);
   assert.equal(f.checkpoint.revision,1);
+ }finally{f.close();}
+});
+
+test('unknown true IP remainder pauses safely and cannot auto-resume after an hour',()=>{
+ const f=fixture();
+ try{
+  const paused=pauseForQuota(f.base,f.project,f.lock.record.token,f.git,f.guard);
+  assert.equal(paused.quotaReason,'unknown-remaining');
+  assert.equal(paused.revision,2);
+  assert.throws(()=>assertQuotaResume(f.base,f.project,f.lock.record.token,2,f.git,f.guard),
+    /unknown-remaining/);
+  f.guard.recordAttempt('normal'); // local observation is NOT authoritative
+  assert.throws(()=>assertQuotaResume(f.base,f.project,f.lock.record.token,2,f.git,f.guard),
+    /unknown-remaining/);
+  f.guard.recordProviderQuota(9,Date.now()+3600000);
+  assert.throws(()=>assertQuotaResume(f.base,f.project,f.lock.record.token,2,f.git,f.guard),
+    /reserve/);
+  f.guard.recordProviderQuota(90,Date.now()+3600000);
+  assert.equal(assertQuotaResume(f.base,f.project,f.lock.record.token,2,f.git,f.guard).stage,'review');
  }finally{f.close();}
 });
