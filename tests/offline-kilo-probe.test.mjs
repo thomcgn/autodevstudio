@@ -81,7 +81,7 @@ test('standalone Kilo copies exactly one executable into private staging',async 
   },()=>binary);
   if(process.platform==='linux'){
     assert.deepEqual(result,{passed:true,reason:'passed'});
-    assert.equal(called,1);
+    assert.equal(called,2);
   }else assert.equal(called,0);
 });
 test('fake package metadata in HOME cannot authorize mounting a home ancestor',t=>{
