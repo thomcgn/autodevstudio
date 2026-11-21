@@ -85,7 +85,7 @@ export async function probeOfflineReviewerSandbox(
       catch(error){return {...failed('sandbox-failed',stage),...classifyFailure(error)};}
       const length=typeof output==='string'?Buffer.byteLength(output,'utf8'):Infinity;
       const valid=length>0&&length<=32*1024&&
-        (stage==='runtime'?/^\\s*(?:kilo\\s+)?v?\\d+\\.\\d+\\.\\d+/i.test(output):
+        (stage==='runtime'?/^\s*(?:kilo\s+)?v?\d+\.\d+\.\d+/i.test(output):
           output.includes('--model')&&output.includes('--agent'));
       if(!valid)return failed('invalid-output',stage);
     }
