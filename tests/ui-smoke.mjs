@@ -33,6 +33,7 @@ const success={
   reviewerCalibration:{passed:true,reason:'passed'},
   ollamaReadiness:{ready:true,reason:'ready'},
   kiloRoleModels:null,
+  kiloReviewerCalibration:{passed:true,reason:'passed'},
   saveKiloRoleModels:null,
   kiloFreeModels:{checkedAt:'2026-11-21T00:00:00.000Z',models:[
     {id:'nvidia/nemotron-3-ultra-550b-a55b:free',name:'NVIDIA Nemotron 3 Ultra',preferred:true},
@@ -77,6 +78,7 @@ async function fixture(page){
       ollamaReadiness:()=>respond('ollamaReadiness'),
       kiloFreeModels:()=>respond('kiloFreeModels'),
       kiloRoleModels:()=>respond('kiloRoleModels'),
+      kiloReviewerCalibrate:()=>respond('kiloReviewerCalibration'),
       saveKiloRoleModels:async(_id,roles)=>{calls.push('saveKiloRoleModels');return structuredClone(roles);},
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
@@ -103,7 +105,8 @@ async function click(page,name){
       'Lokales Review-Modell testen':'localModelProbe',
       'Reviewer kalibrieren (2 Modellanfragen)':'reviewerCalibration',
       'Ollama-Verbindung prüfen':'ollamaReadiness',
-      'Free-Modelle laden':'kiloFreeModels'})[name]);
+      'Free-Modelle laden':'kiloFreeModels',
+      'Kilo-Free-Reviewer kalibrieren':'kiloReviewerCalibration'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -128,6 +131,13 @@ try {
   await page.getByLabel('Modell für reviewer').selectOption('kilo-auto/free');
   await page.getByRole('button',{name:'Rollenzuordnung speichern'}).click();
   await page.getByText('Rollenzuordnung gespeichert',{exact:false}).waitFor();
+  await click(page,'Kilo-Free-Reviewer kalibrieren');
+  await page.getByText('Kilo-Reviewer hat zwei synthetische PASS/FAIL-Fälle richtig erkannt',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.kiloReviewerCalibration={passed:false,reason:'rate-limit',caseNumber:1};
+  });
+  await click(page,'Kilo-Free-Reviewer kalibrieren');
+  await page.getByText('Kilo-Free-Limit erreicht (HTTP 429)',{exact:false}).waitFor();
   assert.equal(await page.getByLabel('Modell für builder').inputValue(),'nvidia/nemotron-3-ultra-550b-a55b:free');
   assert.equal(await page.getByText('nvidia/nemotron-3-ultra-550b-a55b:free',{exact:true}).count(),1);
   await click(page,'Ollama-Verbindung prüfen');
