@@ -1,6 +1,7 @@
 import {runGuardedEvidenceReview,type GuardedReviewDependencies} from './guarded-evidence-review.ts';
 import {loadCoreCheckpoint,saveCoreCheckpoint,type GitIdentity} from './checkpoint-store.ts';
 import {inspectProjectLock} from './project-lock.ts';
+import {captureGitIdentity} from './git-identity.ts';
 import type {EvidenceOnlyReviewerTransport} from './evidence-only-reviewer.ts';
 import type {IssueTask,PlanResult,BuildResult} from './orchestrator.ts';
 
@@ -43,8 +44,7 @@ export async function reviewAndCheckpointQuality(
   // A new capture after inference and immediately before checkpointing
   // prevents approving the tree captured only before the model ran.
   // The exclusive project lock still remains mandatory.
-  const capture=dependencies?.capture;
-  if(!capture)throw Error('Review handoff requires trusted fresh Git capture');
+  const capture=dependencies?.capture??captureGitIdentity;
   const currentGit=await capture(projectPath);
   if(!sameGit(currentGit,result.git))
     throw Error('Repository drift during quality handoff');
