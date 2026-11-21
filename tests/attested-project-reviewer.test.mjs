@@ -98,7 +98,7 @@ test('unreachable local model, other projects and corrupted calibration cannot b
     ...f.input,projectId:'another-project',
   },fetcher)),/No approved reviewer/);
   fs.writeFileSync(path.join(f.root,'local-review-calibration','fixture-project.json'),'{invalid');
-  assert.throws(()=>createAttestedProjectReviewerTransport(f.input,fetcher),/manual review/);
+  await assert.rejects(review(createAttestedProjectReviewerTransport(f.input,fetcher)),/manual review/);
   assert.equal(requests,0);
  }finally{f.close();}
 });
