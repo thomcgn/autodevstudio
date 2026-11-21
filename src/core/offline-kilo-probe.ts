@@ -37,7 +37,7 @@ export function discoverKiloInstallation(
     try {
       const binary=fs.realpathSync(candidate);
       const stat=fs.statSync(binary);
-      if(!stat.isFile()||!fs.constants.X_OK)continue;
+      if(!stat.isFile())continue;
       fs.accessSync(binary,fs.constants.X_OK);
       return {binary};
     }catch {/* not an executable candidate */}
@@ -55,7 +55,8 @@ export interface KiloPackagePlacement {
  */
 export function classifyKiloPlacement(binary:string):KiloPackagePlacement{
   const canonical=fs.realpathSync(binary);
-  if(!fs.statSync(canonical).isFile())throw new Error('Kilo executable not a file');
+  const stat=fs.statSync(canonical);
+  if(!stat.isFile()||stat.size>512*1024*1024)throw new Error('Invalid Kilo executable');
   if(canonical.startsWith('/usr/'))
     return {kind:'system',executable:canonical};
   let directory=path.dirname(canonical);
@@ -65,7 +66,9 @@ export function classifyKiloPlacement(binary:string):KiloPackagePlacement{
       const stat=fs.lstatSync(pkg);
       if(stat.isFile()&&!stat.isSymbolicLink()&&stat.size<=128*1024){
         const data:unknown=JSON.parse(fs.readFileSync(pkg,'utf8'));
-        if(data&&typeof data==='object'&&!Array.isArray(data)&&
+        if(path.basename(directory)==='cli' && path.basename(path.dirname(directory))==='@kilocode' &&
+          path.basename(path.dirname(path.dirname(directory)))==='node_modules' &&
+          data&&typeof data==='object'&&!Array.isArray(data)&&
           (data as {name?:unknown}).name==='@kilocode/cli'){
           const relative=path.relative(directory,canonical);
           if(relative&&relative!=='.'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative))
