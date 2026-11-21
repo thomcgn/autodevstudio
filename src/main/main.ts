@@ -23,6 +23,7 @@ import { probeLocalReviewModel } from '../core/local-review-model-probe';
 import { probeReviewerCalibration } from '../core/reviewer-calibration-probe';
 import { probeOllamaReadiness } from '../core/ollama-readiness';
 import { fetchKiloFreeModels } from '../core/kilo-free-models';
+import { loadKiloRoles, saveKiloRoles } from '../core/kilo-role-models';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -123,6 +124,19 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:kilo-role-models:get', (_event, id: string) => {
+    if(typeof id!=='string')throw new Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw new Error('Not a Git repository');
+    return loadKiloRoles(app.getPath('userData'),id);
+  });
+  ipcMain.handle('core:kilo-role-models:save', async (_event, id: string, input: unknown) => {
+    if(typeof id!=='string')throw new Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw new Error('Not a Git repository');
+    const catalog=await fetchKiloFreeModels();
+    return saveKiloRoles(app.getPath('userData'),id,input as Parameters<typeof saveKiloRoles>[2],catalog.models);
+  });
   ipcMain.handle('core:kilo-free-models', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
