@@ -54,6 +54,12 @@ export function createKiloArgs(input: Pick<KiloInvocation, 'agent' | 'model' | '
  * Studio's caller must persist a session ID immediately through onSessionId.
  */
 export function runKilo(input: KiloInvocation): Promise<KiloInvocationResult> {
+  // This runner passes --auto, which can approve model-requested tool actions.
+  // An independent reviewer MUST use a separate tool-free, OS-isolated transport.
+  if (input.role === 'reviewer') {
+    return Promise.reject(new KiloProcessError(
+      'Unisolated Kilo reviewer execution is forbidden', 'permission', null));
+  }
   if (!Number.isFinite(input.inactivityTimeoutMs) || input.inactivityTimeoutMs < 100 ||
       input.inactivityTimeoutMs > 60 * 60 * 1000) throw new Error('Invalid inactivity timeout');
   const interval = input.heartbeatIntervalMs ?? 30_000;
