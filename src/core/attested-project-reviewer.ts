@@ -34,22 +34,29 @@ export function createAttestedProjectReviewerTransport(
 ):EvidenceOnlyReviewerTransport {
   if(!input||!input.roles||!input.quota||!Array.isArray(input.freeCatalog))
     throw Error('Invalid attested reviewer configuration');
-  const enabled=readLocalReviewFallback(input.userData,input.projectId);
-  const calibrationPassed=readLocalReviewCalibration(input.userData,input.projectId);
-  return createStrictReviewerFailoverTransport({
-    kiloModel:input.roles.reviewer,
-    builderModel:input.roles.builder,
-    freeCatalog:input.freeCatalog,
-    quota:input.quota,
-    local:{
-      enabled,
-      model:LOCAL_MODEL,
-      ready:input.ollamaReadiness.ready===true,
-      calibrationPassed,
-      // The selected transport is a fixed loopback model-only HTTP channel:
-      // no tools, no filesystem access, no dynamic endpoint or process launch.
-      // This assertion does NOT substitute for outer controller permissions.
-      toolFreeTransportApproved:true,
-    },
-  },fetcher);
+  // A controller may hold a transport across several issues. Recheck the
+  // project-scoped opt-in and expiring calibration immediately before EVERY
+  // evidence request: disabling the fallback cannot leave a stale, approved
+  // transport in memory. This only creates a model transport, not a job.
+  return (request,signal)=>{
+    if(signal?.aborted)throw Error('Review cancelled before attestation');
+    const enabled=readLocalReviewFallback(input.userData,input.projectId);
+    const calibrationPassed=readLocalReviewCalibration(input.userData,input.projectId);
+    const transport=createStrictReviewerFailoverTransport({
+      kiloModel:input.roles.reviewer,
+      builderModel:input.roles.builder,
+      freeCatalog:input.freeCatalog,
+      quota:input.quota,
+      local:{
+        enabled,
+        model:LOCAL_MODEL,
+        ready:input.ollamaReadiness.ready===true&&input.ollamaReadiness.reason==='ready',
+        calibrationPassed,
+        // The channel is a fixed loopback model-only HTTP transport; no tools,
+        // filesystem access, dynamic endpoint or process launch.
+        toolFreeTransportApproved:true,
+      },
+    },fetcher);
+    return transport(request,signal);
+  };
 }
