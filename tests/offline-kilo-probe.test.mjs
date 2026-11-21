@@ -89,3 +89,34 @@ test('unavailable and failed runtime are sanitized',async t=>{
   assert.equal(result.reason,'sandbox-failed');
   assert.ok(!JSON.stringify(result).includes('/home/user'));
 });
+
+test('Electron PATH missing user npm prefix still finds verified Kilo package',t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-home-npm-'));
+  t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const prefix=path.join(home,'.local','npm');
+  const packageDir=path.join(prefix,'lib','node_modules','@kilocode','cli');
+  const binary=path.join(packageDir,'bin','kilo');
+  fs.mkdirSync(path.dirname(binary),{recursive:true});
+  fs.mkdirSync(path.join(prefix,'bin'),{recursive:true});
+  fs.writeFileSync(path.join(packageDir,'package.json'),
+    JSON.stringify({name:'@kilocode/cli',version:'1.0.0'}));
+  fs.writeFileSync(binary,'#!/usr/bin/env node\n',{mode:0o755});
+  fs.symlinkSync(binary,path.join(prefix,'bin','kilo'));
+  assert.deepEqual(discoverKiloInstallation('/usr/bin:/bin',home),{binary});
+  assert.equal(classifyKiloPlacement(binary).kind,'package');
+  assert.equal(classifyKiloPlacement(binary).sourceDirectory,packageDir);
+});
+test('untrusted executable in user npm bin is not accepted through fallback',t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-home-untrusted-'));
+  t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  const bin=path.join(home,'.local','npm','bin');
+  fs.mkdirSync(bin,{recursive:true});
+  fs.writeFileSync(path.join(bin,'kilo'),'#!/bin/sh\nexit 0\n',{mode:0o755});
+  assert.equal(discoverKiloInstallation('/usr/bin:/bin',home),null);
+});
+test('fallback does not inspect arbitrary home directories or execute package manager',t=>{
+  const home=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-home-other-'));
+  t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+  fs.writeFileSync(path.join(home,'kilo'),'#!/bin/sh\nexit 0\n',{mode:0o755});
+  assert.equal(discoverKiloInstallation('',home),null);
+});
