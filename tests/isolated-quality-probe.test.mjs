@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { probeIsolatedQualityRuntime } from '../src/core/isolated-quality-probe.ts';
+import os from 'node:os';
+import { createIsolatedQualityLaunch } from '../src/core/isolated-quality.ts';
+import { probeIsolatedQualityRuntime, createQualityProbeCommand } from '../src/core/isolated-quality-probe.ts';
 
 const localReady=process.platform==='linux'&&fs.existsSync('/usr/bin/node')&&fs.existsSync('/usr/bin/npm');
 test('tests isolated Node then npm, never executing project scripts',async()=>{
@@ -56,4 +58,28 @@ test('invalid output is flagged at its actual stage',async()=>{
   assert.equal(output.stage,'npm');
   assert.equal(output.reason,'invalid-output');
   assert.ok(!JSON.stringify(output).includes('/private'));
+});
+
+test('regression: Bubblewrap delimiter precedes npm run delimiter, never runs npm scripts',t=>{
+  if(process.platform!=='linux')return;
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-probe-layout-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  fs.mkdirSync(path.join(root,'.git'));
+  const launch=createIsolatedQualityLaunch(root,'typecheck');
+  assert.equal(launch.args.filter(x=>x==='--').length,2);
+  const first=launch.args.indexOf('--');
+  const last=launch.args.lastIndexOf('--');
+  assert.ok(first<last);
+  assert.deepEqual(launch.args.slice(first),['--','/usr/bin/npm','run','--','typecheck']);
+  for (const binary of ['/usr/bin/node','/usr/bin/npm']) {
+    const probe=createQualityProbeCommand(launch,binary);
+    assert.deepEqual(probe.args.slice(first),['--',binary,'--version']);
+    assert.equal(probe.args.length,first+3);
+    assert.equal(probe.args.includes('run'),false);
+    assert.equal(probe.args.includes('typecheck'),false);
+  }
+});
+test('rejects unexpected command layouts rather than launching an unsafe test',()=>{
+  assert.throws(()=>createQualityProbeCommand({binary:'bwrap',cwd:'/tmp',args:['--','/usr/bin/npm','install','--','danger']},'/usr/bin/node'),/Unexpected/);
+  assert.throws(()=>createQualityProbeCommand({binary:'bwrap',cwd:'/tmp',args:['--','/usr/bin/bash','-c','danger']},'/usr/bin/node'),/Unexpected/);
 });
