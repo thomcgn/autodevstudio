@@ -11,7 +11,8 @@ test('sandbox probe never targets a selected Git project or calls a model', asyn
     assert.ok(args.includes('--unshare-net'));
     assert.ok(args.includes('--ro-bind'));
     assert.ok(args.includes('--die-with-parent'));
-    assert.ok(args.includes('/probe'));
+    assert.ok(args.includes('/tmp/probe'));
+    assert.equal(args[args.indexOf('--chdir')+1], '/tmp/probe');
     assert.equal(path.basename(cwd).startsWith('autodev-sandbox-probe-'),true);
     assert.equal(fs.readFileSync(path.join(cwd,'canary.txt'),'utf8'),'original');
     assert.ok(!args.includes('kilo'));
@@ -45,12 +46,17 @@ test('categorizes known Linux namespace and mount failures without leaking stder
   assert.equal(classifySandboxError({code:1,stderr:'bwrap: mount /probe failed: No such file or directory'}),'mount-setup-failed');
   assert.equal(classifySandboxError({code:'ETIMEDOUT',killed:true,stderr:'private'}),'timeout');
 });
-test('binds host canary before creating isolated /tmp',async()=>{
+test('creates private writable tmpfs before binding canary read-only into it',async()=>{
   if(process.platform!=='linux') return;
-  await probeBubblewrap(async(args)=>{
-    const positions = {bind:args.indexOf('/probe'),tmp:args.indexOf('--tmpfs')};
-    assert.ok(positions.bind >= 0 && positions.tmp > positions.bind);
+  const result = await probeBubblewrap(async(args)=>{
+    const tmpIndex = args.indexOf('--tmpfs');
+    const bindIndex = args.indexOf('/tmp/probe');
+    assert.ok(tmpIndex >= 0 && bindIndex > tmpIndex);
+    assert.equal(args[tmpIndex + 1], '/tmp');
+    assert.equal(args[bindIndex - 2], '--ro-bind');
+    assert.ok(!args.includes('/probe'), 'mountpoint must not be under readonly root');
   });
+  assert.equal(result.isolated, true, 'fake successful sandbox runner must pass validated argument layout');
 });
 test('failure result contains only stable diagnostic enum, not raw error',async()=>{
   if(process.platform!=='linux') return;

@@ -49,18 +49,19 @@ export async function probeBubblewrap(
   try {
     fs.writeFileSync(canary, 'original', { flag: 'wx', mode: 0o600 });
     // Root is read-only; /tmp is a fresh tmpfs; network is disabled.
-    // /probe contains only the canary, never the user's project.
+    // /tmp/probe contains only the canary, never the user's project.
     const args = [
       '--die-with-parent', '--unshare-net',
       '--ro-bind', '/', '/',
-      // Bind the host canary before overlaying /tmp with a fresh tmpfs.
-      '--ro-bind', temp, '/probe',
+      // Create a writable mountpoint in the private tmpfs BEFORE the readonly bind.
+      // /probe cannot be created on the read-only root mount.
       '--tmpfs', '/tmp',
-      '--chdir', '/probe',
+      '--ro-bind', temp, '/tmp/probe',
+      '--chdir', '/tmp/probe',
       '--', '/bin/sh', '-c',
-      'test "$(cat /probe/canary.txt)" = original || exit 40; ' +
-      'if printf modified > /probe/canary.txt 2>/dev/null; then exit 41; fi; ' +
-      'test "$(cat /probe/canary.txt)" = original || exit 42',
+      'test "$(cat /tmp/probe/canary.txt)" = original || exit 40; ' +
+      'if printf modified > /tmp/probe/canary.txt 2>/dev/null; then exit 41; fi; ' +
+      'test "$(cat /tmp/probe/canary.txt)" = original || exit 42',
     ];
     let runnerFailure: unknown = null;
     try { await runner(args, temp); }
