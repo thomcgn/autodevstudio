@@ -37,7 +37,7 @@ test('always-PASS fails calibration without revealing model output',async()=>{
 test('unreachable model returns safe failure status',async()=>{
   if(process.platform!=='linux')return;
   const result=await probeReviewerCalibration(async()=>{throw Error('SECRET: /home/user')});
-  assert.deepEqual(result,{passed:false,reason:'invalid-response',caseNumber:1});
+  assert.deepEqual(result,{passed:false,reason:'transport-failed',caseNumber:1});
   assert.doesNotMatch(JSON.stringify(result),/SECRET|home/);
 });
 
