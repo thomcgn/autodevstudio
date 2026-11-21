@@ -67,6 +67,7 @@ export function createLocalOllamaReviewerChannel(
   config:LocalOllamaConfig,fetcher:Fetcher=fetch,
 ):ReviewerGatewayChannel{
   if(!MODEL.test(config.model)||config.model.includes('..')||
+    config.model.includes('://')||config.model.includes('//')||
     !Number.isSafeInteger(config.timeoutMs??120000)||
     (config.timeoutMs??120000)<1000||(config.timeoutMs??120000)>180000||
     !Number.isSafeInteger(config.maxCompletionTokens??1200)||
