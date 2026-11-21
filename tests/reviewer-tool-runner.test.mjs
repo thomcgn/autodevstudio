@@ -38,7 +38,7 @@ test('rejects oversized output and never treats an error as successful review',a
   const projectPath=repo(t);
   const spec={projectPath,binary:'/usr/bin/git',args:['status']};
   await assert.rejects(
-    runReadonlyReviewerTool(spec,undefined,async()=> 'x'.repeat(130000)),
+    runReadonlyReviewerTool(spec,undefined,async()=> 'x'.repeat(140000)),
     /cannot count as PASS/,
   );
   await assert.rejects(
