@@ -100,7 +100,7 @@ export function createKiloGatewayReviewerChannel(
     if(signal?.aborted)throw new Error('Reviewer Gateway request cancelled');
     const key=config.readGatewayApiKey();
     const free=config.model==='kilo-auto/free'||config.model.endsWith(':free');
-    if ((!key&&!free)||(key!==null&&!/^[\\x21-\\x7e]{10,4096}$/.test(key)))
+    if ((!key&&!free)||(key!==null&&!/^[!-~]{10,4096}$/.test(key)))
       throw new Error('Kilo Gateway API key unavailable');
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),config.timeoutMs??60000);
