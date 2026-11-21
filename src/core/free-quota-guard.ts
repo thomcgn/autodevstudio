@@ -68,7 +68,7 @@ export class FreeQuotaGuard {
       limit:HOURLY_LIMIT,reserve:RESERVED_REQUESTS,usedLocal:state.events.length,
       remainingVerified:fresh?state.verified!.remaining:null,
       resetAt:state.blockedUntil&&state.blockedUntil>now?state.blockedUntil:fresh?state.verified!.resetAt:null,
-      blockedBy429:state.rateLimited&&(state.blockedUntil===null||state.blockedUntil>now),
+      blockedBy429:state.rateLimited,
       observedAt:state.observedAt};
   }
   decide(phase:QuotaPhase):QuotaDecision {
@@ -86,7 +86,9 @@ export class FreeQuotaGuard {
     return {allowed:true,reason:'allowed',retryAt:null};
   }
   /** Call immediately BEFORE a Kilo inference session: no retries or model switching. */
-  recordAttempt():void {
+  recordAttempt(phase:QuotaPhase='normal'):void {
+    const decision=this.decide(phase);
+    if(!decision.allowed)throw Error('Quota checkpoint required: '+decision.reason);
     const now=this.clock(),state=trim(this.load(),now);
     state.events.push(now);
     state.observedAt=now;
