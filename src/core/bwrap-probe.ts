@@ -6,10 +6,23 @@ import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
 export type SandboxProbeRunner = (args: readonly string[], cwd: string) => Promise<void>;
+
+/** Categorize only recognized OS/process errors. Never forward raw stderr. */
+export function classifySandboxError(error: unknown): NonNullable<SandboxProbeResult['detail']> {
+  const item = error as { code?: unknown; killed?: unknown; stderr?: unknown } | null;
+  if (item?.code === 'ETIMEDOUT' || item?.killed === true) return 'timeout';
+  const stderr = typeof item?.stderr === 'string' ? item.stderr.slice(0, 8192) : '';
+  if (/loopback.*(?:operation not permitted|permission denied)|RTM_NEWADDR/i.test(stderr)) return 'network-setup-denied';
+  if (/(?:user namespace|namespace|uid map|gid map).*(?:operation not permitted|permission denied|not allowed)|no permissions to create new namespace/i.test(stderr)) return 'namespace-permission-denied';
+  if (/(?:mount|bind|ro-bind).*(?:failed|permission denied|no such file or directory|operation not permitted)/i.test(stderr)) return 'mount-setup-failed';
+  if (typeof item?.code === 'number') return 'probe-command-failed';
+  return 'unknown';
+}
 export interface SandboxProbeResult {
   available: boolean;
   isolated: boolean;
   reason: 'passed' | 'unsupported-platform' | 'sandbox-failed' | 'canary-modified';
+  detail: 'namespace-permission-denied' | 'network-setup-denied' | 'mount-setup-failed' | 'probe-command-failed' | 'timeout' | 'unknown' | null;
 }
 
 /** A deliberate local smoke-test, not a production sandbox and not a model run.
@@ -25,7 +38,7 @@ export async function probeBubblewrap(
   },
 ): Promise<SandboxProbeResult> {
   if (process.platform !== 'linux')
-    return { available: false, isolated: false, reason: 'unsupported-platform' };
+    return { available: false, isolated: false, reason: 'unsupported-platform', detail: null };
 
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'autodev-sandbox-probe-'));
   const canary = path.join(temp, 'canary.txt');
@@ -36,24 +49,24 @@ export async function probeBubblewrap(
     const args = [
       '--die-with-parent', '--unshare-net',
       '--ro-bind', '/', '/',
-      '--proc', '/proc',
-      '--tmpfs', '/tmp',
+      // Bind the host canary before overlaying /tmp with a fresh tmpfs.
       '--ro-bind', temp, '/probe',
+      '--tmpfs', '/tmp',
       '--chdir', '/probe',
       '--', '/bin/sh', '-c',
       'test "$(cat /probe/canary.txt)" = original || exit 40; ' +
       'if printf modified > /probe/canary.txt 2>/dev/null; then exit 41; fi; ' +
       'test "$(cat /probe/canary.txt)" = original || exit 42',
     ];
-    let runnerFailed = false;
+    let runnerFailure: unknown = null;
     try { await runner(args, temp); }
-    catch { runnerFailed = true; }
+    catch (error) { runnerFailure = error; }
     // Even if an injected or defective runner claims PASS, verify host canary.
     if (fs.readFileSync(canary, 'utf8') !== 'original')
-      return { available: true, isolated: false, reason: 'canary-modified' };
-    return runnerFailed
-      ? { available: true, isolated: false, reason: 'sandbox-failed' }
-      : { available: true, isolated: true, reason: 'passed' };
+      return { available: true, isolated: false, reason: 'canary-modified', detail: null };
+    return runnerFailure !== null
+      ? { available: true, isolated: false, reason: 'sandbox-failed', detail: classifySandboxError(runnerFailure) }
+      : { available: true, isolated: true, reason: 'passed', detail: null };
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });
   }
