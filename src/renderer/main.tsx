@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -42,6 +42,8 @@ function App(): React.JSX.Element {
   const [kiloModels, setKiloModels] = useState<KiloFreeCatalog | null>(null);
   const [kiloModelLoading, setKiloModelLoading] = useState(false);
   const [kiloModelError, setKiloModelError] = useState('');
+  const [kiloUsage, setKiloUsage] = useState<KiloFreeUsage | null>(null);
+  const [kiloUsageError, setKiloUsageError] = useState('');
   const [savedRoleModels, setSavedRoleModels] = useState<KiloRoleModels | null>(null);
   const [draftRoleModels, setDraftRoleModels] = useState<KiloRoleModels>({planner:'',builder:'',reviewer:''});
   const [savingRoleModels, setSavingRoleModels] = useState(false);
@@ -132,6 +134,8 @@ function App(): React.JSX.Element {
     setOllamaReadiness(null);
     setKiloModels(null);
     setKiloModelError('');
+    setKiloUsage(null);
+    setKiloUsageError('');
     setSavedRoleModels(null);
     setDraftRoleModels({planner:'',builder:'',reviewer:''});
     setRoleModelsMessage('');
@@ -267,13 +271,23 @@ function App(): React.JSX.Element {
     finally { setLocalModelChecking(false); }
   };
 
+  const refreshKiloUsage = async (): Promise<void> => {
+    if(!selected)return;
+    try {
+      setKiloUsage(await window.studio.kiloFreeUsage(selected));
+      setKiloUsageError('');
+    }catch{
+      setKiloUsageError('Lokaler Kilo-Zähler nicht lesbar · Freigabe bleibt gesperrt');
+    }
+  };
+
   const calibrateKiloFreeReviewer = async (): Promise<void> => {
     if(!selected||!savedRoleModels||kiloCalibrating)return;
     setKiloCalibration(null);
     setKiloCalibrating(true);
     try{setKiloCalibration(await window.studio.kiloReviewerCalibrate(selected));}
     catch{setKiloCalibration({passed:false,reason:'transport-failed'});}
-    finally{setKiloCalibrating(false);}
+    finally{setKiloCalibrating(false);void refreshKiloUsage();}
   };
 
   const saveRoleModels = async (): Promise<void> => {
@@ -298,6 +312,7 @@ function App(): React.JSX.Element {
     try {
       const catalog=await window.studio.kiloFreeModels(selected);
       setKiloModels(catalog);
+      void refreshKiloUsage();
       const stored=await window.studio.kiloRoleModels(selected);
       setSavedRoleModels(stored);
       const available=new Set(catalog.models.map(model=>model.id));
@@ -460,6 +475,17 @@ function App(): React.JSX.Element {
             <div className="provider-heading"><div><h3>Kilo · kostenlose Modelle</h3><p>Live-Katalog von Kilo, ausschließlich ausdrücklich kostenlose IDs. Nemotron 3 Ultra wird bevorzugt angezeigt; Verfügbarkeit wird jedes Mal neu geprüft.</p></div>
               <button disabled={!selected || kiloModelLoading} onClick={() => void loadKiloModels()}>{kiloModelLoading ? 'Lade Modelle …' : 'Free-Modelle laden'}</button></div>
             {kiloModelError && <p role="alert" className="error">{kiloModelError}</p>}
+            {selected && <div className="sandbox-check">
+              <button className="quiet" onClick={()=>void refreshKiloUsage()}>Kilo-Requests anzeigen</button>
+              <span>{kiloUsageError || (kiloUsage ? <>
+                <strong>{kiloUsage.usedLocal} von {kiloUsage.limit} lokal erfassten Gateway-Versuchen in den letzten 60 Minuten</strong>
+                {' · '}Reserve: {kiloUsage.reserve}
+                {kiloUsage.remainingVerified!==null ? ' · Anbieter bestätigt verbleibend: '+kiloUsage.remainingVerified :
+                  ' · tatsächliches IP-Restkontingent unbekannt'}
+                {kiloUsage.blockedBy429 ? ' · HTTP 429: weitere Kilo-Free-Requests gesperrt' : ''}
+                {' · '}Andere Kilo-Clients und Geräte werden nicht mitgezählt.
+              </> : 'Zählt nur direkte Modellanfragen aus AutoDev Studio; Kilo CLI und andere Apps sind nicht erfasst.')}</span>
+            </div>}
             {kiloModels && <div className="provider-results" aria-label="Kostenlose Kilo-Modelle">
               {kiloModels.models.length===0 ? <p>Keine eindeutig kostenlosen Modelle gefunden. Aus Sicherheitsgründen wird nichts als kostenlos angenommen.</p> :
                 kiloModels.models.map(model=><div key={model.id}><strong>{model.name}{model.preferred ? ' · Favorit' : ''}</strong><small className="mono">{model.id}</small></div>)}

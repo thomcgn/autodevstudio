@@ -126,6 +126,14 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:kilo-free-usage', (_event,id:string) => {
+    if(typeof id!=='string')throw new Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw new Error('Not a Git repository');
+    // This counts ONLY inference attempts through Studio's own gateway bridge.
+    // It cannot observe Kilo CLI, browser, other devices or shared public IP.
+    return new FreeQuotaGuard(app.getPath('userData')).snapshot();
+  });
   let kiloCalibrationInProgress=false;
   ipcMain.handle('core:kilo-reviewer-calibrate', async (_event, id:string) => {
     if(typeof id!=='string')throw new Error('Invalid project ID');

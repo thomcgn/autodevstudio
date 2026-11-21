@@ -34,6 +34,7 @@ const success={
   ollamaReadiness:{ready:true,reason:'ready'},
   kiloRoleModels:null,
   kiloReviewerCalibration:{passed:true,reason:'passed'},
+  kiloFreeUsage:{source:'local-observation',limit:200,reserve:10,usedLocal:2,remainingVerified:null,resetAt:null,blockedBy429:false,observedAt:1},
   saveKiloRoleModels:null,
   kiloFreeModels:{checkedAt:'2026-11-21T00:00:00.000Z',models:[
     {id:'nvidia/nemotron-3-ultra-550b-a55b:free',name:'NVIDIA Nemotron 3 Ultra',preferred:true},
@@ -79,6 +80,7 @@ async function fixture(page){
       kiloFreeModels:()=>respond('kiloFreeModels'),
       kiloRoleModels:()=>respond('kiloRoleModels'),
       kiloReviewerCalibrate:()=>respond('kiloReviewerCalibration'),
+      kiloFreeUsage:()=>respond('kiloFreeUsage'),
       saveKiloRoleModels:async(_id,roles)=>{calls.push('saveKiloRoleModels');return structuredClone(roles);},
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
@@ -106,7 +108,8 @@ async function click(page,name){
       'Reviewer kalibrieren (2 Modellanfragen)':'reviewerCalibration',
       'Ollama-Verbindung prüfen':'ollamaReadiness',
       'Free-Modelle laden':'kiloFreeModels',
-      'Kilo-Free-Reviewer kalibrieren':'kiloReviewerCalibration'})[name]);
+      'Kilo-Free-Reviewer kalibrieren':'kiloReviewerCalibration',
+      'Kilo-Requests anzeigen':'kiloFreeUsage'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -126,6 +129,9 @@ try {
   const localModelButton=page.getByRole('button',{name:'Lokales Review-Modell testen',exact:true});
   assert.equal(await localModelButton.isVisible(),true);
   assert.equal(await localModelButton.isEnabled(),true);
+  await click(page,'Kilo-Requests anzeigen');
+  await page.getByText('2 von 200 lokal erfassten Gateway-Versuchen',{exact:false}).waitFor();
+  await page.getByText('tatsächliches IP-Restkontingent unbekannt',{exact:false}).waitFor();
   await click(page,'Free-Modelle laden');
   await page.locator('strong').filter({hasText:'NVIDIA Nemotron 3 Ultra'}).first().waitFor();
   await page.getByLabel('Modell für reviewer').selectOption('kilo-auto/free');
