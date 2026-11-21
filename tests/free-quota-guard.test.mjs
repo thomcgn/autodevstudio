@@ -96,3 +96,33 @@ test('strict production quota mode refuses unknown upstream remainder',()=>{
   assert.equal(f.guard.snapshot().remainingVerified,39);
  }finally{f.close();}
 });
+
+test('cross-instance accounting lock denies a second request rather than losing counts',()=>{
+ const f=fixture();
+ try{
+  f.guard.recordAttempt();
+  const lock=path.join(f.dir,'free-quota.write-lock');
+  fs.mkdirSync(lock);
+  const other=new FreeQuotaGuard(f.dir,f.now);
+  assert.throws(()=>other.recordAttempt('normal'),/writer occupied/);
+  assert.equal(other.snapshot().usedLocal,1);
+  fs.rmdirSync(lock);
+  other.recordAttempt();
+  assert.equal(f.guard.snapshot().usedLocal,2);
+ }finally{f.close();}
+});
+test('a 429 marker blocks other instances even if JSON writer is busy',()=>{
+ const f=fixture();
+ try{
+  const lock=path.join(f.dir,'free-quota.write-lock');
+  fs.mkdirSync(lock);
+  assert.throws(()=>f.guard.recordRateLimit(),/writer occupied/);
+  const other=new FreeQuotaGuard(f.dir,f.now);
+  assert.equal(other.snapshot().blockedBy429,true);
+  assert.equal(other.decide('normal').reason,'rate-limit');
+  fs.rmdirSync(lock);
+  assert.throws(()=>other.recordAttempt(),/rate-limit/);
+  other.recoverFromVerifiedProvider(40,f.now()+3600000);
+  assert.equal(other.snapshot().blockedBy429,false);
+ }finally{f.close();}
+});

@@ -30,6 +30,18 @@ function trim(state:Stored,now:number):Stored {
   return {...state,events:state.events.filter(t=>finiteInt(t)&&t<=now&&t>now-HOUR)};
 }
 function statePath(userData:string):string{return path.join(userData,'free-quota.json');}
+function writerLockPath(userData:string):string{return path.join(userData,'free-quota.write-lock');}
+function rateLimitMarker(userData:string):string{return path.join(userData,'free-quota.rate-limited');}
+function markerExists(userData:string):boolean{
+  try{
+    const stat=fs.lstatSync(rateLimitMarker(userData));
+    if(!stat.isFile()||stat.isSymbolicLink())throw Error('Invalid rate-limit marker');
+    return true;
+  }catch(error){
+    if((error as NodeJS.ErrnoException).code==='ENOENT')return false;
+    throw Error('Rate-limit marker inaccessible: manual recovery required');
+  }
+}
 /** Globally shared IP-limit counter per Studio installation, not per project or model.
  * Local observation is NEVER represented as an authoritative provider counter.
  */
@@ -37,6 +49,18 @@ export class FreeQuotaGuard {
   private readonly userData:string;
   private readonly clock:()=>number;
   constructor(userData:string,clock:()=>number=Date.now){this.userData=userData;this.clock=clock;}
+  /** Atomic between Studio instances: no second writer can pass a quota check
+   * while another one is accounting for a request. Stale locks require
+   * explicit recovery; they are never silently stolen or timed out.
+   */
+  private withWriteLock<T>(action:()=>T):T{
+    fs.mkdirSync(this.userData,{recursive:true,mode:0o700});
+    const lock=writerLockPath(this.userData);
+    try{fs.mkdirSync(lock,{mode:0o700});}
+    catch{throw Error('Quota writer occupied: no model request allowed');}
+    try{return action();}
+    finally{fs.rmdirSync(lock);}
+  }
   private load():Stored{
     const file=statePath(this.userData);
     try{fs.statSync(file);}
@@ -75,7 +99,7 @@ export class FreeQuotaGuard {
       limit:HOURLY_LIMIT,reserve:RESERVED_REQUESTS,usedLocal:state.events.length,
       remainingVerified:fresh?state.verified!.remaining:null,
       resetAt:state.blockedUntil&&state.blockedUntil>now?state.blockedUntil:fresh?state.verified!.resetAt:null,
-      blockedBy429:state.rateLimited,
+      blockedBy429:state.rateLimited||markerExists(this.userData),
       observedAt:state.observedAt};
   }
   decide(phase:QuotaPhase,requireVerified=false):QuotaDecision {
@@ -96,13 +120,15 @@ export class FreeQuotaGuard {
   }
   /** Call immediately BEFORE a Kilo inference session: no retries or model switching. */
   recordAttempt(phase:QuotaPhase='normal',requireVerified=false):void {
-    const decision=this.decide(phase,requireVerified);
-    if(!decision.allowed)throw Error('Quota checkpoint required: '+decision.reason);
-    const now=this.clock(),state=trim(this.load(),now);
-    state.events.push(now);
-    state.observedAt=now;
-    if(state.verified)state.verified.remaining=Math.max(0,state.verified.remaining-1);
-    this.persist(state);
+    this.withWriteLock(()=>{
+      const decision=this.decide(phase,requireVerified);
+      if(!decision.allowed)throw Error('Quota checkpoint required: '+decision.reason);
+      const now=this.clock(),state=trim(this.load(),now);
+      state.events.push(now);
+      state.observedAt=now;
+      if(state.verified)state.verified.remaining=Math.max(0,state.verified.remaining-1);
+      this.persist(state);
+    });
   }
   /** Only explicitly authenticated provider usage is allowed to set remaining.
    * Raw model outputs, CLI stderr and invented reset times cannot do so.
@@ -111,10 +137,13 @@ export class FreeQuotaGuard {
     if(!finiteInt(remaining)||remaining>HOURLY_LIMIT||
       (resetAt!==null&&(!finiteInt(resetAt)||resetAt<=this.clock()||resetAt>this.clock()+2*HOUR)))
       throw Error('Invalid provider quota telemetry');
-    const now=this.clock(),state=trim(this.load(),now);
-    state.observedAt=now;state.verified={remaining,resetAt};
-    state.rateLimited=false;state.blockedUntil=null;
-    this.persist(state);
+    this.withWriteLock(()=>{
+      const now=this.clock(),state=trim(this.load(),now);
+      state.observedAt=now;state.verified={remaining,resetAt};
+      state.rateLimited=false;state.blockedUntil=null;
+      this.persist(state);
+      if(markerExists(this.userData))fs.unlinkSync(rateLimitMarker(this.userData));
+    });
   }
   /** HTTP 429 is authoritative exhaustion. Retry-After can supply a minimum
    * delay but does not authorize automatic retry after expiration.
@@ -122,10 +151,22 @@ export class FreeQuotaGuard {
   recordRateLimit(retryAfterMs:number|null=null):void {
     if(retryAfterMs!==null&&(!finiteInt(retryAfterMs)||retryAfterMs>2*HOUR))
       throw Error('Invalid retry interval');
-    const now=this.clock(),state=trim(this.load(),now);
-    state.rateLimited=true;state.blockedUntil=retryAfterMs===null?null:now+retryAfterMs;
-    state.verified=null;state.observedAt=now;
-    this.persist(state);
+    // Write a fail-closed marker FIRST: concurrent processes must see HTTP 429
+    // even when another instance currently owns the JSON accounting lock.
+    fs.mkdirSync(this.userData,{recursive:true,mode:0o700});
+    if(!markerExists(this.userData)){
+      try{fs.writeFileSync(rateLimitMarker(this.userData),'429',{flag:'wx',mode:0o600});}
+      catch(error){
+        if((error as NodeJS.ErrnoException).code!=='EEXIST'||!markerExists(this.userData))
+          throw Error('Cannot persist rate-limit marker');
+      }
+    }
+    this.withWriteLock(()=>{
+      const now=this.clock(),state=trim(this.load(),now);
+      state.rateLimited=true;state.blockedUntil=retryAfterMs===null?null:now+retryAfterMs;
+      state.verified=null;state.observedAt=now;
+      this.persist(state);
+    });
   }
   /** Clears a 429 ONLY after provider evidence of recovery, never from local time alone. */
   recoverFromVerifiedProvider(remaining:number,resetAt:number|null):void {
