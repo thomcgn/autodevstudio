@@ -15,6 +15,9 @@ export interface KiloGatewayConfig {
    * This is a gateway API key, NOT necessarily the CLI login/session token.
    */
   readGatewayApiKey:()=>string|null;
+  /** Trusted per-request quota boundaries; never accepts model-provided counts. */
+  onBeforeRequest?:()=>void;
+  onRateLimited?:()=>void;
   timeoutMs?:number;
   maxCompletionTokens?:number;
 }
@@ -96,18 +99,20 @@ export function createKiloGatewayReviewerChannel(
     requireReview(request);
     if(signal?.aborted)throw new Error('Reviewer Gateway request cancelled');
     const key=config.readGatewayApiKey();
-    if(!key||!/^[\x21-\x7e]{10,4096}$/.test(key))
+    const free=config.model==='kilo-auto/free'||config.model.endsWith(':free');
+    if ((!key&&!free)||(key!==null&&!/^[\\x21-\\x7e]{10,4096}$/.test(key)))
       throw new Error('Kilo Gateway API key unavailable');
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),config.timeoutMs??60000);
     const onAbort=()=>controller.abort();
     signal?.addEventListener('abort',onAbort,{once:true});
     try{
+      config.onBeforeRequest?.();
       const response=await fetcher(URL,{
         method:'POST',
         redirect:'error',
         headers:{
-          'Authorization':'Bearer '+key,
+          ...(key?{'Authorization':'Bearer '+key}:{}),
           'Content-Type':'application/json',
           'Accept':'application/json',
         },
@@ -121,6 +126,10 @@ export function createKiloGatewayReviewerChannel(
         }),
         signal:controller.signal,
       });
+      if(response.status===429){
+        config.onRateLimited?.();
+        throw new Error('Kilo Gateway free rate limited (HTTP 429)');
+      }
       if(!response.ok)
         throw new Error('Kilo Gateway request rejected (HTTP '+response.status+')');
       const text=outputOnly(await readBoundedJson(response));
@@ -135,7 +144,7 @@ export function createKiloGatewayReviewerChannel(
       if(controller.signal.aborted||signal?.aborted)
         throw new Error('Reviewer Gateway request cancelled or timed out');
       if(error instanceof Error&&
-        /^(Kilo Gateway request rejected|Gateway response exceeds|Invalid Gateway JSON|Empty Gateway|Invalid Gateway completion|Reviewer completion|Reviewer returned|Reviewer output)/.test(error.message))
+        /^(Quota checkpoint required|Kilo Gateway free rate limited|Kilo Gateway request rejected|Gateway response exceeds|Invalid Gateway JSON|Empty Gateway|Invalid Gateway completion|Reviewer completion|Reviewer returned|Reviewer output)/.test(error.message))
         throw error;
       throw new Error('Reviewer Gateway transport failed');
     }finally{
