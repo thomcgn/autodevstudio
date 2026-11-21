@@ -57,7 +57,7 @@ export function createOfflineReviewerSandboxLaunch(
     }
     if(stat.isSymbolicLink()){
       const target=fs.readlinkSync(name);
-      if(!/^usr\\/(?:bin|lib|lib64)$/.test(target))
+      if(!/^usr\/(?:bin|lib|lib64)$/.test(target))
         throw new Error('Unexpected runtime symlink');
       args.push('--symlink',target,name);
     }else if(stat.isDirectory())args.push('--ro-bind',name,name);
