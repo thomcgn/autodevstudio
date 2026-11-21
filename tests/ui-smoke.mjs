@@ -124,7 +124,7 @@ try {
   assert.equal(await localModelButton.isVisible(),true);
   assert.equal(await localModelButton.isEnabled(),true);
   await click(page,'Free-Modelle laden');
-  await page.getByText('NVIDIA Nemotron 3 Ultra',{exact:false}).waitFor();
+  await page.locator('strong').filter({hasText:'NVIDIA Nemotron 3 Ultra'}).first().waitFor();
   await page.getByLabel('Modell für reviewer').selectOption('kilo-auto/free');
   await page.getByRole('button',{name:'Rollenzuordnung speichern'}).click();
   await page.getByText('Rollenzuordnung gespeichert',{exact:false}).waitFor();
