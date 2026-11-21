@@ -16,12 +16,12 @@ test('review tool launch has private root, project-only readonly access and no n
     assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/git',args:['status']}),/Linux/);
     return;
   }
-  const launch=createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/git',args:['status','--short']});
+  const launch=createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/git',args:['--no-pager','status','--porcelain=v1','--untracked-files=all']});
   assert.equal(launch.binary,'bwrap');
   assert.ok(launch.args.includes('--unshare-net'));
   assert.ok(launch.args.includes('--unshare-ipc'));
   assert.ok(launch.args.includes('--clearenv'));
-  assert.deepEqual(launch.args.slice(-6),['--chdir','/project','--','/usr/bin/git','status','--short']);
+  assert.deepEqual(launch.args.slice(-6),['--','/usr/bin/git','--no-pager','status','--porcelain=v1','--untracked-files=all']);
   const tmpfsIndex=launch.args.indexOf('--tmpfs');
   assert.equal(launch.args[tmpfsIndex+1],'/');
   assert.ok(launch.args.includes(projectPath));
@@ -36,13 +36,32 @@ test('rejects arbitrary executables, user shells and malformed input',t=>{
   const projectPath=fixture(t);
   if(process.platform!=='linux')return;
   for(const binary of ['/bin/bash','/usr/bin/python3','/usr/bin/env','/usr/bin/gh','/usr/bin/git;echo','/usr/bin/../bin/sh','git']){
-    assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary,args:[]}),/tool|binary/);
+    assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary,args:[]}),/tool|binary|executable/);
   }
-  assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/sh',args:['-c','touch /project/modified']}),/Shell execution/);
+  assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/sh',args:['-c','touch /project/modified']}),/Unsupported reviewer executable/);
   assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/git',args:['x'.repeat(5000)]}),/Invalid tool arguments/);
 });
 test('refuses nonexistent project roots',t=>{
   const root=fixture(t);
   if(process.platform!=='linux')return;
   assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath:path.join(root,'missing'),binary:'/usr/bin/git',args:[]}));
+});
+
+test('rejects Git command injection and writable or external operations',t=>{
+  const projectPath=fixture(t);
+  if(process.platform!=='linux')return;
+  for(const args of [
+    ['status'],['commit','-am','bad'],['push'],['-C','/home','status'],
+    ['-c','alias.status=!touch /tmp/evil','status'],
+    ['--exec-path=/home/evil','status'],['--no-pager','diff','--ext-diff'],
+    ['--no-pager','config','--global','--list'],
+    ['--no-pager','show','HEAD:secret'],
+    ['--no-pager','status','--porcelain=v1','--untracked-files=all','--'],
+  ])assert.throws(()=>createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/git',args}),/Unsupported reviewer Git operation/);
+  for(const args of [
+    ['--no-pager','status','--porcelain=v1','--untracked-files=all'],
+    ['--no-pager','diff','--no-ext-diff','--no-textconv','--'],
+    ['--no-pager','diff','--cached','--no-ext-diff','--no-textconv','--'],
+    ['--no-pager','log','-5','--format=%h %s'],
+  ])assert.equal(createReadonlyReviewerToolLaunch({projectPath,binary:'/usr/bin/git',args}).binary,'bwrap');
 });
