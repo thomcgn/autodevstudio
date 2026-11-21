@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { probeBubblewrap } from '../src/core/bwrap-probe.ts';
+import { probeBubblewrap, classifySandboxError } from '../src/core/bwrap-probe.ts';
 
 test('sandbox probe never targets a selected Git project or calls a model', async () => {
   let seen = 0;
@@ -18,7 +18,7 @@ test('sandbox probe never targets a selected Git project or calls a model', asyn
   });
   if (process.platform === 'linux') {
     assert.equal(seen,1);
-    assert.deepEqual(outcome,{available:true,isolated:true,reason:'passed'});
+    assert.deepEqual(outcome,{available:true,isolated:true,reason:'passed',detail:null});
   } else assert.equal(outcome.reason,'unsupported-platform');
 });
 
@@ -27,6 +27,7 @@ test('sandbox launch failure blocks readiness without leaking process error',asy
   if(process.platform==='linux'){
     assert.equal(result.isolated,false);
     assert.equal(result.reason,'sandbox-failed');
+    assert.equal(result.detail,'unknown');
     assert.ok(!JSON.stringify(result).includes('secret'));
   }
 });
@@ -36,4 +37,30 @@ test('a deceptive process success cannot hide changes to canary',async()=>{
     fs.writeFileSync(path.join(cwd,'canary.txt'),'modified');
   });
   if(process.platform==='linux') assert.equal(result.reason,'canary-modified');
+});
+
+test('categorizes known Linux namespace and mount failures without leaking stderr',()=>{
+  assert.equal(classifySandboxError({code:1,stderr:'bwrap: Creating new namespace failed: Operation not permitted'}),'namespace-permission-denied');
+  assert.equal(classifySandboxError({code:1,stderr:'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted'}),'network-setup-denied');
+  assert.equal(classifySandboxError({code:1,stderr:'bwrap: mount /probe failed: No such file or directory'}),'mount-setup-failed');
+  assert.equal(classifySandboxError({code:'ETIMEDOUT',killed:true,stderr:'private'}),'timeout');
+});
+test('binds host canary before creating isolated /tmp',async()=>{
+  if(process.platform!=='linux') return;
+  await probeBubblewrap(async(args)=>{
+    const positions = {bind:args.indexOf('/probe'),tmp:args.indexOf('--tmpfs')};
+    assert.ok(positions.bind >= 0 && positions.tmp > positions.bind);
+  });
+});
+test('failure result contains only stable diagnostic enum, not raw error',async()=>{
+  if(process.platform!=='linux') return;
+  const result=await probeBubblewrap(async()=>{
+    const error=new Error('HOME=/private/password');
+    error.code=1;
+    error.stderr='bwrap: Creating new namespace failed: Operation not permitted\nsecret=somevalue';
+    throw error;
+  });
+  assert.equal(result.detail,'namespace-permission-denied');
+  assert.ok(!JSON.stringify(result).includes('secret'));
+  assert.ok(!JSON.stringify(result).includes('/private'));
 });
