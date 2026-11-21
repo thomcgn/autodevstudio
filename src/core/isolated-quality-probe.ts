@@ -65,7 +65,7 @@ export async function probeIsolatedQualityRuntime(
         return {supported:true,passed:false,reason:'sandbox-failed',stage,
           ...classify(error)};
       }
-      if(!/^\s*\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\s*$/.test(output))
+      if(!(part==='node' ? /^\s*v\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\s*$/.test(output) : /^\s*\d+\.\d+\.\d+(?:[-+][a-zA-Z0-9.-]+)?\s*$/.test(output)))
         return {supported:true,passed:false,reason:'invalid-output',stage,detail:null,exitCode:null};
     }
     return {supported:true,passed:true,reason:'passed',stage:null,detail:null,exitCode:null};
