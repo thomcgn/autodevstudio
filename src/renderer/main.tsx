@@ -182,7 +182,7 @@ function App(): React.JSX.Element {
     setQualityChecking(true);
     setQualityProbe(null);
     try { setQualityProbe(await window.studio.qualityProbe(selected)); }
-    catch { setQualityProbe({supported:true,passed:false,reason:'sandbox-failed'}); }
+    catch { setQualityProbe({supported:true,passed:false,reason:'sandbox-failed',stage:'prepare',detail:'other',exitCode:null}); }
     finally { setQualityChecking(false); }
   };
 
