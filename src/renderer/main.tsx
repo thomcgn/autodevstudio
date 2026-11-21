@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -25,6 +25,8 @@ function App(): React.JSX.Element {
   const [reviewerChecking, setReviewerChecking] = useState(false);
   const [qualityProbe, setQualityProbe] = useState<IsolatedQualityProbe | null>(null);
   const [qualityChecking, setQualityChecking] = useState(false);
+  const [qualityScriptProbe, setQualityScriptProbe] = useState<QualityScriptProbeResult | null>(null);
+  const [qualityScriptChecking, setQualityScriptChecking] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -100,6 +102,7 @@ function App(): React.JSX.Element {
     setSandboxError('');
     setReviewerProbe(null);
     setQualityProbe(null);
+    setQualityScriptProbe(null);
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -184,6 +187,15 @@ function App(): React.JSX.Element {
     try { setQualityProbe(await window.studio.qualityProbe(selected)); }
     catch { setQualityProbe({supported:true,passed:false,reason:'sandbox-failed',stage:'prepare',detail:'other',exitCode:null}); }
     finally { setQualityChecking(false); }
+  };
+
+  const verifyQualityScript = async (): Promise<void> => {
+    if (!selected || qualityScriptChecking) return;
+    setQualityScriptChecking(true);
+    setQualityScriptProbe(null);
+    try { setQualityScriptProbe(await window.studio.qualityScriptProbe(selected)); }
+    catch { setQualityScriptProbe({passed:false,reason:'script-failed'}); }
+    finally { setQualityScriptChecking(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -326,6 +338,7 @@ function App(): React.JSX.Element {
             <div className="sandbox-check"><button className="quiet" disabled={!selected || sandboxChecking || diagnostics?.sandboxTool !== 'bwrap' || !diagnostics.sandboxToolAvailable} onClick={() => void verifySandbox()}>{sandboxChecking ? 'Prüfe Sandbox …' : 'Sandbox testen'}</button><span>{sandboxError || (sandboxProbe ? sandboxProbe.isolated ? 'Schreibschutz und Start in Testumgebung bestätigt · Produktiv-Sandbox noch ausstehend' : `Sandbox-Test fehlgeschlagen: ${sandboxProbe.detail === 'namespace-permission-denied' ? 'User-Namespace nicht erlaubt' : sandboxProbe.detail === 'network-setup-denied' ? 'Netzwerk-Namespace blockiert' : sandboxProbe.detail === 'mount-setup-failed' ? 'Mount-Konfiguration fehlgeschlagen' : sandboxProbe.detail === 'timeout' ? 'Zeitüberschreitung' : sandboxProbe.detail === 'canary-read-failed' ? 'Testdatei innerhalb der Sandbox nicht lesbar' : sandboxProbe.detail === 'write-protection-failed' ? 'Schreibschutz nicht wirksam' : sandboxProbe.detail === 'canary-verification-failed' ? 'Testdatei nach Schreibversuch verändert' : sandboxProbe.detail === 'probe-command-failed' ? `Testbefehl fehlgeschlagen (Exit ${sandboxProbe.exitCode ?? '?'})` : 'Ursache unbekannt'}` : 'Separater Test ohne Kilo und ohne Projektänderungen')}</span></div>
             {sandboxProbe?.isolated && <div className="sandbox-check"><button className="quiet" disabled={!selected || reviewerChecking} onClick={() => void verifyReviewer()}>{reviewerChecking ? 'Prüfe Reviewer …' : 'Reviewer-Tool testen'}</button><span>{reviewerProbe ? reviewerProbe.passed ? 'Git-Prozess isoliert gestartet · Projekt weiterhin nur lesbar' : `Isolierter Git-Prozess fehlgeschlagen: ${reviewerProbe.detail === 'mountpoint-failed' ? 'Mount- oder Namespace-Konfiguration' : reviewerProbe.detail === 'runtime-library-missing' ? 'Laufzeitbibliothek fehlt' : reviewerProbe.detail === 'git-repository-rejected' ? 'Git-Repository in Sandbox nicht erkannt' : reviewerProbe.detail === 'git-command-failed' ? 'Git-Befehl fehlgeschlagen' : reviewerProbe.detail === 'timeout' ? 'Zeitüberschreitung' : 'Prozessstart fehlgeschlagen'}` : 'Prüft den tatsächlichen Git-Prozess in der Offline-Sandbox – ohne Modellaufruf'}</span></div>}
             {reviewerProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || qualityChecking} onClick={() => void verifyQualitySandbox()}>{qualityChecking ? 'Prüfe npm …' : 'Quality-Sandbox testen'}</button><span>{qualityProbe ? qualityProbe.passed ? 'npm in isolierter Testumgebung gestartet · keine Projektskripte ausgeführt' : qualityProbe.reason === 'npm-unavailable' ? 'System-npm unter /usr/bin/npm nicht gefunden' : qualityProbe.reason === 'invalid-output' ? 'npm-Version nicht erkannt' : `Quality-Sandbox: ${qualityProbe.stage === 'node' ? 'Node' : qualityProbe.stage === 'npm' ? 'npm' : 'Vorbereitung'} fehlgeschlagen${qualityProbe.detail ? ' · ' + (qualityProbe.detail === 'mount-or-namespace' ? 'Mount/Namespace' : qualityProbe.detail === 'runtime-library' ? 'Laufzeitdatei fehlt' : qualityProbe.detail === 'timeout' ? 'Zeitüberschreitung' : qualityProbe.detail === 'command-exit' ? 'Programmfehler' : 'Unbekannter Fehler') : ''}${qualityProbe.exitCode !== null ? ' (Exit ' + qualityProbe.exitCode + ')' : ''}` : 'Prüft ausschließlich npm --version in einem temporären Testverzeichnis'}</span></div>}
+            {qualityProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || qualityScriptChecking} onClick={() => void verifyQualityScript()}>{qualityScriptChecking ? 'Prüfe Testskript …' : 'Quality-Skript testen'}</button><span>{qualityScriptProbe ? qualityScriptProbe.passed ? 'Testskript isoliert ausgeführt · Projektschreibzugriff erlaubt · .git geschützt' : qualityScriptProbe.reason === 'missing-expected-write' ? 'Testskript konnte nicht in das Testprojekt schreiben' : qualityScriptProbe.reason === 'git-metadata-modified' ? 'Git-Metadaten waren nicht ausreichend geschützt' : 'Isoliertes Testskript fehlgeschlagen' : 'Führt nur ein festes Testskript in einem temporären Projekt aus'}</span></div>}
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           {canRun && <div className="run-panel"><div><h3>Legacy-Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>}
