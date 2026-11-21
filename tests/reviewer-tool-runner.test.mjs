@@ -15,7 +15,7 @@ test('only invokes wrapped bwrap process without model, networking or host HOME'
   const projectPath=repo(t);
   let called=0;
   const result=await runReadonlyReviewerTool(
-    {projectPath,binary:'/usr/bin/git',args:['status','--short']},
+    {projectPath,binary:'/usr/bin/git',args:['--no-pager','status','--porcelain=v1','--untracked-files=all']},
     undefined,
     async launch=>{
       called++;
@@ -36,7 +36,7 @@ test('only invokes wrapped bwrap process without model, networking or host HOME'
 test('rejects oversized output and never treats an error as successful review',async t=>{
   if(process.platform!=='linux')return;
   const projectPath=repo(t);
-  const spec={projectPath,binary:'/usr/bin/git',args:['status']};
+  const spec={projectPath,binary:'/usr/bin/git',args:['--no-pager','status','--porcelain=v1','--untracked-files=all']};
   await assert.rejects(
     runReadonlyReviewerTool(spec,undefined,async()=> 'x'.repeat(140000)),
     /cannot count as PASS/,
