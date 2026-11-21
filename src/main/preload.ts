@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('studio', {
   offlineReviewerProbe: (id: string) => ipcRenderer.invoke('core:offline-reviewer-probe', id),
   localModelProbe: (id: string) => ipcRenderer.invoke('core:local-model-probe', id),
   reviewerCalibration: (id: string) => ipcRenderer.invoke('core:reviewer-calibration', id),
+  ollamaReadiness: (id: string) => ipcRenderer.invoke('core:ollama-readiness', id),
   simulateIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:simulate', id, issueNumber),
   workflowStages: () => ipcRenderer.invoke('core:workflow'),
   snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
