@@ -98,7 +98,39 @@ test('unreachable local model, other projects and corrupted calibration cannot b
     ...f.input,projectId:'another-project',
   },fetcher)),/No approved reviewer/);
   fs.writeFileSync(path.join(f.root,'local-review-calibration','fixture-project.json'),'{invalid');
-  assert.throws(()=>createAttestedProjectReviewerTransport(f.input,fetcher),/manual review/);
+  await assert.rejects(review(createAttestedProjectReviewerTransport(f.input,fetcher)),/manual review/);
+  assert.equal(requests,0);
+ }finally{f.close();}
+});
+
+test('already constructed transport immediately honors opt-out and failed re-calibration',async()=>{
+ const f=fixture();let requests=0;
+ try{
+  writeLocalReviewFallback(f.root,'fixture-project',true);
+  recordLocalReviewCalibration(f.root,'fixture-project',true);
+  const transport=createAttestedProjectReviewerTransport(f.input,async url=>{
+   requests++;
+   assert.equal(url,'http://127.0.0.1:11434/api/chat');
+   return localReply();
+  });
+  assert.equal((await review(transport)).verdict,'FAIL');
+  writeLocalReviewFallback(f.root,'fixture-project',false);
+  await assert.rejects(review(transport),/No approved reviewer/);
+  writeLocalReviewFallback(f.root,'fixture-project',true);
+  recordLocalReviewCalibration(f.root,'fixture-project',false);
+  await assert.rejects(review(transport),/No approved reviewer/);
+  assert.equal(requests,1);
+ }finally{f.close();}
+});
+test('inconsistent local readiness cannot grant reviewer permission',async()=>{
+ const f=fixture();let requests=0;
+ try{
+  writeLocalReviewFallback(f.root,'fixture-project',true);
+  recordLocalReviewCalibration(f.root,'fixture-project',true);
+  const transport=createAttestedProjectReviewerTransport({
+   ...f.input,ollamaReadiness:{ready:true,reason:'unreachable'},
+  },async()=>{requests++;return localReply()});
+  await assert.rejects(review(transport),/No approved reviewer/);
   assert.equal(requests,0);
  }finally{f.close();}
 });
