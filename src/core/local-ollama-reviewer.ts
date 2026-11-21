@@ -40,12 +40,12 @@ async function boundedBody(response:Response):Promise<unknown>{
   try{return JSON.parse(Buffer.concat(chunks,bytes).toString('utf8')) as unknown;}
   catch{throw new Error('Invalid Ollama JSON response');}
 }
-function extract(raw:unknown):string{
+function extract(raw:unknown,expectedModel:string):string{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))
     throw new Error('Invalid Ollama completion');
   const response=raw as Record<string,unknown>;
   const message=response.message;
-  if(response.done!==true||!message||typeof message!=='object'||Array.isArray(message))
+  if(response.model!==expectedModel||response.done!==true||!message||typeof message!=='object'||Array.isArray(message))
     throw new Error('Ollama completion unfinished');
   const r=message as Record<string,unknown>;
   if(r.role!=='assistant'||Object.prototype.hasOwnProperty.call(r,'tool_calls')||
@@ -94,7 +94,7 @@ export function createLocalOllamaReviewerChannel(
         }),
       });
       if(!response.ok)throw new Error('Ollama unavailable or rejected request (HTTP '+response.status+')');
-      const output=extract(await boundedBody(response));
+      const output=extract(await boundedBody(response),config.model);
       const result:ReviewerGatewayResponse={
         protocol:'autodev-review-gateway-v1',kind:'review-result',
         requestId:request.requestId,issueNumber:request.issueNumber,
