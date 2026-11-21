@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -39,6 +39,9 @@ function App(): React.JSX.Element {
   const [calibrating, setCalibrating] = useState(false);
   const [ollamaReadiness, setOllamaReadiness] = useState<OllamaReadinessResult | null>(null);
   const [checkingOllama, setCheckingOllama] = useState(false);
+  const [kiloModels, setKiloModels] = useState<KiloFreeCatalog | null>(null);
+  const [kiloModelLoading, setKiloModelLoading] = useState(false);
+  const [kiloModelError, setKiloModelError] = useState('');
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -121,6 +124,8 @@ function App(): React.JSX.Element {
     setLocalModelProbe(null);
     setCalibration(null);
     setOllamaReadiness(null);
+    setKiloModels(null);
+    setKiloModelError('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -250,6 +255,16 @@ function App(): React.JSX.Element {
     try { setLocalModelProbe(await window.studio.localModelProbe(selected)); }
     catch { setLocalModelProbe({passed:false,reason:'request-failed'}); }
     finally { setLocalModelChecking(false); }
+  };
+
+  const loadKiloModels = async (): Promise<void> => {
+    if (!selected || kiloModelLoading) return;
+    setKiloModelLoading(true);
+    setKiloModelError('');
+    setKiloModels(null);
+    try { setKiloModels(await window.studio.kiloFreeModels(selected)); }
+    catch { setKiloModelError('Kilo-Modellkatalog derzeit nicht erreichbar · keine kostenpflichtigen Modelle übernommen'); }
+    finally { setKiloModelLoading(false); }
   };
 
   const checkOllamaReadiness = async (): Promise<void> => {
@@ -400,6 +415,15 @@ function App(): React.JSX.Element {
             <div className="metric"><small>Checkpoint</small><strong>{snapshot?.checkpoint ? `#${snapshot.checkpoint.issueNumber} · ${snapshot.checkpoint.phase}` : 'Keiner'}</strong></div>
           </div>
           <div className="provider-panel">
+            <div className="provider-heading"><div><h3>Kilo · kostenlose Modelle</h3><p>Live-Katalog von Kilo, ausschließlich ausdrücklich kostenlose IDs. Nemotron 3 Ultra wird bevorzugt angezeigt; Verfügbarkeit wird jedes Mal neu geprüft.</p></div>
+              <button disabled={!selected || kiloModelLoading} onClick={() => void loadKiloModels()}>{kiloModelLoading ? 'Lade Modelle …' : 'Free-Modelle laden'}</button></div>
+            {kiloModelError && <p role="alert" className="error">{kiloModelError}</p>}
+            {kiloModels && <div className="provider-results" aria-label="Kostenlose Kilo-Modelle">
+              {kiloModels.models.length===0 ? <p>Keine eindeutig kostenlosen Modelle gefunden. Aus Sicherheitsgründen wird nichts als kostenlos angenommen.</p> :
+                kiloModels.models.map(model=><div key={model.id}><strong>{model.name}{model.preferred ? ' · Favorit' : ''}</strong><small className="mono">{model.id}</small></div>)}
+              <small>Stand: {new Date(kiloModels.checkedAt).toLocaleString('de-DE')} · Nur Anzeige; Rollenzuordnung und Agentenfreigabe folgen separat.</small>
+            </div>}
+
             <div className="provider-heading"><div><h3>Lokale Provider</h3><p>Prüft nur Kilo CLI und GitHub-Anmeldung – keine Modellanfrage, keine Dateiänderungen.</p></div>
               <button disabled={!selected || checkingProviders} onClick={() => void checkProviders()}>{checkingProviders ? 'Prüfe …' : 'Umgebung prüfen'}</button></div>
             {diagnosticsError && <p className="error" role="alert">{diagnosticsError}</p>}
