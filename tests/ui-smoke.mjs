@@ -145,6 +145,21 @@ try {
   await click(page,'Kilo-Free-Reviewer kalibrieren');
   await page.getByText('Kilo-Free-Limit erreicht (HTTP 429)',{exact:false}).waitFor();
   assert.equal(await page.getByLabel('Modell für builder').inputValue(),'nvidia/nemotron-3-ultra-550b-a55b:free');
+  // Agent role dropdowns must never overflow into the second model card column.
+  const geometry=await page.evaluate(()=>{
+    const panel=document.querySelector('.role-assignment-panel');
+    const catalog=document.querySelector('[aria-label="Kostenlose Kilo-Modelle"]');
+    const view=document.querySelector('.agents');
+    return {panelWidth:panel.getBoundingClientRect().width,
+      catalogWidth:catalog.getBoundingClientRect().width,
+      overflow:view.scrollWidth>view.clientWidth+1,
+      allSelectorsInside:[...panel.querySelectorAll('select')].every(node=>
+        node.getBoundingClientRect().right<=panel.getBoundingClientRect().right+1)};
+  });
+  assert.equal(geometry.overflow,false,'Agent view must not scroll horizontally');
+  assert.ok(geometry.panelWidth>=geometry.catalogWidth-2,'Role settings span catalog width');
+  assert.equal(geometry.allSelectorsInside,true,'All role dropdowns fit their container');
+
   assert.equal(await page.getByText('nvidia/nemotron-3-ultra-550b-a55b:free',{exact:true}).count(),1);
   await click(page,'Ollama-Verbindung prüfen');
   await page.getByText('Ollama erreichbar · qwen2.5-coder:3b installiert',{exact:false}).waitFor();
