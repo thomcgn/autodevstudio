@@ -32,7 +32,7 @@ test('local calibration sends exactly two separate model-only synthetic prompts'
 test('always-PASS fails calibration without revealing model output',async()=>{
   if(process.platform!=='linux')return;
   const result=await probeReviewerCalibration(async()=>response('PASS'));
-  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:1});
+  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:2});
 });
 test('unreachable model returns safe failure status',async()=>{
   if(process.platform!=='linux')return;
