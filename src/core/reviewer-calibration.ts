@@ -4,7 +4,8 @@ import { createEvidenceOnlyReviewer, type EvidenceOnlyReviewerTransport } from '
 
 export interface CalibrationResult {
   passed: boolean;
-  reason: 'passed'|'wrong-verdict'|'invalid-response'|'cancelled';
+  reason: 'passed'|'wrong-verdict'|'invalid-response'|'cancelled'|'model-unavailable'|'timeout'|'transport-failed';
+  caseNumber?: 1|2;
 }
 
 /** A calibration is NOT permission to run production issues. Both examples
@@ -39,22 +40,32 @@ function evidence(number:number,diff:string):ReviewEvidence {
  * of its own. PASS means calibration examples matched, not general reliability.
  * Run only following a user-authorized local model calibration action.
  */
+/** Public status codes are intentionally coarse. Never leak HTTP bodies, local paths or model text. */
+export function classifyCalibrationError(error:unknown): CalibrationResult['reason'] {
+  const message=error instanceof Error ? error.message : '';
+  if (/Local reviewer cancelled or timed out/.test(message)) return 'timeout';
+  if (/Ollama unavailable or rejected request \(HTTP (?:404|400)\)/.test(message)) return 'model-unavailable';
+  if (/^(?:Ollama unavailable|Local reviewer transport failed|Ollama returned empty response|Ollama response exceeded limit)/.test(message)) return 'transport-failed';
+  return 'invalid-response';
+}
+
 export async function calibrateReviewer(
   transport:EvidenceOnlyReviewerTransport,
   signal?:AbortSignal,
 ):Promise<CalibrationResult> {
   const review=createEvidenceOnlyReviewer(transport,signal);
-  for(const fixture of fixtures) {
+  for(const [index,fixture] of fixtures.entries()) {
+    const caseNumber=(index+1) as 1|2;
     if(signal?.aborted)return {passed:false,reason:'cancelled'};
     const issue:IssueTask={...fixture.issue};
     const plan:PlanResult={summary:fixture.issue.body,steps:['Review the synthetic patch']};
     const build:BuildResult={summary:fixture.summary};
     try {
       const verdict=await review(issue,plan,build,evidence(issue.number,fixture.diff));
-      if(verdict.verdict!==fixture.expected)return {passed:false,reason:'wrong-verdict'};
-    } catch {
+      if(verdict.verdict!==fixture.expected)return {passed:false,reason:'wrong-verdict',caseNumber};
+    } catch (error) {
       if(signal?.aborted)return {passed:false,reason:'cancelled'};
-      return {passed:false,reason:'invalid-response'};
+      return {passed:false,reason:classifyCalibrationError(error),caseNumber};
     }
   }
   return {passed:true,reason:'passed'};
