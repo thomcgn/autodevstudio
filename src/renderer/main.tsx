@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -31,6 +31,8 @@ function App(): React.JSX.Element {
   const [fullPipelineChecking, setFullPipelineChecking] = useState(false);
   const [offlineKiloProbe, setOfflineKiloProbe] = useState<OfflineKiloProbeResult | null>(null);
   const [offlineKiloChecking, setOfflineKiloChecking] = useState(false);
+  const [offlineReviewerProbe, setOfflineReviewerProbe] = useState<OfflineReviewerProbeResult | null>(null);
+  const [offlineReviewerChecking, setOfflineReviewerChecking] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -109,6 +111,7 @@ function App(): React.JSX.Element {
     setQualityScriptProbe(null);
     setFullPipelineProbe(null);
     setOfflineKiloProbe(null);
+    setOfflineReviewerProbe(null);
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -220,6 +223,15 @@ function App(): React.JSX.Element {
     try { setOfflineKiloProbe(await window.studio.offlineKiloProbe(selected)); }
     catch { setOfflineKiloProbe({passed:false,reason:'sandbox-failed'}); }
     finally { setOfflineKiloChecking(false); }
+  };
+
+  const verifyOfflineReviewer = async (): Promise<void> => {
+    if (!selected || offlineReviewerChecking) return;
+    setOfflineReviewerChecking(true);
+    setOfflineReviewerProbe(null);
+    try { setOfflineReviewerProbe(await window.studio.offlineReviewerProbe(selected)); }
+    catch { setOfflineReviewerProbe({passed:false,reason:'sandbox-failed'}); }
+    finally { setOfflineReviewerChecking(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -365,6 +377,7 @@ function App(): React.JSX.Element {
             {qualityProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || qualityScriptChecking} onClick={() => void verifyQualityScript()}>{qualityScriptChecking ? 'Prüfe Testskript …' : 'Quality-Skript testen'}</button><span>{qualityScriptProbe ? qualityScriptProbe.passed ? 'Testskript isoliert ausgeführt · Projektschreibzugriff erlaubt · .git geschützt' : qualityScriptProbe.reason === 'missing-expected-write' ? 'Testskript konnte nicht in das Testprojekt schreiben' : qualityScriptProbe.reason === 'git-metadata-modified' ? 'Git-Metadaten waren nicht ausreichend geschützt' : 'Isoliertes Testskript fehlgeschlagen' : 'Führt nur ein festes Testskript in einem temporären Projekt aus'}</span></div>}
             {qualityScriptProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || fullPipelineChecking} onClick={() => void verifyFullPipeline()}>{fullPipelineChecking ? 'Prüfe Workflow …' : 'Gesamtworkflow testen'}</button><span>{fullPipelineProbe ? fullPipelineProbe.passed ? 'Lokaler Trockenlauf erfolgreich · Git, Reviewer-Evidenz, Quality und Lock geprüft · keine Veröffentlichung' : fullPipelineProbe.reason === 'setup-failed' ? 'Temporäres Git-Testprojekt konnte nicht vorbereitet werden' : 'Lokaler Trockenlauf fehlgeschlagen · kein Projekt verändert' : 'Erzeugt ein Wegwerf-Git-Repository und testet die vollständige Schutzkette ohne KI und Push'}</span></div>}
             {fullPipelineProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || offlineKiloChecking} onClick={() => void verifyOfflineKilo()}>{offlineKiloChecking ? 'Prüfe Kilo …' : 'Kilo-Laufzeit testen'}</button><span>{offlineKiloProbe ? offlineKiloProbe.passed ? 'Kilo-Version und Run-Aufrufsyntax offline geprüft · keine Modellanfrage' : offlineKiloProbe.reason === 'cli-unavailable' ? 'Kilo weder im Studio-PATH noch in üblichen npm-Benutzerpfaden gefunden' : offlineKiloProbe.reason === 'cli-outside-usr' ? 'Kilo-Installationspfad nicht sicher freigebbar' : 'Kilo-CLI konnte in der privaten Sandbox nicht gestartet werden' : 'Startet ausschließlich kilo --version ohne Netzwerk, Zugangsdaten oder Projektzugriff'}</span></div>}
+            {offlineKiloProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || offlineReviewerChecking} onClick={() => void verifyOfflineReviewer()}>{offlineReviewerChecking ? 'Prüfe Reviewer-Sandbox …' : 'Reviewer-Sandbox testen'}</button><span>{offlineReviewerProbe ? offlineReviewerProbe.passed ? 'Reviewer-CLI isoliert · keine Projektdateien, kein Netzwerk, keine Modellanfrage' : offlineReviewerProbe.reason === 'cli-unavailable' ? 'Kilo-Installation nicht gefunden' : offlineReviewerProbe.reason === 'invalid-output' ? 'Reviewer-CLI-Hilfe unvollständig' : 'Reviewer-Sandbox konnte nicht gestartet werden' : 'Prüft die separate Werkzeug-Sperre ohne Anmeldung, KI- oder Projektzugriff'}</span></div>}
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           {canRun && <div className="run-panel"><div><h3>Legacy-Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>}

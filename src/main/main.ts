@@ -18,6 +18,7 @@ import { probeIsolatedQualityRuntime } from '../core/isolated-quality-probe';
 import { probeIsolatedQualityScript } from '../core/isolated-quality-script-probe';
 import { probeFullStandalonePipeline } from '../core/full-pipeline-probe';
 import { probeOfflineKiloRuntime } from '../core/offline-kilo-probe';
+import { probeOfflineReviewerSandbox } from '../core/offline-reviewer-probe';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -118,6 +119,12 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:offline-reviewer-probe', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    return probeOfflineReviewerSandbox();
+  });
   ipcMain.handle('core:offline-kilo-probe', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
