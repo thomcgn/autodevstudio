@@ -65,9 +65,9 @@ test('runtime works but deny-all config fails: report policy without stderr',asy
     const isVersion=launch.args.at(-1)==='--version';
     seen.push(isVersion?'runtime':hasPolicy?'policy':'help');
     if(hasPolicy){const e=new Error('secret from /home/user');e.code=254;e.stderr='configuration invalid in /home/user';throw e;}
-    return isVersion?'kilo 7.8.27\n':'Usage --model --agent\n';
+    return isVersion?'kilo 7.8.27\n':'Usage: kilo run --model example --agent reviewer\n';
   },()=>binary);
-  assert.deepEqual(seen,['runtime','help','policy']);
+  assert.deepEqual(seen,['runtime','help','policy','policy']);
   assert.equal(result.stage,'policy');
   assert.equal(result.detail,'permission-or-config');
   assert.equal(result.exitCode,254);
@@ -82,4 +82,27 @@ test('Bubblewrap launch error classified separately from provider policy',async 
   assert.equal(result.stage,'runtime');
   assert.equal(result.detail,'mount-or-namespace');
   assert.equal(result.exitCode,1);
+});
+
+test('reviewer help fallback works both without and with deny-all policy',async t=>{
+  const {binary}=fixture(t);
+  if(process.platform!=='linux')return;
+  const seen=[];
+  const result=await probeOfflineReviewerSandbox(async launch=>{
+    const args=launch.args.slice(launch.args.indexOf('--')+2);
+    const hasPolicy=launch.args.includes('KILO_CONFIG_CONTENT');
+    seen.push([hasPolicy?'policy':'plain',args.join(' ')]);
+    if(args.join(' ')==='--version')return 'kilo 7.8.27\n';
+    if(args.join(' ')==='run --help'){
+      const e=new Error('CLI help entrypoint exited');e.code=254;throw e;
+    }
+    assert.deepEqual(args,['help','run']);
+    return 'kilo run --model provider/model --agent reviewer\n';
+  },()=>binary);
+  assert.equal(result.passed,true);
+  assert.deepEqual(seen,[
+    ['plain','--version'],
+    ['plain','run --help'],['plain','help run'],
+    ['policy','run --help'],['policy','help run'],
+  ]);
 });
