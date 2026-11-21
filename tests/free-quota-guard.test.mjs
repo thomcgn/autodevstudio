@@ -73,3 +73,13 @@ test('shared counters persist across guarded objects and roll off after 60 min',
   assert.equal(other.snapshot().remainingVerified,null);
  }finally{f.close();}
 });
+
+test('corrupt accounting never silently resets the quota counter',()=>{
+ const f=fixture();
+ try{
+  f.guard.recordRateLimit();
+  fs.writeFileSync(path.join(f.dir,'free-quota.json'),'{bad');
+  assert.throws(()=>f.guard.snapshot(),/manual recovery required/);
+  assert.throws(()=>f.guard.recordAttempt(),/manual recovery required/);
+ }finally{f.close();}
+});
