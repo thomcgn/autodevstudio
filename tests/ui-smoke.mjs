@@ -155,6 +155,26 @@ try {
   });
   await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
   await page.getByText('Modell hat mindestens einen Fall falsch bewertet',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.reviewerCalibration={passed:false,reason:'timeout',caseNumber:1};
+  });
+  await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
+  await page.getByText('Ollama-Zeitlimit erreicht',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.reviewerCalibration={passed:false,reason:'model-unavailable',caseNumber:1};
+  });
+  await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
+  await page.getByText('Ollama hat die Modellanfrage abgelehnt',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.reviewerCalibration={passed:false,reason:'transport-failed',caseNumber:1};
+  });
+  await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
+  await page.getByText('Ollama-Verbindung oder HTTP-Antwort fehlgeschlagen',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.reviewerCalibration={passed:false,reason:'invalid-response',caseNumber:2};
+  });
+  await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
+  await page.getByText('Modellantwort nicht im geforderten Reviewer-JSON-Format (Testfall 2/2)',{exact:false}).waitFor();
   // Switching projects resets all probe state and does not carry PASS badges across projects.
   await page.getByRole('button',{name:/another-repo/}).click();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
