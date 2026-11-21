@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -29,6 +29,8 @@ function App(): React.JSX.Element {
   const [qualityScriptChecking, setQualityScriptChecking] = useState(false);
   const [fullPipelineProbe, setFullPipelineProbe] = useState<FullPipelineProbeResult | null>(null);
   const [fullPipelineChecking, setFullPipelineChecking] = useState(false);
+  const [offlineKiloProbe, setOfflineKiloProbe] = useState<OfflineKiloProbeResult | null>(null);
+  const [offlineKiloChecking, setOfflineKiloChecking] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -106,6 +108,7 @@ function App(): React.JSX.Element {
     setQualityProbe(null);
     setQualityScriptProbe(null);
     setFullPipelineProbe(null);
+    setOfflineKiloProbe(null);
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -208,6 +211,15 @@ function App(): React.JSX.Element {
     try { setFullPipelineProbe(await window.studio.fullPipelineProbe(selected)); }
     catch { setFullPipelineProbe({passed:false,reason:'pipeline-failed'}); }
     finally { setFullPipelineChecking(false); }
+  };
+
+  const verifyOfflineKilo = async (): Promise<void> => {
+    if (!selected || offlineKiloChecking) return;
+    setOfflineKiloChecking(true);
+    setOfflineKiloProbe(null);
+    try { setOfflineKiloProbe(await window.studio.offlineKiloProbe(selected)); }
+    catch { setOfflineKiloProbe({passed:false,reason:'sandbox-failed'}); }
+    finally { setOfflineKiloChecking(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -352,6 +364,7 @@ function App(): React.JSX.Element {
             {reviewerProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || qualityChecking} onClick={() => void verifyQualitySandbox()}>{qualityChecking ? 'Prüfe npm …' : 'Quality-Sandbox testen'}</button><span>{qualityProbe ? qualityProbe.passed ? 'npm in isolierter Testumgebung gestartet · keine Projektskripte ausgeführt' : qualityProbe.reason === 'npm-unavailable' ? 'System-npm unter /usr/bin/npm nicht gefunden' : qualityProbe.reason === 'invalid-output' ? 'npm-Version nicht erkannt' : `Quality-Sandbox: ${qualityProbe.stage === 'node' ? 'Node' : qualityProbe.stage === 'npm' ? 'npm' : 'Vorbereitung'} fehlgeschlagen${qualityProbe.detail ? ' · ' + (qualityProbe.detail === 'mount-or-namespace' ? 'Mount/Namespace' : qualityProbe.detail === 'runtime-library' ? 'Laufzeitdatei fehlt' : qualityProbe.detail === 'timeout' ? 'Zeitüberschreitung' : qualityProbe.detail === 'command-exit' ? 'Programmfehler' : 'Unbekannter Fehler') : ''}${qualityProbe.exitCode !== null ? ' (Exit ' + qualityProbe.exitCode + ')' : ''}` : 'Prüft ausschließlich npm --version in einem temporären Testverzeichnis'}</span></div>}
             {qualityProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || qualityScriptChecking} onClick={() => void verifyQualityScript()}>{qualityScriptChecking ? 'Prüfe Testskript …' : 'Quality-Skript testen'}</button><span>{qualityScriptProbe ? qualityScriptProbe.passed ? 'Testskript isoliert ausgeführt · Projektschreibzugriff erlaubt · .git geschützt' : qualityScriptProbe.reason === 'missing-expected-write' ? 'Testskript konnte nicht in das Testprojekt schreiben' : qualityScriptProbe.reason === 'git-metadata-modified' ? 'Git-Metadaten waren nicht ausreichend geschützt' : 'Isoliertes Testskript fehlgeschlagen' : 'Führt nur ein festes Testskript in einem temporären Projekt aus'}</span></div>}
             {qualityScriptProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || fullPipelineChecking} onClick={() => void verifyFullPipeline()}>{fullPipelineChecking ? 'Prüfe Workflow …' : 'Gesamtworkflow testen'}</button><span>{fullPipelineProbe ? fullPipelineProbe.passed ? 'Lokaler Trockenlauf erfolgreich · Git, Reviewer-Evidenz, Quality und Lock geprüft · keine Veröffentlichung' : fullPipelineProbe.reason === 'setup-failed' ? 'Temporäres Git-Testprojekt konnte nicht vorbereitet werden' : 'Lokaler Trockenlauf fehlgeschlagen · kein Projekt verändert' : 'Erzeugt ein Wegwerf-Git-Repository und testet die vollständige Schutzkette ohne KI und Push'}</span></div>}
+            {fullPipelineProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || offlineKiloChecking} onClick={() => void verifyOfflineKilo()}>{offlineKiloChecking ? 'Prüfe Kilo …' : 'Kilo-Laufzeit testen'}</button><span>{offlineKiloProbe ? offlineKiloProbe.passed ? 'Kilo-CLI offline in privater Sandbox gestartet · keine Modellanfrage' : offlineKiloProbe.reason === 'cli-unavailable' ? 'Kilo-CLI nicht unter /usr/bin/kilo installiert' : offlineKiloProbe.reason === 'cli-outside-usr' ? 'Kilo-CLI außerhalb der freigegebenen /usr-Laufzeit installiert' : 'Kilo-CLI konnte in der privaten Sandbox nicht gestartet werden' : 'Startet ausschließlich kilo --version ohne Netzwerk, Zugangsdaten oder Projektzugriff'}</span></div>}
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           {canRun && <div className="run-panel"><div><h3>Legacy-Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>}
