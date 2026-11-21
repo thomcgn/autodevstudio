@@ -26,7 +26,8 @@ export async function probeReadonlyReviewerTool(
     if (!result.isolated || !result.readonly)
       return { supported: true, passed: false, reason: 'tool-failed', detail: null };
     return { supported: true, passed: true, reason: 'passed', detail: null };
-  } catch {
-    return { supported: true, passed: false, reason: 'tool-failed', detail: null };
+  } catch (error) {
+    return { supported: true, passed: false, reason: 'tool-failed',
+      detail: error instanceof ReviewerToolFailure ? error.reason : 'sandbox-launch-failed' };
   }
 }
