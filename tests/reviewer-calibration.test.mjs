@@ -24,27 +24,27 @@ test('calibration demands both known-good PASS and known-bad FAIL',async()=>{
 
 test('a reviewer that blindly approves is rejected',async()=>{
   const result=await calibrateReviewer(async()=>json('PASS'));
-  assert.deepEqual(result,{passed:false,reason:'wrong-verdict'});
+  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:1});
 });
 
 test('a reviewer that blindly rejects is rejected without second model call',async()=>{
   let count=0;
   const result=await calibrateReviewer(async()=>{count++;return json('FAIL')});
-  assert.deepEqual(result,{passed:false,reason:'wrong-verdict'});
+  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:1});
   assert.equal(count,1);
 });
 
 test('malformed response is sanitized and stops calibration',async()=>{
   let count=0;
   const result=await calibrateReviewer(async()=>{count++;return 'PRIVATE SECRET'});
-  assert.deepEqual(result,{passed:false,reason:'invalid-response'});
+  assert.deepEqual(result,{passed:false,reason:'invalid-response',caseNumber:1});
   assert.equal(count,1);
   assert.doesNotMatch(JSON.stringify(result),/PRIVATE/);
 });
 
 test('transport exceptions never escape into renderer-facing statuses',async()=>{
   const result=await calibrateReviewer(async()=>{throw Error('SECRET /home/user')});
-  assert.deepEqual(result,{passed:false,reason:'invalid-response'});
+  assert.deepEqual(result,{passed:false,reason:'invalid-response',caseNumber:1});
 });
 
 test('aborted calibration never contacts the provider',async()=>{
@@ -66,4 +66,15 @@ test('aborting after first verdict prevents second call',async()=>{
   },controller.signal);
   assert.deepEqual(result,{passed:false,reason:'cancelled'});
   assert.equal(calls,1);
+});
+
+test('timeouts are separately classified and never leak messages',async()=>{
+  const result=await calibrateReviewer(async()=>{throw Error('Local reviewer cancelled or timed out: /home/secret')});
+  assert.deepEqual(result,{passed:false,reason:'timeout',caseNumber:1});
+  assert.doesNotMatch(JSON.stringify(result),/home|secret/);
+});
+test('second synthetic example is identified on malformed response',async()=>{
+  let calls=0;
+  const result=await calibrateReviewer(async()=>++calls===1?json('PASS'):'malformed');
+  assert.deepEqual(result,{passed:false,reason:'invalid-response',caseNumber:2});
 });
