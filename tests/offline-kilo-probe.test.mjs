@@ -136,7 +136,7 @@ test('missing model/agent CLI options fails closed, without running a model',asy
   const result=await probeOfflineKiloRuntime(async launch=>{
     n++;
     if(launch.args.at(-1)==='--version')return 'kilo 7.8.27\n';
-    assert.deepEqual(launch.args.slice(-2),['run','--help']);
+    assert.ok(['run --help','help run'].includes(launch.args.slice(-2).join(' ')));
     return 'Usage: kilo run --only-help\n';
   },()=>binary);
   assert.equal(n,3);
@@ -156,7 +156,7 @@ test('version succeeds but help fails with classified status and no raw stderr',
     error.stderr='missing dependency: cannot find module /home/user/private';
     throw error;
   },()=>binary);
-  assert.deepEqual(calls,['version','help']);
+  assert.deepEqual(calls,['version','help','help']);
   assert.deepEqual(result,{passed:false,reason:'sandbox-failed',stage:'help',detail:'runtime-library',exitCode:254});
   assert.ok(!JSON.stringify(result).includes('/home/user'));
 });
@@ -171,7 +171,7 @@ test('CLI help that exits nonzero is not treated as a valid result',async t=>{
     error.code=1;
     throw error;
   },()=>binary);
-  assert.equal(count,2);
+  assert.equal(count,3);
   assert.equal(result.stage,'help');
   assert.equal(result.detail,'process-exit');
   assert.equal(result.exitCode,1);
