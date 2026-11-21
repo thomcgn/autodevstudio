@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('studio', {
   qualityProbe: (id: string) => ipcRenderer.invoke('core:quality-probe', id),
   qualityScriptProbe: (id: string) => ipcRenderer.invoke('core:quality-script-probe', id),
   fullPipelineProbe: (id: string) => ipcRenderer.invoke('core:full-pipeline-probe', id),
+  offlineKiloProbe: (id: string) => ipcRenderer.invoke('core:offline-kilo-probe', id),
   simulateIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:simulate', id, issueNumber),
   workflowStages: () => ipcRenderer.invoke('core:workflow'),
   snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
