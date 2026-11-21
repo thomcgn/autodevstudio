@@ -42,9 +42,9 @@ const execute:KiloVersionExecutor=async launch=>{
  */
 export function isKiloRunHelp(output:string):boolean{
   if(typeof output!=='string'||Buffer.byteLength(output,'utf8')>128*1024)return false;
-  const clean=output.replace(/\\x1b\\[[0-9;]*m/g,'');
-  return /--model\\b/.test(clean)&&/--agent\\b/.test(clean)&&
-    /(?:kilo\\s+run|run kilo|run with a message)/i.test(clean);
+  const clean=output.replace(/\x1b\[[0-9;]*m/g,'');
+  return /--model\b/.test(clean)&&/--agent\b/.test(clean)&&
+    /(?:kilo\s+run|run kilo|run with a message)/i.test(clean);
 }
 export interface KiloInstallation {
   /** Canonical executable path determined from PATH; never renderer input. */
