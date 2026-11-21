@@ -486,15 +486,17 @@ function App(): React.JSX.Element {
                 {' · '}Andere Kilo-Clients und Geräte werden nicht mitgezählt.
               </> : 'Zählt nur direkte Modellanfragen aus AutoDev Studio; Kilo CLI und andere Apps sind nicht erfasst.')}</span>
             </div>}
-            {kiloModels && <div className="provider-results" aria-label="Kostenlose Kilo-Modelle">
+            {kiloModels && <>
+              <div className="provider-results" aria-label="Kostenlose Kilo-Modelle">
               {kiloModels.models.length===0 ? <p>Keine eindeutig kostenlosen Modelle gefunden. Aus Sicherheitsgründen wird nichts als kostenlos angenommen.</p> :
                 kiloModels.models.map(model=><div key={model.id}><strong>{model.name}{model.preferred ? ' · Favorit' : ''}</strong><small className="mono">{model.id}</small></div>)}
-              <small>Stand: {new Date(kiloModels.checkedAt).toLocaleString('de-DE')} · Keine automatische Agentenfreigabe.</small>
-              {kiloModels.models.length>0 && <div className="sandbox-check" style={{display:'block'}}>
+              </div>
+              <small className="catalog-updated">Stand: {new Date(kiloModels.checkedAt).toLocaleString('de-DE')} · Keine automatische Agentenfreigabe.</small>
+              {kiloModels.models.length>0 && <section className="role-assignment-panel" aria-label="Modelle pro Rolle">
                 <strong>Modelle pro Rolle</strong>
                 <p>Die Free-Liste wird beim Speichern erneut geprüft. Diese Einstellung startet noch keine Agenten.</p>
-                <div className="metric-grid three">
-                  {(['planner','builder','reviewer'] as const).map(role=><label key={role} style={{display:'grid',gap:6}}>
+                <div className="role-model-grid">
+                  {(['planner','builder','reviewer'] as const).map(role=><label key={role} className="role-model-field">
                     <span>{role==='planner'?'Planner':role==='builder'?'Builder':'Reviewer'}</span>
                     <select aria-label={'Modell für '+role} value={draftRoleModels[role]}
                       onChange={e=>{setDraftRoleModels(v=>({...v,[role]:e.target.value}));setRoleModelsMessage('');}}>
@@ -502,7 +504,7 @@ function App(): React.JSX.Element {
                     </select>
                   </label>)}
                 </div>
-                {savedRoleModels && <small>Gespeichert: {(['planner','builder','reviewer'] as const).map(role=>role+': '+savedRoleModels[role]).join(' · ')}</small>}
+                {savedRoleModels && <p className="role-saved-label">Gespeicherte Zuordnung geladen. Änderungen werden erst nach „Rollenzuordnung speichern“ übernommen.</p>}
                 <div className="button-group"><button disabled={savingRoleModels||!draftRoleModels.planner||!draftRoleModels.builder||!draftRoleModels.reviewer}
                   onClick={()=>void saveRoleModels()}>{savingRoleModels?'Speichere …':'Rollenzuordnung speichern'}</button></div>
                 {roleModelsMessage && <p role="status">{roleModelsMessage}</p>}
@@ -520,8 +522,8 @@ function App(): React.JSX.Element {
                     'Kilo-Reviewer-Test fehlgeschlagen · keine Projektänderungen' :
                     'Zwei Free-Gateway-Anfragen nur mit künstlichen Codeänderungen · keine Projektdateien oder Zugangsdaten'}</span>
                 </div>}
-              </div>}
-            </div>}
+              </section>}
+            </>}
 
             <div className="provider-heading"><div><h3>Lokale Provider</h3><p>Prüft nur Kilo CLI und GitHub-Anmeldung – keine Modellanfrage, keine Dateiänderungen.</p></div>
               <button disabled={!selected || checkingProviders} onClick={() => void checkProviders()}>{checkingProviders ? 'Prüfe …' : 'Umgebung prüfen'}</button></div>
