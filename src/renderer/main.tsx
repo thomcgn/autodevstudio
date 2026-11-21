@@ -170,7 +170,7 @@ function App(): React.JSX.Element {
     setReviewerChecking(true);
     setReviewerProbe(null);
     try { setReviewerProbe(await window.studio.reviewerProbe(selected)); }
-    catch { setReviewerProbe({supported:true,passed:false,reason:'tool-failed'}); }
+    catch { setReviewerProbe({supported:true,passed:false,reason:'tool-failed',detail:'sandbox-launch-failed'}); }
     finally { setReviewerChecking(false); }
   };
 
