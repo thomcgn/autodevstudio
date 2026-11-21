@@ -19,6 +19,7 @@ import { probeIsolatedQualityScript } from '../core/isolated-quality-script-prob
 import { probeFullStandalonePipeline } from '../core/full-pipeline-probe';
 import { probeOfflineKiloRuntime } from '../core/offline-kilo-probe';
 import { probeOfflineReviewerSandbox } from '../core/offline-reviewer-probe';
+import { probeLocalReviewModel } from '../core/local-review-model-probe';
 
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
@@ -119,6 +120,13 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  // Explicit user-triggered fixture only. Never reads a selected repository.
+  ipcMain.handle('core:local-model-probe', async (_event, id: string) => {
+    if (typeof id !== 'string') throw new Error('Invalid project ID');
+    const project = getProject(id);
+    if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
+    return probeLocalReviewModel();
+  });
   ipcMain.handle('core:offline-reviewer-probe', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
