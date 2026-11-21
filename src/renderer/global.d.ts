@@ -9,6 +9,8 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface KiloFreeModel { id: string; name: string; preferred: boolean }
+export interface KiloFreeCatalog { models: KiloFreeModel[]; checkedAt: string }
 export interface OllamaReadinessResult { ready: boolean; reason: 'ready' | 'unreachable' | 'http-error' | 'invalid-response' | 'model-missing' | 'timeout' }
 export interface ReviewerCalibrationResult { passed: boolean; reason: 'passed' | 'wrong-verdict' | 'invalid-response' | 'cancelled' | 'busy' | 'model-unavailable' | 'timeout' | 'transport-failed'; caseNumber?: 1 | 2 }
 export interface LocalReviewModelProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'model-unavailable' | 'invalid-verdict' | 'request-failed' }
@@ -67,6 +69,7 @@ declare global {
     localModelProbe(id: string): Promise<LocalReviewModelProbeResult>;
     reviewerCalibration(id: string): Promise<ReviewerCalibrationResult>;
     ollamaReadiness(id: string): Promise<OllamaReadinessResult>;
+    kiloFreeModels(id: string): Promise<KiloFreeCatalog>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
