@@ -17,7 +17,7 @@ test('tests isolated Node then npm, never executing project scripts',async()=>{
     assert.ok(path.basename(launch.cwd).startsWith('autodev-quality-probe-'));
     assert.ok(fs.existsSync(path.join(launch.cwd,'.git')));
     assert.equal(launch.args.includes('run'),false);
-    return '10.9.4\n';
+    return launch.args.includes('/usr/bin/node') ? 'v22.14.0\n' : '10.9.4\n';
   });
   if(!localReady){
     assert.equal(calls.length,0);
@@ -40,7 +40,7 @@ test('node failure is distinguished from npm failure and raw error is redacted',
     if(launch.args.includes('/usr/bin/npm')){
       const failure=new Error('confidential');failure.code=127;throw failure;
     }
-    return '22.0.0\n';
+    return 'v22.0.0\n';
   });
   assert.equal(npmFailed.stage,'npm');
   assert.equal(npmFailed.detail,'command-exit');
@@ -49,7 +49,7 @@ test('node failure is distinguished from npm failure and raw error is redacted',
 test('invalid output is flagged at its actual stage',async()=>{
   if(!localReady)return;
   const output=await probeIsolatedQualityRuntime(async launch=>
-    launch.args.includes('/usr/bin/npm')?'HOME=/private/user':'22.0.0\n');
+    launch.args.includes('/usr/bin/npm')?'HOME=/private/user':'v22.0.0\n');
   assert.equal(output.stage,'npm');
   assert.equal(output.reason,'invalid-output');
   assert.ok(!JSON.stringify(output).includes('/private'));
