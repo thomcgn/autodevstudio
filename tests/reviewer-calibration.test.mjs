@@ -24,7 +24,7 @@ test('calibration demands both known-good PASS and known-bad FAIL',async()=>{
 
 test('a reviewer that blindly approves is rejected',async()=>{
   const result=await calibrateReviewer(async()=>json('PASS'));
-  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:1});
+  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:2});
 });
 
 test('a reviewer that blindly rejects is rejected without second model call',async()=>{
