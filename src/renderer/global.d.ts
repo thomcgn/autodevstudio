@@ -9,6 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface OllamaReadinessResult { ready: boolean; reason: 'ready' | 'unreachable' | 'http-error' | 'invalid-response' | 'model-missing' | 'timeout' }
 export interface ReviewerCalibrationResult { passed: boolean; reason: 'passed' | 'wrong-verdict' | 'invalid-response' | 'cancelled' | 'busy' | 'model-unavailable' | 'timeout' | 'transport-failed'; caseNumber?: 1 | 2 }
 export interface LocalReviewModelProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'model-unavailable' | 'invalid-verdict' | 'request-failed' }
 export interface OfflineReviewerProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'sandbox-failed' | 'invalid-output'; stage: 'runtime' | 'help' | 'policy' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'permission-or-config' | 'timeout' | 'process-exit' | 'other' | null; exitCode: number | null }
@@ -65,6 +66,7 @@ declare global {
     offlineReviewerProbe(id: string): Promise<OfflineReviewerProbeResult>;
     localModelProbe(id: string): Promise<LocalReviewModelProbeResult>;
     reviewerCalibration(id: string): Promise<ReviewerCalibrationResult>;
+    ollamaReadiness(id: string): Promise<OllamaReadinessResult>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
