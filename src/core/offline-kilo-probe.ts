@@ -15,7 +15,7 @@ export type KiloVersionExecutor=(launch:IsolatedQualityLaunch)=>Promise<string>;
 const execute:KiloVersionExecutor=async launch=>{
   const result=await exec(launch.binary,launch.args,{
     cwd:launch.cwd,encoding:'utf8',windowsHide:true,shell:false,
-    timeout:10000,maxBuffer:4096,env:{PATH:'/usr/bin:/bin',LANG:'C'},
+    timeout:10000,maxBuffer:32*1024,env:{PATH:'/usr/bin:/bin',LANG:'C'},
   });
   return result.stdout;
 };
@@ -139,7 +139,7 @@ export async function probeOfflineKiloRuntime(
     const help=[...args,'--',placement.executable,'run','--help'];
     try{output=await executor({...launch,args:help})}
     catch{return {passed:false,reason:'sandbox-failed'};}
-    if(!output.trim()||Buffer.byteLength(output)>4096 ||
+    if(!output.trim()||Buffer.byteLength(output)>32*1024 ||
        !output.includes('--model')||!output.includes('--agent'))
       return {passed:false,reason:'invalid-output'};
     return {passed:true,reason:'passed'};
