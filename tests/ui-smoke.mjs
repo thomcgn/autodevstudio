@@ -30,6 +30,7 @@ const success={
   offlineKiloProbe:{passed:true,reason:'passed',stage:null,detail:null,exitCode:null},
   offlineReviewerProbe:{passed:true,reason:'passed',stage:null,detail:null,exitCode:null},
   localModelProbe:{passed:true,reason:'passed'},
+  reviewerCalibration:{passed:true,reason:'passed'},
 };
 const names=[
   'Sandbox testen','Reviewer-Tool testen','Quality-Sandbox testen',
@@ -66,6 +67,7 @@ async function fixture(page){
       offlineKiloProbe:()=>respond('offlineKiloProbe'),
       offlineReviewerProbe:()=>respond('offlineReviewerProbe'),
       localModelProbe:()=>respond('localModelProbe'),
+      reviewerCalibration:()=>respond('reviewerCalibration'),
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
@@ -88,7 +90,8 @@ async function click(page,name){
       'Reviewer-Tool testen':'reviewerProbe','Quality-Sandbox testen':'qualityProbe',
       'Quality-Skript testen':'qualityScriptProbe','Gesamtworkflow testen':'fullPipelineProbe',
       'Kilo-Laufzeit testen':'offlineKiloProbe','Reviewer-Sandbox testen':'offlineReviewerProbe',
-      'Lokales Review-Modell testen':'localModelProbe'})[name]);
+      'Lokales Review-Modell testen':'localModelProbe',
+      'Reviewer kalibrieren (2 Modellanfragen)':'reviewerCalibration'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -110,6 +113,10 @@ try {
   assert.equal(await localModelButton.isEnabled(),true);
   await click(page,'Lokales Review-Modell testen');
   await page.getByText('Ollama-Modell antwortet strukturiert',{exact:false}).waitFor();
+  const calibrationButton=page.getByRole('button',{name:'Reviewer kalibrieren (2 Modellanfragen)',exact:true});
+  assert.equal(await calibrationButton.isEnabled(),true);
+  await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
+  await page.getByText('Zwei künstliche Fälle korrekt',{exact:false}).waitFor();
   await fullChain(page);
   for(const sentence of [
     'Schreibschutz und Start in Testumgebung bestätigt',
@@ -143,11 +150,17 @@ try {
   });
   await click(page,'Lokales Review-Modell testen');
   await page.getByText('Modellantwort entspricht noch nicht dem Reviewer-Format',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.reviewerCalibration={passed:false,reason:'wrong-verdict'};
+  });
+  await click(page,'Reviewer kalibrieren (2 Modellanfragen)');
+  await page.getByText('Modell hat mindestens einen Fall falsch bewertet',{exact:false}).waitFor();
   // Switching projects resets all probe state and does not carry PASS badges across projects.
   await page.getByRole('button',{name:/another-repo/}).click();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
   assert.equal(await page.getByRole('button',{name:'Reviewer-Sandbox testen'}).count(),0);
   assert.equal(await page.getByRole('button',{name:'Sandbox testen'}).isDisabled(),true);
+  assert.equal(await page.getByText('Kalibrierung fehlgeschlagen',{exact:false}).count(),0);
   assert.deepEqual(errors,[]);
   console.log('PASS: real React clicks, IPC mocks, stages, failures, project reset and no legacy run');
 }finally{
