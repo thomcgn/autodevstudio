@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -53,6 +53,11 @@ function App(): React.JSX.Element {
   const [readiness, setReadiness] = useState<FreeRunReadiness | null>(null);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
   const [readinessError, setReadinessError] = useState('');
+  const [localFallback, setLocalFallback] = useState(false);
+  const [savingLocalFallback, setSavingLocalFallback] = useState(false);
+  const [routePreview, setRoutePreview] = useState<FreeRoutePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -145,6 +150,9 @@ function App(): React.JSX.Element {
     setKiloCalibration(null);
     setReadiness(null);
     setReadinessError('');
+    setLocalFallback(false);
+    setRoutePreview(null);
+    setPreviewError('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -286,6 +294,26 @@ function App(): React.JSX.Element {
     }
   };
 
+  const updateLocalFallback = async (enabled:boolean):Promise<void> => {
+    if(!selected||savingLocalFallback)return;
+    setSavingLocalFallback(true);
+    setPreviewError('');
+    setRoutePreview(null);
+    try{setLocalFallback(await window.studio.setLocalReviewFallback(selected,enabled));}
+    catch{setPreviewError('Lokale Reviewer-Einstellung konnte nicht gespeichert werden');}
+    finally{setSavingLocalFallback(false);}
+  };
+
+  const checkFreeRoutePreview = async ():Promise<void> => {
+    if(!selected||previewLoading)return;
+    setPreviewLoading(true);
+    setPreviewError('');
+    setRoutePreview(null);
+    try{setRoutePreview(await window.studio.freeRoutePreview(selected));}
+    catch{setPreviewError('Provider-Routing konnte nicht geprüft werden · keine Ausführung');}
+    finally{setPreviewLoading(false);}
+  };
+
   const checkFreeRunReadiness = async (): Promise<void> => {
     if(!selected||checkingReadiness)return;
     setCheckingReadiness(true);
@@ -330,6 +358,8 @@ function App(): React.JSX.Element {
       setKiloModels(catalog);
       void refreshKiloUsage();
       const stored=await window.studio.kiloRoleModels(selected);
+      setLocalFallback(await window.studio.localReviewFallback(selected));
+      setRoutePreview(null);
       setSavedRoleModels(stored);
       const available=new Set(catalog.models.map(model=>model.id));
       const favorite=catalog.models.find(model=>model.preferred)?.id??catalog.models.find(model=>model.id==='kilo-auto/free')?.id??catalog.models[0]?.id??'';
@@ -525,6 +555,31 @@ function App(): React.JSX.Element {
                   onClick={()=>void saveRoleModels()}>{savingRoleModels?'Speichere …':'Rollenzuordnung speichern'}</button></div>
                 {roleModelsMessage && <p role="status">{roleModelsMessage}</p>}
                 {savedRoleModels && <div className="readiness-panel">
+                  <label className="local-fallback-choice">
+                    <input type="checkbox" checked={localFallback} disabled={savingLocalFallback}
+                      onChange={e=>void updateLocalFallback(e.target.checked)}/>
+                    <span>Lokalen Ollama-Reviewer als Fallback zulassen (nur Kandidat, keine automatische Ausführung)</span>
+                  </label>
+                  <div className="sandbox-check">
+                    <button type="button" className="quiet" disabled={previewLoading||savingLocalFallback}
+                      onClick={()=>void checkFreeRoutePreview()}>{previewLoading?'Prüfe Provider …':'Provider-Fallback simulieren'}</button>
+                    <span>Nur Modellliste, lokaler Dienststatus und Quota · keine KI-Generierung</span>
+                  </div>
+                  {previewError && <p role="alert">{previewError}</p>}
+                  {routePreview && <div role="status" className="readiness-steps">
+                    {routePreview.roles.map(item=><div key={item.role}>
+                      <strong>{item.role==='planner'?'Planner':item.role==='builder'?'Builder':'Reviewer'}</strong>
+                      <span>{item.route==='ollama-candidate'?'Lokaler Reviewer wäre ein Fallback-Kandidat':
+                        item.route==='kilo-candidate'?'Kilo-Free wäre ein Kandidat':
+                        item.reason==='local-not-enabled'?'Lokaler Reviewer nicht freigegeben':
+                        item.reason==='local-unavailable'?'Lokales Modell derzeit nicht erreichbar':
+                        item.reason==='kilo-quota-exhausted'?'Kilo-Limit gesperrt':
+                        item.reason==='kilo-quota-unverified'?'Kilo-Restkontingent unbekannt':
+                        item.reason==='model-not-free'?'Modell fehlt im Free-Katalog':
+                        item.reason==='reviewer-not-isolated'?'Kein unabhängig isolierter Reviewer':'Kein sicherer Provider vorhanden'}</span>
+                    </div>)}
+                    <small>Nur Simulation. Auch ein lokaler Kandidat muss kalibriert und technisch isoliert sein; echte Issue- und Git-Aktionen bleiben gesperrt.</small>
+                  </div>}
                   <div className="sandbox-check">
                     <button type="button" className="quiet" disabled={checkingReadiness}
                       onClick={()=>void checkFreeRunReadiness()}>{checkingReadiness?'Prüfe Konfiguration …':'Modell-/Kontingentbereitschaft prüfen'}</button>

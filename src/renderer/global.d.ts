@@ -9,6 +9,14 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface FreeRoutePreview {
+  previewOnly:true;executionEnabled:false;ollamaReady:boolean;localFallbackEnabled:boolean;
+  roles:Array<{role:'planner'|'builder'|'reviewer';preferredModel:string|null;
+    route:'kilo-candidate'|'ollama-candidate'|'paused';model:string|null;
+    reason:'kilo-quota-unverified'|'kilo-quota-exhausted'|'model-not-free'|
+      'local-not-enabled'|'local-unavailable'|'reviewer-not-isolated'|
+      'no-provider'|'candidate-only'}>;
+}
 export interface FreeRunReadiness {
   roles: Array<{role:'planner'|'builder'|'reviewer';model:string|null;reason:
     'ready'|'not-configured'|'model-no-longer-free'|'429-blocked'|
@@ -86,6 +94,9 @@ declare global {
     kiloFreeModels(id: string): Promise<KiloFreeCatalog>;
     kiloFreeUsage(id: string): Promise<KiloFreeUsage>;
     freeRunReadiness(id: string): Promise<FreeRunReadiness>;
+    localReviewFallback(id: string): Promise<boolean>;
+    setLocalReviewFallback(id: string, enabled:boolean): Promise<boolean>;
+    freeRoutePreview(id: string): Promise<FreeRoutePreview>;
     kiloRoleModels(id: string): Promise<KiloRoleModels | null>;
     kiloReviewerCalibrate(id: string): Promise<ReviewerCalibrationResult>;
     saveKiloRoleModels(id: string, roles: KiloRoleModels): Promise<KiloRoleModels>;

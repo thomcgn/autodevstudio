@@ -25,6 +25,8 @@ import { probeOllamaReadiness } from '../core/ollama-readiness';
 import { fetchKiloFreeModels } from '../core/kilo-free-models';
 import { FreeQuotaGuard } from '../core/free-quota-guard';
 import { inspectFreeRunReadiness } from '../core/free-run-readiness';
+import { previewFreeRoutes } from '../core/free-route-preview';
+import { readLocalReviewFallback, writeLocalReviewFallback } from '../core/local-review-fallback-settings';
 import { probeKiloReviewerCalibration } from '../core/kilo-reviewer-calibration-probe';
 import { loadKiloRoles, saveKiloRoles } from '../core/kilo-role-models';
 
@@ -127,6 +129,29 @@ function createWindow(): void {
 }
 app.whenReady().then(() => {
   history().recoverInterrupted();
+  ipcMain.handle('core:local-review-fallback:get', (_event,id:string) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    return readLocalReviewFallback(app.getPath('userData'),id);
+  });
+  ipcMain.handle('core:local-review-fallback:set', (_event,id:string,enabled:unknown) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    return writeLocalReviewFallback(app.getPath('userData'),id,enabled);
+  });
+  ipcMain.handle('core:free-route-preview', async (_event,id:string) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    const enabled=readLocalReviewFallback(app.getPath('userData'),id);
+    const roles=loadKiloRoles(app.getPath('userData'),id);
+    const catalog=await fetchKiloFreeModels();
+    const quota=new FreeQuotaGuard(app.getPath('userData')).snapshot();
+    const ollama=enabled?await probeOllamaReadiness():{ready:false as const,reason:'unreachable' as const};
+    return previewFreeRoutes(roles,catalog.models,quota,ollama,enabled);
+  });
   ipcMain.handle('core:free-run-readiness', async (_event,id:string) => {
     if(typeof id!=='string')throw new Error('Invalid project ID');
     const project=getProject(id);
