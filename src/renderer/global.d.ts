@@ -9,6 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface LocalReviewModelProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'model-unavailable' | 'invalid-verdict' | 'request-failed' }
 export interface OfflineReviewerProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'sandbox-failed' | 'invalid-output'; stage: 'runtime' | 'help' | 'policy' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'permission-or-config' | 'timeout' | 'process-exit' | 'other' | null; exitCode: number | null }
 export interface OfflineKiloProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'cli-outside-usr' | 'sandbox-failed' | 'invalid-output'; stage: 'prepare' | 'version' | 'help' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'timeout' | 'process-exit' | 'other' | null; exitCode: number | null }
 export interface FullPipelineProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'setup-failed' | 'pipeline-failed' }
@@ -61,6 +62,7 @@ declare global {
     fullPipelineProbe(id: string): Promise<FullPipelineProbeResult>;
     offlineKiloProbe(id: string): Promise<OfflineKiloProbeResult>;
     offlineReviewerProbe(id: string): Promise<OfflineReviewerProbeResult>;
+    localModelProbe(id: string): Promise<LocalReviewModelProbeResult>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
