@@ -25,22 +25,37 @@ export interface KiloInstallation {
   binary: string;
 }
 
-/** Resolve only an executable named kilo from the current process PATH.
- * No shell, no npm execution, no Home or provider config inspection.
+/** Electron desktop sessions can have a different PATH than interactive
+ * shells. Search PATH first, then a SMALL fixed set of per-user npm bin
+ * locations. The fallback accepts ONLY a verified @kilocode/cli package,
+ * never arbitrary home executables or a caller-controlled repository path.
+ * Discovery executes no CLI, shell or npm configuration.
  */
 export function discoverKiloInstallation(
   envPath:string|undefined=process.env.PATH,
+  home:string=os.homedir(),
 ):KiloInstallation|null{
-  for(const dir of (envPath??'').split(path.delimiter)){
-    if(!dir || !path.isAbsolute(dir))continue;
+  const fromPath=(envPath??'').split(path.delimiter)
+    .filter(dir=>dir.length>0 && path.isAbsolute(dir));
+  const fallback=path.isAbsolute(home) ? [
+    path.join(home,'.local','npm','bin'),
+    path.join(home,'.npm-global','bin'),
+    path.join(home,'.local','bin'),
+  ] : [];
+  const visited=new Set<string>();
+  for(const dir of [...fromPath,...fallback]){
+    if(visited.has(dir))continue;
+    visited.add(dir);
     const candidate=path.join(dir,'kilo');
     try {
       const binary=fs.realpathSync(candidate);
       const stat=fs.statSync(binary);
       if(!stat.isFile())continue;
       fs.accessSync(binary,fs.constants.X_OK);
+      if(fallback.includes(dir) && classifyKiloPlacement(binary).kind!=='package')
+        continue;
       return {binary};
-    }catch {/* not an executable candidate */}
+    }catch {/* not an executable or not a verified npm package */}
   }
   return null;
 }
