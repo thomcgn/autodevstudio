@@ -36,9 +36,15 @@ function classify(error:unknown):{detail:Failure;exitCode:number|null}{
   if(code!==null)return {detail:'command-exit',exitCode:code};
   return {detail:'other',exitCode:null};
 }
-const command=(launch:IsolatedQualityLaunch,program:string):IsolatedQualityLaunch=>{
-  const separator=launch.args.lastIndexOf('--');
-  if(separator<0)throw new Error('Missing sandbox command separator');
+/** Replace ONLY the executable after Bubblewrap's first command delimiter.
+ * npm run has its own second '--' that must never be treated as Bubblewrap's.
+ */
+export const createQualityProbeCommand=(launch:IsolatedQualityLaunch,program:'/usr/bin/node'|'/usr/bin/npm'):IsolatedQualityLaunch=>{
+  const separator=launch.args.indexOf('--');
+  if(separator<0 || launch.args[separator+1]!=='/usr/bin/npm' ||
+      launch.args[separator+2]!=='run' || launch.args[separator+3]!=='--') {
+    throw new Error('Unexpected Bubblewrap quality command layout');
+  }
   return {...launch,args:[...launch.args.slice(0,separator+1),program,'--version']};
 };
 
@@ -60,7 +66,7 @@ export async function probeIsolatedQualityRuntime(
     for(const [part,program] of [['node','/usr/bin/node'],['npm','/usr/bin/npm']] as const){
       stage=part;
       let output:string;
-      try{output=await executor(command(launch,program),10000)}
+      try{output=await executor(createQualityProbeCommand(launch,program),10000)}
       catch(error){
         return {supported:true,passed:false,reason:'sandbox-failed',stage,
           ...classify(error)};
