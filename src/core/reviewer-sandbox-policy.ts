@@ -12,6 +12,31 @@ export interface ReviewerSandboxLaunch {
   cwd: string;
 }
 
+/** A sandbox boundary is not a command-authorization boundary. Keep the review
+ * operation surface closed: no arbitrary git options (aliases, -c, -C,
+ * external diff helpers, git subcommands or pagers) and no shell access.
+ */
+function assertReadonlyToolCommand(binary: string, args: readonly string[]): void {
+  if (binary === '/usr/bin/git') {
+    const allowed = [
+      ['--no-pager', 'status', '--porcelain=v1', '--untracked-files=all'],
+      ['--no-pager', 'diff', '--no-ext-diff', '--no-textconv', '--'],
+      ['--no-pager', 'diff', '--cached', '--no-ext-diff', '--no-textconv', '--'],
+      ['--no-pager', 'log', '-5', '--format=%h %s'],
+    ];
+    if (!allowed.some(sequence => args.length === sequence.length &&
+        sequence.every((item,index) => args[index] === item))) {
+      throw new Error('Unsupported reviewer Git operation');
+    }
+    return;
+  }
+  if (binary === '/usr/bin/true' || binary === '/usr/bin/false') {
+    if (args.length) throw new Error('Reviewer command does not accept arguments');
+    return;
+  }
+  throw new Error('Unsupported reviewer executable');
+}
+
 /** Strictly local, offline reviewer TOOL sandbox policy.
  *
  * This is not a Kilo network-enabled agent sandbox. A future controller must
@@ -29,14 +54,9 @@ export function createReadonlyReviewerToolLaunch(spec: ReviewerSandboxSpec): Rev
       !/^\/usr\/bin\/[a-zA-Z0-9._+-]+$/.test(spec.binary)) {
     throw new Error('Reviewer tool must be an approved /usr/bin binary');
   }
-  const allowed = new Set(['/usr/bin/sh','/usr/bin/true','/usr/bin/false',
-    '/usr/bin/cat','/usr/bin/grep','/usr/bin/git','/usr/bin/diff']);
-  if (!allowed.has(spec.binary)) throw new Error('Reviewer tool not allowlisted');
   if (spec.args.length > 64 || spec.args.some(arg => typeof arg !== 'string' ||
     arg.length > 4096 || arg.includes('\0'))) throw new Error('Invalid tool arguments');
-  // This is a policy primitive: arbitrary shell code is NOT an acceptable reviewer tool.
-  if (spec.binary === '/usr/bin/sh' && spec.args.length)
-    throw new Error('Shell execution requires a separate fixed test harness');
+  assertReadonlyToolCommand(spec.binary, spec.args);
   const args = [
     '--die-with-parent',
     '--unshare-net', '--unshare-ipc', '--unshare-pid',
