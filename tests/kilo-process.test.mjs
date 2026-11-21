@@ -90,3 +90,20 @@ test('log output kept in memory is bounded', async () => {
   });
   assert.ok(result.output.length <= 256 * 1024);
 });
+
+test('direct reviewer role is forbidden even with a supplied spawn function', async()=>{
+  let started=false;
+  await assert.rejects(runKilo({
+    ...base,role:'reviewer',
+    spawnProcess:()=>{started=true;throw Error('must not spawn reviewer');},
+  }),error=>error instanceof KiloProcessError && error.reason==='permission' &&
+       /Unisolated Kilo reviewer/.test(error.message));
+  assert.equal(started,false);
+});
+
+test('ordinary Kilo runner still allows builder when appropriately configured',async()=>{
+  const output=await runKilo({...base,
+    spawnProcess:fake("console.log('builder done')"),
+  });
+  assert.match(output.output,/builder done/);
+});
