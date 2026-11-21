@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -42,6 +42,10 @@ function App(): React.JSX.Element {
   const [kiloModels, setKiloModels] = useState<KiloFreeCatalog | null>(null);
   const [kiloModelLoading, setKiloModelLoading] = useState(false);
   const [kiloModelError, setKiloModelError] = useState('');
+  const [savedRoleModels, setSavedRoleModels] = useState<KiloRoleModels | null>(null);
+  const [draftRoleModels, setDraftRoleModels] = useState<KiloRoleModels>({planner:'',builder:'',reviewer:''});
+  const [savingRoleModels, setSavingRoleModels] = useState(false);
+  const [roleModelsMessage, setRoleModelsMessage] = useState('');
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -126,6 +130,9 @@ function App(): React.JSX.Element {
     setOllamaReadiness(null);
     setKiloModels(null);
     setKiloModelError('');
+    setSavedRoleModels(null);
+    setDraftRoleModels({planner:'',builder:'',reviewer:''});
+    setRoleModelsMessage('');
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -257,12 +264,34 @@ function App(): React.JSX.Element {
     finally { setLocalModelChecking(false); }
   };
 
+  const saveRoleModels = async (): Promise<void> => {
+    if(!selected||savingRoleModels||!kiloModels)return;
+    setSavingRoleModels(true);
+    setRoleModelsMessage('');
+    try {
+      const saved=await window.studio.saveKiloRoleModels(selected,draftRoleModels);
+      setSavedRoleModels(saved);
+      setRoleModelsMessage('Rollenzuordnung gespeichert · Ausführung weiterhin gesperrt');
+    }catch{
+      setRoleModelsMessage('Speichern abgelehnt: Kilo-Free-Katalog nicht erreichbar oder Modell nicht mehr kostenlos');
+    }finally{setSavingRoleModels(false);}
+  };
+
   const loadKiloModels = async (): Promise<void> => {
     if (!selected || kiloModelLoading) return;
     setKiloModelLoading(true);
     setKiloModelError('');
     setKiloModels(null);
-    try { setKiloModels(await window.studio.kiloFreeModels(selected)); }
+    try {
+      const catalog=await window.studio.kiloFreeModels(selected);
+      setKiloModels(catalog);
+      const stored=await window.studio.kiloRoleModels(selected);
+      setSavedRoleModels(stored);
+      const available=new Set(catalog.models.map(model=>model.id));
+      const favorite=catalog.models.find(model=>model.preferred)?.id??catalog.models.find(model=>model.id==='kilo-auto/free')?.id??catalog.models[0]?.id??'';
+      const pick=(id:string|undefined)=>id&&available.has(id)?id:favorite;
+      setDraftRoleModels({planner:pick(stored?.planner),builder:pick(stored?.builder),reviewer:pick(stored?.reviewer)});
+    }
     catch { setKiloModelError('Kilo-Modellkatalog derzeit nicht erreichbar · keine kostenpflichtigen Modelle übernommen'); }
     finally { setKiloModelLoading(false); }
   };
@@ -421,7 +450,24 @@ function App(): React.JSX.Element {
             {kiloModels && <div className="provider-results" aria-label="Kostenlose Kilo-Modelle">
               {kiloModels.models.length===0 ? <p>Keine eindeutig kostenlosen Modelle gefunden. Aus Sicherheitsgründen wird nichts als kostenlos angenommen.</p> :
                 kiloModels.models.map(model=><div key={model.id}><strong>{model.name}{model.preferred ? ' · Favorit' : ''}</strong><small className="mono">{model.id}</small></div>)}
-              <small>Stand: {new Date(kiloModels.checkedAt).toLocaleString('de-DE')} · Nur Anzeige; Rollenzuordnung und Agentenfreigabe folgen separat.</small>
+              <small>Stand: {new Date(kiloModels.checkedAt).toLocaleString('de-DE')} · Keine automatische Agentenfreigabe.</small>
+              {kiloModels.models.length>0 && <div className="sandbox-check" style={{display:'block'}}>
+                <strong>Modelle pro Rolle</strong>
+                <p>Die Free-Liste wird beim Speichern erneut geprüft. Diese Einstellung startet noch keine Agenten.</p>
+                <div className="metric-grid three">
+                  {(['planner','builder','reviewer'] as const).map(role=><label key={role} style={{display:'grid',gap:6}}>
+                    <span>{role==='planner'?'Planner':role==='builder'?'Builder':'Reviewer'}</span>
+                    <select aria-label={'Modell für '+role} value={draftRoleModels[role]}
+                      onChange={e=>{setDraftRoleModels(v=>({...v,[role]:e.target.value}));setRoleModelsMessage('');}}>
+                      {kiloModels.models.map(model=><option key={model.id} value={model.id}>{model.name}</option>)}
+                    </select>
+                  </label>)}
+                </div>
+                {savedRoleModels && <small>Gespeichert: {(['planner','builder','reviewer'] as const).map(role=>role+': '+savedRoleModels[role]).join(' · ')}</small>}
+                <div className="button-group"><button disabled={savingRoleModels||!draftRoleModels.planner||!draftRoleModels.builder||!draftRoleModels.reviewer}
+                  onClick={()=>void saveRoleModels()}>{savingRoleModels?'Speichere …':'Rollenzuordnung speichern'}</button></div>
+                {roleModelsMessage && <p role="status">{roleModelsMessage}</p>}
+              </div>
             </div>}
 
             <div className="provider-heading"><div><h3>Lokale Provider</h3><p>Prüft nur Kilo CLI und GitHub-Anmeldung – keine Modellanfrage, keine Dateiänderungen.</p></div>
