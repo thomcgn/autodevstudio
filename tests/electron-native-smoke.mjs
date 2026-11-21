@@ -115,6 +115,11 @@ try{
     catch{return true;}
   });
   assert.equal(quotaRejected,true,'Kilo quota visibility requires registered project ID');
+  const readinessRejected=await page.evaluate(async()=>{
+    try{await window.studio.freeRunReadiness('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(readinessRejected,true,'Free run readiness requires registered Git project ID');
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{
