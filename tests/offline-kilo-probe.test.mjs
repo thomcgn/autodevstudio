@@ -1,7 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { probeOfflineKiloRuntime } from '../src/core/offline-kilo-probe.ts';
-test('CLI probe never mounts user HOME nor starts model or npm scripts',async()=>{
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  probeOfflineKiloRuntime, discoverKiloInstallation, classifyKiloPlacement,
+} from '../src/core/offline-kilo-probe.ts';
+
+function fixture(t,kind='standalone'){
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-kilo-install-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const directory=kind==='npm'
+    ?path.join(root,'lib','node_modules','@kilocode','cli','bin')
+    :path.join(root,'bin');
+  fs.mkdirSync(directory,{recursive:true});
+  const binary=path.join(directory,'kilo');
+  fs.writeFileSync(binary,'#!/usr/bin/env node\nconsole.log("test")\n',{mode:0o755});
+  if(kind==='npm'){
+    fs.writeFileSync(path.join(path.dirname(directory),'package.json'),
+      JSON.stringify({name:'@kilocode/cli',version:'1.0.0'}));
+    fs.mkdirSync(path.join(root,'bin'),{recursive:true});
+    fs.symlinkSync(binary,path.join(root,'bin','kilo'));
+  }
+  return {root,binary};
+}
+
+test('finds CLI via PATH symlink without executing host Kilo',t=>{
+  const {root,binary}=fixture(t,'npm');
+  assert.deepEqual(discoverKiloInstallation(path.join(root,'bin')),{binary});
+  assert.equal(discoverKiloInstallation('/nonexistent/path'),null);
+  assert.equal(discoverKiloInstallation('relative:path'),null);
+});
+test('verified npm package alone is exposed read-only, not host home',async t=>{
+  const {binary}=fixture(t,'npm');
   let called=0;
   const result=await probeOfflineKiloRuntime(async launch=>{
     called++;
@@ -9,29 +40,52 @@ test('CLI probe never mounts user HOME nor starts model or npm scripts',async()=
     assert.ok(launch.args.includes('--unshare-net'));
     assert.ok(launch.args.includes('--clearenv'));
     assert.ok(launch.args.includes('--proc'));
-    assert.ok(!launch.args.includes('/home'));
-    assert.ok(launch.cwd.includes('autodev-kilo-runtime-'));
-    assert.deepEqual(launch.args.slice(-3),['--','/usr/bin/kilo','--version']);
-    assert.equal(launch.args.includes('run'),false);
-    assert.equal(launch.args.includes('--auto'),false);
+    assert.equal(launch.args.includes('/home'),false);
+    const mount=launch.args.indexOf('/opt/kilo');
+    assert.ok(mount>0);
+    assert.equal(launch.args[mount-2],'--ro-bind');
+    assert.equal(path.basename(launch.args[mount-1]),'cli');
+    assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/bin/kilo','--version']);
+    assert.ok(!launch.args.includes('run'));
     return 'kilo 1.0.0\n';
-  },()=>'/usr/lib/node_modules/@kilocode/cli/bin/kilo');
+  },()=>binary);
   if(process.platform==='linux'){
     assert.deepEqual(result,{passed:true,reason:'passed'});
     assert.equal(called,1);
   }else assert.equal(called,0);
 });
-test('rejects CLI installed outside approved runtime tree without launching',async()=>{
-  if(process.platform!=='linux')return;
+test('standalone Kilo copies exactly one executable into private staging',async t=>{
+  const {binary}=fixture(t);
+  assert.equal(classifyKiloPlacement(binary).kind,'standalone');
   let called=0;
-  const result=await probeOfflineKiloRuntime(async()=>{called++;return '1.0';},()=>'/home/user/.local/bin/kilo');
-  assert.equal(result.reason,'cli-outside-usr');
-  assert.equal(called,0);
+  const result=await probeOfflineKiloRuntime(async launch=>{
+    called++;
+    const mount=launch.args.indexOf('/opt/kilo');
+    assert.ok(mount>0);
+    assert.equal(launch.args[mount-2],'--ro-bind');
+    const copiedDir=launch.args[mount-1];
+    assert.ok(copiedDir.startsWith(launch.cwd+path.sep));
+    assert.deepEqual(fs.readdirSync(copiedDir),['kilo']);
+    assert.equal(fs.readFileSync(path.join(copiedDir,'kilo'),'utf8'),
+      fs.readFileSync(binary,'utf8'));
+    assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/kilo','--version']);
+    return 'kilo 1.0.0\n';
+  },()=>binary);
+  if(process.platform==='linux'){
+    assert.deepEqual(result,{passed:true,reason:'passed'});
+    assert.equal(called,1);
+  }else assert.equal(called,0);
 });
-test('handles unavailable and failed runtimes without leaking stderr',async()=>{
+test('fake package metadata in HOME cannot authorize mounting a home ancestor',t=>{
+  const {root,binary}=fixture(t);
+  fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({name:'@kilocode/cli'}));
+  assert.equal(classifyKiloPlacement(binary).kind,'standalone');
+});
+test('unavailable and failed runtime are sanitized',async t=>{
+  const {binary}=fixture(t);
   if(process.platform!=='linux')return;
   assert.equal((await probeOfflineKiloRuntime(async()=>'',()=>null)).reason,'cli-unavailable');
-  const result=await probeOfflineKiloRuntime(async()=>{throw new Error('SECRET HOME /home/user');},()=>'/usr/bin/kilo');
+  const result=await probeOfflineKiloRuntime(async()=>{throw new Error('SECRET HOME /home/user');},()=>binary);
   assert.equal(result.reason,'sandbox-failed');
   assert.ok(!JSON.stringify(result).includes('/home/user'));
 });
