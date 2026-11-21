@@ -22,7 +22,7 @@ export function createIsolatedQualityLaunch(projectPath:string, script:string):I
   const gitStat=fs.lstatSync(git);
   if(!gitStat.isDirectory()||gitStat.isSymbolicLink())
     throw new Error('Quality sandbox requires a regular Git directory (no worktrees)');
-  if(!fs.existsSync('/usr/bin/npm'))throw new Error('System npm unavailable for isolated quality gate');
+
   const args=[
     '--die-with-parent','--unshare-net','--unshare-ipc','--unshare-pid',
     '--clearenv','--setenv','PATH','/usr/bin:/bin',
@@ -75,6 +75,7 @@ export const runIsolatedNpmScript:QualityScriptRunner=async(cwd,script,timeoutMs
   if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1000||timeoutMs>30*60*1000)
     throw new Error('Invalid isolated quality timeout');
   const launch=createIsolatedQualityLaunch(cwd,script);
+  if(!fs.existsSync('/usr/bin/npm'))throw new Error('System npm unavailable for isolated quality gate');
   try {
     const text=await execute(launch,timeoutMs,signal);
     if(signal?.aborted)throw new Error('Cancelled');
