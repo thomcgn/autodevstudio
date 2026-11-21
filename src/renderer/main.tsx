@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -23,6 +23,8 @@ function App(): React.JSX.Element {
   const [sandboxError, setSandboxError] = useState('');
   const [reviewerProbe, setReviewerProbe] = useState<ReviewerToolProbe | null>(null);
   const [reviewerChecking, setReviewerChecking] = useState(false);
+  const [qualityProbe, setQualityProbe] = useState<IsolatedQualityProbe | null>(null);
+  const [qualityChecking, setQualityChecking] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -97,6 +99,7 @@ function App(): React.JSX.Element {
     setSandboxProbe(null);
     setSandboxError('');
     setReviewerProbe(null);
+    setQualityProbe(null);
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -172,6 +175,15 @@ function App(): React.JSX.Element {
     try { setReviewerProbe(await window.studio.reviewerProbe(selected)); }
     catch { setReviewerProbe({supported:true,passed:false,reason:'tool-failed',detail:'sandbox-launch-failed'}); }
     finally { setReviewerChecking(false); }
+  };
+
+  const verifyQualitySandbox = async (): Promise<void> => {
+    if (!selected || qualityChecking) return;
+    setQualityChecking(true);
+    setQualityProbe(null);
+    try { setQualityProbe(await window.studio.qualityProbe(selected)); }
+    catch { setQualityProbe({supported:true,passed:false,reason:'sandbox-failed'}); }
+    finally { setQualityChecking(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -313,6 +325,7 @@ function App(): React.JSX.Element {
             </div>}
             <div className="sandbox-check"><button className="quiet" disabled={!selected || sandboxChecking || diagnostics?.sandboxTool !== 'bwrap' || !diagnostics.sandboxToolAvailable} onClick={() => void verifySandbox()}>{sandboxChecking ? 'Prüfe Sandbox …' : 'Sandbox testen'}</button><span>{sandboxError || (sandboxProbe ? sandboxProbe.isolated ? 'Schreibschutz und Start in Testumgebung bestätigt · Produktiv-Sandbox noch ausstehend' : `Sandbox-Test fehlgeschlagen: ${sandboxProbe.detail === 'namespace-permission-denied' ? 'User-Namespace nicht erlaubt' : sandboxProbe.detail === 'network-setup-denied' ? 'Netzwerk-Namespace blockiert' : sandboxProbe.detail === 'mount-setup-failed' ? 'Mount-Konfiguration fehlgeschlagen' : sandboxProbe.detail === 'timeout' ? 'Zeitüberschreitung' : sandboxProbe.detail === 'canary-read-failed' ? 'Testdatei innerhalb der Sandbox nicht lesbar' : sandboxProbe.detail === 'write-protection-failed' ? 'Schreibschutz nicht wirksam' : sandboxProbe.detail === 'canary-verification-failed' ? 'Testdatei nach Schreibversuch verändert' : sandboxProbe.detail === 'probe-command-failed' ? `Testbefehl fehlgeschlagen (Exit ${sandboxProbe.exitCode ?? '?'})` : 'Ursache unbekannt'}` : 'Separater Test ohne Kilo und ohne Projektänderungen')}</span></div>
             {sandboxProbe?.isolated && <div className="sandbox-check"><button className="quiet" disabled={!selected || reviewerChecking} onClick={() => void verifyReviewer()}>{reviewerChecking ? 'Prüfe Reviewer …' : 'Reviewer-Tool testen'}</button><span>{reviewerProbe ? reviewerProbe.passed ? 'Git-Prozess isoliert gestartet · Projekt weiterhin nur lesbar' : `Isolierter Git-Prozess fehlgeschlagen: ${reviewerProbe.detail === 'mountpoint-failed' ? 'Mount- oder Namespace-Konfiguration' : reviewerProbe.detail === 'runtime-library-missing' ? 'Laufzeitbibliothek fehlt' : reviewerProbe.detail === 'git-repository-rejected' ? 'Git-Repository in Sandbox nicht erkannt' : reviewerProbe.detail === 'git-command-failed' ? 'Git-Befehl fehlgeschlagen' : reviewerProbe.detail === 'timeout' ? 'Zeitüberschreitung' : 'Prozessstart fehlgeschlagen'}` : 'Prüft den tatsächlichen Git-Prozess in der Offline-Sandbox – ohne Modellaufruf'}</span></div>}
+            {reviewerProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || qualityChecking} onClick={() => void verifyQualitySandbox()}>{qualityChecking ? 'Prüfe npm …' : 'Quality-Sandbox testen'}</button><span>{qualityProbe ? qualityProbe.passed ? 'npm in isolierter Testumgebung gestartet · keine Projektskripte ausgeführt' : qualityProbe.reason === 'npm-unavailable' ? 'System-npm unter /usr/bin/npm nicht gefunden' : qualityProbe.reason === 'invalid-output' ? 'npm-Version nicht erkannt' : 'Isolierter npm-Prozess konnte nicht gestartet werden' : 'Prüft ausschließlich npm --version in einem temporären Testverzeichnis'}</span></div>}
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           {canRun && <div className="run-panel"><div><h3>Legacy-Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>}

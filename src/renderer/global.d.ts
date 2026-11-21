@@ -9,6 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
+export interface IsolatedQualityProbe { supported: boolean; passed: boolean; reason: 'passed' | 'unsupported-platform' | 'npm-unavailable' | 'sandbox-failed' | 'invalid-output' }
 export interface ReviewerToolProbe { supported: boolean; passed: boolean; reason: 'passed' | 'unsupported-platform' | 'tool-failed'; detail: 'mountpoint-failed' | 'runtime-library-missing' | 'git-repository-rejected' | 'git-command-failed' | 'timeout' | 'sandbox-launch-failed' | null }
 export interface SandboxProbeResult { available: boolean; isolated: boolean; reason: 'passed' | 'unsupported-platform' | 'sandbox-failed' | 'canary-modified'; detail: 'namespace-permission-denied' | 'network-setup-denied' | 'mount-setup-failed' | 'canary-read-failed' | 'write-protection-failed' | 'canary-verification-failed' | 'probe-command-failed' | 'timeout' | 'unknown' | null; exitCode: number | null }
 export interface ProviderDiagnostics {
@@ -51,6 +52,7 @@ declare global {
     diagnostics(id: string): Promise<ProviderDiagnostics>;
     sandboxProbe(id: string): Promise<SandboxProbeResult>;
     reviewerProbe(id: string): Promise<ReviewerToolProbe>;
+    qualityProbe(id: string): Promise<IsolatedQualityProbe>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
