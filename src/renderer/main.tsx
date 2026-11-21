@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -33,6 +33,8 @@ function App(): React.JSX.Element {
   const [offlineKiloChecking, setOfflineKiloChecking] = useState(false);
   const [offlineReviewerProbe, setOfflineReviewerProbe] = useState<OfflineReviewerProbeResult | null>(null);
   const [offlineReviewerChecking, setOfflineReviewerChecking] = useState(false);
+  const [localModelProbe, setLocalModelProbe] = useState<LocalReviewModelProbeResult | null>(null);
+  const [localModelChecking, setLocalModelChecking] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -112,6 +114,7 @@ function App(): React.JSX.Element {
     setFullPipelineProbe(null);
     setOfflineKiloProbe(null);
     setOfflineReviewerProbe(null);
+    setLocalModelProbe(null);
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -232,6 +235,15 @@ function App(): React.JSX.Element {
     try { setOfflineReviewerProbe(await window.studio.offlineReviewerProbe(selected)); }
     catch { setOfflineReviewerProbe({passed:false,reason:'sandbox-failed',stage:null,detail:'other',exitCode:null}); }
     finally { setOfflineReviewerChecking(false); }
+  };
+
+  const verifyLocalModel = async (): Promise<void> => {
+    if (!selected || localModelChecking) return;
+    setLocalModelChecking(true);
+    setLocalModelProbe(null);
+    try { setLocalModelProbe(await window.studio.localModelProbe(selected)); }
+    catch { setLocalModelProbe({passed:false,reason:'request-failed'}); }
+    finally { setLocalModelChecking(false); }
   };
 
   const add = async (): Promise<void> => {
@@ -378,6 +390,7 @@ function App(): React.JSX.Element {
             {qualityScriptProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || fullPipelineChecking} onClick={() => void verifyFullPipeline()}>{fullPipelineChecking ? 'Prüfe Workflow …' : 'Gesamtworkflow testen'}</button><span>{fullPipelineProbe ? fullPipelineProbe.passed ? 'Lokaler Trockenlauf erfolgreich · Git, Reviewer-Evidenz, Quality und Lock geprüft · keine Veröffentlichung' : fullPipelineProbe.reason === 'setup-failed' ? 'Temporäres Git-Testprojekt konnte nicht vorbereitet werden' : 'Lokaler Trockenlauf fehlgeschlagen · kein Projekt verändert' : 'Erzeugt ein Wegwerf-Git-Repository und testet die vollständige Schutzkette ohne KI und Push'}</span></div>}
             {fullPipelineProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || offlineKiloChecking} onClick={() => void verifyOfflineKilo()}>{offlineKiloChecking ? 'Prüfe Kilo …' : 'Kilo-Laufzeit testen'}</button><span>{offlineKiloProbe ? offlineKiloProbe.passed ? 'Kilo-Version und Run-Aufrufsyntax offline geprüft · keine Modellanfrage' : offlineKiloProbe.reason === 'cli-unavailable' ? 'Kilo weder im Studio-PATH noch in üblichen npm-Benutzerpfaden gefunden' : offlineKiloProbe.reason === 'cli-outside-usr' ? 'Kilo-Installationspfad nicht sicher freigebbar' : `Kilo: ${offlineKiloProbe.stage === 'version' ? 'Versionsprüfung' : offlineKiloProbe.stage === 'help' ? 'CLI-Hilfe' : 'Vorbereitung'} fehlgeschlagen${offlineKiloProbe.detail ? ' · ' + (offlineKiloProbe.detail === 'mount-or-namespace' ? 'Mount/Namespace' : offlineKiloProbe.detail === 'runtime-library' ? 'Laufzeitdatei fehlt' : offlineKiloProbe.detail === 'timeout' ? 'Zeitüberschreitung' : offlineKiloProbe.detail === 'process-exit' ? 'Programmfehler' : 'Unbekannter Fehler') : ''}${offlineKiloProbe.exitCode !== null ? ' (Exit ' + offlineKiloProbe.exitCode + ')' : ''}` : 'Startet ausschließlich kilo --version ohne Netzwerk, Zugangsdaten oder Projektzugriff'}</span></div>}
             {fullPipelineProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || offlineReviewerChecking} onClick={() => void verifyOfflineReviewer()}>{offlineReviewerChecking ? 'Prüfe Reviewer-Sandbox …' : 'Reviewer-Sandbox testen'}</button><span>{offlineReviewerProbe ? offlineReviewerProbe.passed ? 'Reviewer-CLI isoliert · keine Projektdateien, kein Netzwerk, keine Modellanfrage' : offlineReviewerProbe.reason === 'cli-unavailable' ? 'Kilo-Installation nicht gefunden' : offlineReviewerProbe.reason === 'invalid-output' ? 'Reviewer-CLI-Hilfe unvollständig' : `Reviewer-Sandbox: ${offlineReviewerProbe.stage === 'runtime' ? 'Kilo-Start' : offlineReviewerProbe.stage === 'help' ? 'CLI-Hilfe' : offlineReviewerProbe.stage === 'policy' ? 'Reviewer-Konfiguration' : 'Vorbereitung'} fehlgeschlagen${offlineReviewerProbe.detail ? ' · ' + (offlineReviewerProbe.detail === 'mount-or-namespace' ? 'Mount/Namespace' : offlineReviewerProbe.detail === 'runtime-library' ? 'Laufzeitdatei fehlt' : offlineReviewerProbe.detail === 'permission-or-config' ? 'Berechtigung/Konfiguration' : offlineReviewerProbe.detail === 'timeout' ? 'Zeitüberschreitung' : offlineReviewerProbe.detail === 'process-exit' ? 'Programmfehler' : 'Unbekannter Fehler') : ''}${offlineReviewerProbe.exitCode !== null ? ' (Exit ' + offlineReviewerProbe.exitCode + ')' : ''}` : 'Prüft die separate Werkzeug-Sperre ohne Anmeldung, KI- oder Projektzugriff'}</span></div>}
+            {fullPipelineProbe?.passed && <div className="sandbox-check"><button className="quiet" disabled={!selected || localModelChecking} onClick={() => void verifyLocalModel()}>{localModelChecking ? 'Prüfe lokales Modell …' : 'Lokales Review-Modell testen'}</button><span>{localModelProbe ? localModelProbe.passed ? 'Ollama-Modell antwortet strukturiert · nur synthetischer Diff · keine Projektdateien' : localModelProbe.reason === 'model-unavailable' ? 'Ollama oder qwen2.5-coder:3b nicht verfügbar' : localModelProbe.reason === 'invalid-verdict' ? 'Modellantwort entspricht noch nicht dem Reviewer-Format' : 'Lokaler Modelltest fehlgeschlagen · keine Projektänderung' : 'Einmaliger Test mit Qwen2.5-Coder 3B via localhost · keine Kilo-Tokens oder Projektdateien'}</span></div>}
           </div>
           {snapshot?.checkpoint && <div className="checkpoint-detail">Checkpoint: {snapshot.checkpoint.reason} · Session: {snapshot.checkpoint.sessionId ?? 'Fehlt – Core muss Wiederaufnahme verweigern'}</div>}
           {canRun && <div className="run-panel"><div><h3>Legacy-Agentenlauf</h3><p>Kann Dateien ändern, committen, pushen und Issues schließen. Erfordert eine ausdrückliche Freigabe.</p></div><button className="danger" disabled={busy} onClick={() => { setApproval(''); setConfirmOpen(true); }}>Ausführung vorbereiten</button></div>}
