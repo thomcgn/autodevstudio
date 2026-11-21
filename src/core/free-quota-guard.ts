@@ -34,7 +34,9 @@ function statePath(userData:string):string{return path.join(userData,'free-quota
  * Local observation is NEVER represented as an authoritative provider counter.
  */
 export class FreeQuotaGuard {
-  constructor(private readonly userData:string,private readonly clock:()=>number=Date.now){}
+  private readonly userData:string;
+  private readonly clock:()=>number;
+  constructor(userData:string,clock:()=>number=Date.now){this.userData=userData;this.clock=clock;}
   private load():Stored{
     try{
       const file=statePath(this.userData);
