@@ -97,7 +97,7 @@ export function classifyKiloPlacement(binary:string):KiloPackagePlacement{
   }
   return {kind:'standalone',executable:'/opt/kilo/kilo'};
 }
-/** Offline test only. The sandbox receives either /usr, one verified Kilo npm
+/** Offline CLI capability test only. The sandbox receives either /usr, one verified Kilo npm
  * package (read-only), or a COPY of one standalone executable (read-only).
  * It never receives the host HOME, credentials, runtime sockets or network.
  */
@@ -128,11 +128,19 @@ export async function probeOfflineKiloRuntime(
       return {passed:false,reason:'sandbox-failed'};
     const args=launch.args.slice(0,separator);
     if(source)args.push('--dir','/opt','--ro-bind',source,'/opt/kilo');
-    args.push('--',placement.executable,'--version');
+    // Two OFFLINE, non-model commands. Never use 'kilo run' without --help,
+    // --auto or project-level config. No network or credentials are mounted.
+    const version=[...args,'--',placement.executable,'--version'];
     let output:string;
-    try{output=await executor({...launch,args})}
+    try{output=await executor({...launch,args:version})}
     catch{return {passed:false,reason:'sandbox-failed'};}
     if(!output.trim()||Buffer.byteLength(output)>4096)
+      return {passed:false,reason:'invalid-output'};
+    const help=[...args,'--',placement.executable,'run','--help'];
+    try{output=await executor({...launch,args:help})}
+    catch{return {passed:false,reason:'sandbox-failed'};}
+    if(!output.trim()||Buffer.byteLength(output)>4096 ||
+       !output.includes('--model')||!output.includes('--agent'))
       return {passed:false,reason:'invalid-output'};
     return {passed:true,reason:'passed'};
   }catch{
