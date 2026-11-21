@@ -9,7 +9,7 @@ export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
 }
-export interface OfflineReviewerProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'sandbox-failed' | 'invalid-output' }
+export interface OfflineReviewerProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'sandbox-failed' | 'invalid-output'; stage: 'runtime' | 'help' | 'policy' | null; detail: 'mount-or-namespace' | 'runtime-library' | 'permission-or-config' | 'timeout' | 'process-exit' | 'other' | null; exitCode: number | null }
 export interface OfflineKiloProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'cli-unavailable' | 'cli-outside-usr' | 'sandbox-failed' | 'invalid-output' }
 export interface FullPipelineProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'setup-failed' | 'pipeline-failed' }
 export interface QualityScriptProbeResult { passed: boolean; reason: 'passed' | 'unsupported-platform' | 'script-failed' | 'missing-expected-write' | 'git-metadata-modified' }

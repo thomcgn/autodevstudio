@@ -19,32 +19,67 @@ test('offline reviewer probe is separate from user projects and never invokes an
   let calls=0;
   const result=await probeOfflineReviewerSandbox(async launch=>{
     calls++;
+    const stage=launch.args.at(-1)==='--version'?'runtime':launch.args.includes('KILO_CONFIG_CONTENT')?'policy':'help';
     assert.equal(launch.binary,'bwrap');
     assert.ok(launch.args.includes('--unshare-net'));
     assert.ok(launch.args.includes('--clearenv'));
     assert.ok(!launch.args.includes('--auto'));
     assert.ok(!launch.args.includes('/project'));
     assert.ok(!launch.args.includes(home));
-    assert.deepEqual(launch.args.slice(-4),['--','/opt/kilo/bin/kilo','run','--help']);
-    const config=JSON.parse(launch.args[launch.args.indexOf('KILO_CONFIG_CONTENT')+1]);
-    assert.equal(config.permission['*'],'deny');
-    assert.equal(config.agent['autodev-reviewer'].permission['*'],'deny');
+    if(stage==='runtime')assert.deepEqual(launch.args.slice(-3),['--','/opt/kilo/bin/kilo','--version']);
+    else assert.deepEqual(launch.args.slice(-4),['--','/opt/kilo/bin/kilo','run','--help']);
+    if(stage==='policy'){
+      const config=JSON.parse(launch.args[launch.args.indexOf('KILO_CONFIG_CONTENT')+1]);
+      assert.equal(config.permission['*'],'deny');
+      assert.equal(config.agent['autodev-reviewer'].permission['*'],'deny');
+    }else assert.equal(launch.args.includes('KILO_CONFIG_CONTENT'),false);
     assert.ok(launch.cwd.startsWith(os.tmpdir()+path.sep));
-    return 'Usage: kilo run --model provider/model --agent reviewer\n';
+    return stage==='runtime'?'kilo 7.8.27\n':'Usage: kilo run --model provider/model --agent reviewer\n';
   },()=>binary);
-  assert.equal(calls,process.platform==='linux'?1:0);
+  assert.equal(calls,process.platform==='linux'?3:0);
   assert.equal(result.passed,process.platform==='linux');
+  if(process.platform==='linux')assert.deepEqual(result,{passed:true,reason:'passed',stage:null,detail:null,exitCode:null});
 });
 test('unavailable Kilo and failed CLI are sanitized',async t=>{
   const {binary}=fixture(t);
   if(process.platform!=='linux')return;
   assert.equal((await probeOfflineReviewerSandbox(async()=>'',()=>null)).reason,'cli-unavailable');
   const failure=await probeOfflineReviewerSandbox(async()=>{throw Error('SECRET /home/user');},()=>binary);
-  assert.deepEqual(failure,{passed:false,reason:'sandbox-failed'});
+  assert.deepEqual(failure,{passed:false,reason:'sandbox-failed',stage:'runtime',detail:'other',exitCode:null});
   assert.ok(!JSON.stringify(failure).includes('SECRET'));
 });
 test('invalid help output fails closed',async t=>{
   const {binary}=fixture(t);
   if(process.platform!=='linux')return;
-  assert.equal((await probeOfflineReviewerSandbox(async()=> 'no agent flags',()=>binary)).reason,'invalid-output');
+  const result=await probeOfflineReviewerSandbox(async launch=>launch.args.at(-1)==='--version'?'kilo 7.8.27\n':'no agent flags',()=>binary);
+  assert.equal(result.reason,'invalid-output');
+  assert.equal(result.stage,'help');
+});
+
+test('runtime works but deny-all config fails: report policy without stderr',async t=>{
+  const {binary}=fixture(t);
+  if(process.platform!=='linux')return;
+  const seen=[];
+  const result=await probeOfflineReviewerSandbox(async launch=>{
+    const hasPolicy=launch.args.includes('KILO_CONFIG_CONTENT');
+    const isVersion=launch.args.at(-1)==='--version';
+    seen.push(isVersion?'runtime':hasPolicy?'policy':'help');
+    if(hasPolicy){const e=new Error('secret from /home/user');e.code=254;e.stderr='configuration invalid in /home/user';throw e;}
+    return isVersion?'kilo 7.8.27\n':'Usage --model --agent\n';
+  },()=>binary);
+  assert.deepEqual(seen,['runtime','help','policy']);
+  assert.equal(result.stage,'policy');
+  assert.equal(result.detail,'permission-or-config');
+  assert.equal(result.exitCode,254);
+  assert.ok(!JSON.stringify(result).includes('/home/user'));
+});
+test('Bubblewrap launch error classified separately from provider policy',async t=>{
+  const {binary}=fixture(t);
+  if(process.platform!=='linux')return;
+  const result=await probeOfflineReviewerSandbox(async()=>{
+    const e=new Error('ignored');e.code=1;e.stderr='bwrap: failed to mount /proc: Operation not permitted';throw e;
+  },()=>binary);
+  assert.equal(result.stage,'runtime');
+  assert.equal(result.detail,'mount-or-namespace');
+  assert.equal(result.exitCode,1);
 });
