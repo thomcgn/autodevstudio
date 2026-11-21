@@ -21,6 +21,10 @@ test('quality sandbox exposes only its selected writable project while protectin
   assert.equal(launch.binary,'bwrap');
   assert.ok(launch.args.includes('--unshare-net'));
   assert.ok(launch.args.includes('--unshare-pid'));
+  assert.equal(launch.args[launch.args.indexOf('--proc')+1],'/proc');
+  assert.ok(launch.args.indexOf('--proc')>launch.args.indexOf('--unshare-pid'));
+  assert.equal(launch.args.filter(x=>x==='/proc').length,1);
+  assert.ok(!launch.args.includes('--ro-bind-try'), 'host /proc must never be bound');
   assert.ok(launch.args.includes('--clearenv'));
   assert.ok(!launch.args.includes('/home'));
   const writable=launch.args.indexOf('--bind');
