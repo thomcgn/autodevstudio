@@ -19,7 +19,8 @@ export interface NoToolsReviewerPolicy {
   agent: typeof AGENT_NAME;
 }
 export function createNoToolsReviewerPolicy(model: string): NoToolsReviewerPolicy {
-  if (!MODEL_PATTERN.test(model)) throw new Error('Invalid reviewer model identifier');
+  if (!MODEL_PATTERN.test(model) || model.split('/').some(part => part === '.' || part === '..') || model.includes('..'))
+    throw new Error('Invalid reviewer model identifier');
   const permission: Record<string,'deny'> = {'*':'deny'};
   for (const tool of DENIED_TOOLS) permission[tool]='deny';
   const config = {
