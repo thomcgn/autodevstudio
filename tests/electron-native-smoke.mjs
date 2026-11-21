@@ -105,6 +105,11 @@ try{
     catch{return true;}
   });
   assert.equal(roleWriteRejected,true);
+  const kiloCalibrateRejected=await page.evaluate(async()=>{
+    try{await window.studio.kiloReviewerCalibrate('not-a-project');return false;}
+    catch{return true;}
+  });
+  assert.equal(kiloCalibrateRejected,true,'Cloud Kilo calibration requires registered Git project ID');
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{

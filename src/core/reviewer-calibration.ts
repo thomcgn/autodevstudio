@@ -4,7 +4,7 @@ import { createEvidenceOnlyReviewer, type EvidenceOnlyReviewerTransport } from '
 
 export interface CalibrationResult {
   passed: boolean;
-  reason: 'passed'|'wrong-verdict'|'invalid-response'|'cancelled'|'model-unavailable'|'timeout'|'transport-failed';
+  reason: 'passed'|'wrong-verdict'|'invalid-response'|'cancelled'|'model-unavailable'|'timeout'|'transport-failed'|'rate-limit'|'quota-reserve';
   caseNumber?: 1|2;
 }
 
@@ -43,7 +43,9 @@ function evidence(number:number,diff:string):ReviewEvidence {
 /** Public status codes are intentionally coarse. Never leak HTTP bodies, local paths or model text. */
 export function classifyCalibrationError(error:unknown): CalibrationResult['reason'] {
   const message=error instanceof Error ? error.message : '';
-  if (/Local reviewer cancelled or timed out/.test(message)) return 'timeout';
+  if (/^Kilo Gateway free rate limited/.test(message)) return 'rate-limit';
+  if (/^Quota checkpoint required/.test(message)) return 'quota-reserve';
+  if (/Local reviewer cancelled or timed out|Reviewer Gateway request cancelled or timed out/.test(message)) return 'timeout';
   if (/Ollama unavailable or rejected request \(HTTP (?:404|400)\)/.test(message)) return 'model-unavailable';
   if (/^(?:Ollama unavailable|Local reviewer transport failed|Ollama returned empty response|Ollama response exceeded limit)/.test(message)) return 'transport-failed';
   return 'invalid-response';

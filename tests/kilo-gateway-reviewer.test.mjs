@@ -75,3 +75,35 @@ test('cancellation short-circuits network',async()=>{
   await assert.rejects(channel(req,abort.signal),/cancelled/);
   assert.equal(invoked,false);
 });
+
+test('anonymous free model is allowed, but paid models still require an API key',async()=>{
+ let calls=0;
+ const free=createKiloGatewayReviewerChannel({
+  ...config,model:'nvidia/nemotron-3-ultra-550b-a55b:free',
+  readGatewayApiKey:()=>null,
+ },async(_url,opts)=>{
+  calls++;
+  assert.equal(opts.headers.Authorization,undefined);
+  return completion({role:'assistant',content:verdict});
+ });
+ assert.equal((await free(req)).output,verdict);
+ assert.equal(calls,1);
+ const paid=createKiloGatewayReviewerChannel({...config,readGatewayApiKey:()=>null},
+   async()=>{calls++;throw Error('must never run paid')});
+ await assert.rejects(paid(req),/key unavailable/);
+ assert.equal(calls,1);
+});
+test('HTTP 429 is categorized and quota hooks run exactly once, without response text',async()=>{
+ let started=0,limits=0;
+ const free=createKiloGatewayReviewerChannel({
+   ...config,model:'nvidia/nemotron-3-ultra-550b-a55b:free',
+   readGatewayApiKey:()=>null,
+   onBeforeRequest:()=>{started++},
+   onRateLimited:()=>{limits++},
+ },async()=>new Response('SECRET',{status:429}));
+ await assert.rejects(free(req),error=>
+   /Kilo Gateway free rate limited \(HTTP 429\)/.test(error.message)&&
+   !error.message.includes('SECRET'));
+ assert.equal(started,1);
+ assert.equal(limits,1);
+});

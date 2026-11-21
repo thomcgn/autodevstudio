@@ -46,6 +46,8 @@ function App(): React.JSX.Element {
   const [draftRoleModels, setDraftRoleModels] = useState<KiloRoleModels>({planner:'',builder:'',reviewer:''});
   const [savingRoleModels, setSavingRoleModels] = useState(false);
   const [roleModelsMessage, setRoleModelsMessage] = useState('');
+  const [kiloCalibration, setKiloCalibration] = useState<ReviewerCalibrationResult | null>(null);
+  const [kiloCalibrating, setKiloCalibrating] = useState(false);
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
@@ -133,6 +135,7 @@ function App(): React.JSX.Element {
     setSavedRoleModels(null);
     setDraftRoleModels({planner:'',builder:'',reviewer:''});
     setRoleModelsMessage('');
+    setKiloCalibration(null);
     setSimulation(null);
     setHistoryRun(null);
     setSavedLog('');
@@ -264,6 +267,15 @@ function App(): React.JSX.Element {
     finally { setLocalModelChecking(false); }
   };
 
+  const calibrateKiloFreeReviewer = async (): Promise<void> => {
+    if(!selected||!savedRoleModels||kiloCalibrating)return;
+    setKiloCalibration(null);
+    setKiloCalibrating(true);
+    try{setKiloCalibration(await window.studio.kiloReviewerCalibrate(selected));}
+    catch{setKiloCalibration({passed:false,reason:'transport-failed'});}
+    finally{setKiloCalibrating(false);}
+  };
+
   const saveRoleModels = async (): Promise<void> => {
     if(!selected||savingRoleModels||!kiloModels)return;
     setSavingRoleModels(true);
@@ -271,6 +283,7 @@ function App(): React.JSX.Element {
     try {
       const saved=await window.studio.saveKiloRoleModels(selected,draftRoleModels);
       setSavedRoleModels(saved);
+      setKiloCalibration(null);
       setRoleModelsMessage('Rollenzuordnung gespeichert · Ausführung weiterhin gesperrt');
     }catch{
       setRoleModelsMessage('Speichern abgelehnt: Kilo-Free-Katalog nicht erreichbar oder Modell nicht mehr kostenlos');
@@ -467,6 +480,20 @@ function App(): React.JSX.Element {
                 <div className="button-group"><button disabled={savingRoleModels||!draftRoleModels.planner||!draftRoleModels.builder||!draftRoleModels.reviewer}
                   onClick={()=>void saveRoleModels()}>{savingRoleModels?'Speichere …':'Rollenzuordnung speichern'}</button></div>
                 {roleModelsMessage && <p role="status">{roleModelsMessage}</p>}
+                {savedRoleModels && <div className="sandbox-check">
+                  <button type="button" className="quiet" disabled={kiloCalibrating||kiloModelLoading}
+                    onClick={()=>void calibrateKiloFreeReviewer()}>{kiloCalibrating?'Prüfe Kilo Reviewer …':'Kilo-Free-Reviewer kalibrieren'}</button>
+                  <span>{kiloCalibration ? kiloCalibration.passed ?
+                    'Kilo-Reviewer hat zwei synthetische PASS/FAIL-Fälle richtig erkannt · noch keine produktive Freigabe' :
+                    kiloCalibration.reason==='rate-limit' ? 'Kilo-Free-Limit erreicht (HTTP 429) · sicher pausiert' :
+                    kiloCalibration.reason==='quota-reserve' ? '5-%-Reserve erreicht oder paralleler Test · keine Modellanfrage' :
+                    kiloCalibration.reason==='wrong-verdict' ? 'Reviewer hat einen synthetischen Fall falsch bewertet' :
+                    kiloCalibration.reason==='model-unavailable' ? 'Reviewer-Modell ist nicht mehr kostenlos verfügbar oder nicht gespeichert' :
+                    kiloCalibration.reason==='timeout' ? 'Kilo-Reviewer hat sein Zeitlimit erreicht' :
+                    kiloCalibration.reason==='invalid-response' ? 'Kilo-Reviewer lieferte kein gültiges PASS/FAIL-JSON' :
+                    'Kilo-Reviewer-Test fehlgeschlagen · keine Projektänderungen' :
+                    'Zwei Free-Gateway-Anfragen nur mit künstlichen Codeänderungen · keine Projektdateien oder Zugangsdaten'}</span>
+                </div>}
               </div>}
             </div>}
 

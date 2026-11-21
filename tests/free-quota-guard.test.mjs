@@ -83,3 +83,16 @@ test('corrupt accounting never silently resets the quota counter',()=>{
   assert.throws(()=>f.guard.recordAttempt(),/manual recovery required/);
  }finally{f.close();}
 });
+
+test('strict production quota mode refuses unknown upstream remainder',()=>{
+ const f=fixture();
+ try{
+  assert.deepEqual(f.guard.decide('normal',true),
+   {allowed:false,reason:'unknown-remaining',retryAt:null});
+  assert.throws(()=>f.guard.recordAttempt('normal',true),/unknown-remaining/);
+  f.guard.recordProviderQuota(40,f.now()+3600000);
+  assert.equal(f.guard.decide('normal',true).allowed,true);
+  f.guard.recordAttempt('normal',true);
+  assert.equal(f.guard.snapshot().remainingVerified,39);
+ }finally{f.close();}
+});
