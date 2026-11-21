@@ -66,7 +66,8 @@ export function chooseFreeProvider(request:RoutingRequest):RouteResult {
       model:candidate.model,fallback:candidate.id!==request.preferredId};
   }
   if(request.phase==='review'&&(blockedReviewer||
-     request.candidates.some(p=>p.zeroCostVerified&&p.ready&&p.roles.includes('review')&&!p.reviewerIsolated)))
+     request.candidates.some(p=>p.zeroCostVerified&&p.ready&&p.roles.includes('review')&&
+       (!p.reviewerIsolated||(p.id===request.builderProviderId&&p.model===request.builderModel)))))
     return {kind:'paused',reason:'independent-reviewer-unavailable'};
   return {kind:'paused',reason:blockedKilo?'quota-unavailable':'no-free-provider'};
 }
