@@ -34,6 +34,12 @@ const success={
   ollamaReadiness:{ready:true,reason:'ready'},
   kiloRoleModels:null,
   kiloReviewerCalibration:{passed:true,reason:'passed'},
+  localReviewFallback:false,
+  freeRoutePreview:{previewOnly:true,executionEnabled:false,ollamaReady:true,
+    localFallbackEnabled:true,roles:[
+      {role:'planner',preferredModel:'kilo-auto/free',route:'paused',model:null,reason:'kilo-quota-unverified'},
+      {role:'builder',preferredModel:'kilo-auto/free',route:'paused',model:null,reason:'kilo-quota-unverified'},
+      {role:'reviewer',preferredModel:'kilo-auto/free',route:'ollama-candidate',model:'qwen2.5-coder:3b',reason:'candidate-only'}]},
   freeRunReadiness:{roles:[
     {role:'planner',model:'nvidia/nemotron-3-ultra-550b-a55b:free',reason:'remaining-unknown'},
     {role:'builder',model:'nvidia/nemotron-3-ultra-550b-a55b:free',reason:'remaining-unknown'},
@@ -86,6 +92,9 @@ async function fixture(page){
       kiloRoleModels:()=>respond('kiloRoleModels'),
       kiloReviewerCalibrate:()=>respond('kiloReviewerCalibration'),
       freeRunReadiness:()=>respond('freeRunReadiness'),
+      localReviewFallback:()=>respond('localReviewFallback'),
+      setLocalReviewFallback:async(_id,enabled)=>{calls.push('setLocalReviewFallback');return enabled;},
+      freeRoutePreview:()=>respond('freeRoutePreview'),
       kiloFreeUsage:()=>respond('kiloFreeUsage'),
       saveKiloRoleModels:async(_id,roles)=>{calls.push('saveKiloRoleModels');return structuredClone(roles);},
       addProject:async()=>null,removeProject:async()=>true,
@@ -116,7 +125,8 @@ async function click(page,name){
       'Free-Modelle laden':'kiloFreeModels',
       'Kilo-Free-Reviewer kalibrieren':'kiloReviewerCalibration',
       'Kilo-Requests anzeigen':'kiloFreeUsage',
-      'Modell-/Kontingentbereitschaft prüfen':'freeRunReadiness'})[name]);
+      'Modell-/Kontingentbereitschaft prüfen':'freeRunReadiness',
+      'Provider-Fallback simulieren':'freeRoutePreview'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -144,6 +154,14 @@ try {
   await page.getByLabel('Modell für reviewer').selectOption('kilo-auto/free');
   await page.getByRole('button',{name:'Rollenzuordnung speichern'}).click();
   await page.getByText('Rollenzuordnung gespeichert',{exact:false}).waitFor();
+  const localChoice=page.getByRole('checkbox',{name:'Lokalen Ollama-Reviewer als Fallback zulassen',exact:false});
+  assert.equal(await localChoice.isChecked(),false);
+  await localChoice.check();
+  await page.waitForFunction(()=>window.__uiSmoke.calls.includes('setLocalReviewFallback'));
+  assert.equal(await localChoice.isChecked(),true);
+  await click(page,'Provider-Fallback simulieren');
+  await page.getByText('Lokaler Reviewer wäre ein Fallback-Kandidat',{exact:false}).waitFor();
+  await page.getByText('Nur Simulation. Auch ein lokaler Kandidat',{exact:false}).waitFor();
   await click(page,'Modell-/Kontingentbereitschaft prüfen');
   assert.equal(await page.getByText('Echte Kilo-Restquote nicht verfügbar',{exact:false}).count(),3);
   await page.getByText('Produktive Ausführung weiterhin gesperrt',{exact:false}).waitFor();
