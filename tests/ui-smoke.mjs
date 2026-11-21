@@ -32,6 +32,9 @@ const success={
   localModelProbe:{passed:true,reason:'passed'},
   reviewerCalibration:{passed:true,reason:'passed'},
   ollamaReadiness:{ready:true,reason:'ready'},
+  kiloFreeModels:{checkedAt:'2026-11-21T00:00:00.000Z',models:[
+    {id:'nvidia/nemotron-3-ultra-550b-a55b:free',name:'NVIDIA Nemotron 3 Ultra',preferred:true},
+    {id:'kilo-auto/free',name:'Auto Free',preferred:false}]},
 };
 const names=[
   'Sandbox testen','Reviewer-Tool testen','Quality-Sandbox testen',
@@ -70,6 +73,7 @@ async function fixture(page){
       localModelProbe:()=>respond('localModelProbe'),
       reviewerCalibration:()=>respond('reviewerCalibration'),
       ollamaReadiness:()=>respond('ollamaReadiness'),
+      kiloFreeModels:()=>respond('kiloFreeModels'),
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
@@ -94,7 +98,8 @@ async function click(page,name){
       'Kilo-Laufzeit testen':'offlineKiloProbe','Reviewer-Sandbox testen':'offlineReviewerProbe',
       'Lokales Review-Modell testen':'localModelProbe',
       'Reviewer kalibrieren (2 Modellanfragen)':'reviewerCalibration',
-      'Ollama-Verbindung prüfen':'ollamaReadiness'})[name]);
+      'Ollama-Verbindung prüfen':'ollamaReadiness',
+      'Free-Modelle laden':'kiloFreeModels'})[name]);
 }
 async function fullChain(page){
   await click(page,'Umgebung prüfen');
@@ -114,6 +119,9 @@ try {
   const localModelButton=page.getByRole('button',{name:'Lokales Review-Modell testen',exact:true});
   assert.equal(await localModelButton.isVisible(),true);
   assert.equal(await localModelButton.isEnabled(),true);
+  await click(page,'Free-Modelle laden');
+  await page.getByText('NVIDIA Nemotron 3 Ultra',{exact:false}).waitFor();
+  assert.equal(await page.getByText('nvidia/nemotron-3-ultra-550b-a55b:free',{exact:true}).count(),1);
   await click(page,'Ollama-Verbindung prüfen');
   await page.getByText('Ollama erreichbar · qwen2.5-coder:3b installiert',{exact:false}).waitFor();
   await click(page,'Lokales Review-Modell testen');
@@ -190,6 +198,11 @@ try {
   });
   await click(page,'Ollama-Verbindung prüfen');
   await page.getByText('Ollama auf 127.0.0.1:11434 nicht erreichbar',{exact:false}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.kiloFreeModels=new Error('network');
+  });
+  await click(page,'Free-Modelle laden');
+  await page.getByText('Kilo-Modellkatalog derzeit nicht erreichbar',{exact:false}).waitFor();
   // Switching projects resets all probe state and does not carry PASS badges across projects.
   await page.getByRole('button',{name:/another-repo/}).click();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
