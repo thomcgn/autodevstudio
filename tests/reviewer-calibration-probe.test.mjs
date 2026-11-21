@@ -32,11 +32,28 @@ test('local calibration sends exactly two separate model-only synthetic prompts'
 test('always-PASS fails calibration without revealing model output',async()=>{
   if(process.platform!=='linux')return;
   const result=await probeReviewerCalibration(async()=>response('PASS'));
-  assert.deepEqual(result,{passed:false,reason:'wrong-verdict'});
+  assert.deepEqual(result,{passed:false,reason:'wrong-verdict',caseNumber:1});
 });
 test('unreachable model returns safe failure status',async()=>{
   if(process.platform!=='linux')return;
   const result=await probeReviewerCalibration(async()=>{throw Error('SECRET: /home/user')});
-  assert.deepEqual(result,{passed:false,reason:'invalid-response'});
+  assert.deepEqual(result,{passed:false,reason:'invalid-response',caseNumber:1});
   assert.doesNotMatch(JSON.stringify(result),/SECRET|home/);
+});
+
+test('HTTP 404 is reported as unavailable without exposing response text',async()=>{
+  if(process.platform!=='linux')return;
+  const result=await probeReviewerCalibration(async()=>new Response('SECRET',{status:404}));
+  assert.deepEqual(result,{passed:false,reason:'model-unavailable',caseNumber:1});
+  assert.doesNotMatch(JSON.stringify(result),/SECRET/);
+});
+test('HTTP 500 has distinct transport failure status',async()=>{
+  if(process.platform!=='linux')return;
+  const result=await probeReviewerCalibration(async()=>new Response('SECRET',{status:500}));
+  assert.deepEqual(result,{passed:false,reason:'transport-failed',caseNumber:1});
+});
+test('malformed successful model reply is distinguished from network failure',async()=>{
+  if(process.platform!=='linux')return;
+  const result=await probeReviewerCalibration(async()=>new Response('{not json',{status:200}));
+  assert.deepEqual(result,{passed:false,reason:'invalid-response',caseNumber:1});
 });
