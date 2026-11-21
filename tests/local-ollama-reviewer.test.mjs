@@ -4,7 +4,7 @@ import {createLocalOllamaReviewerChannel} from '../src/core/local-ollama-reviewe
 const req={protocol:'autodev-review-gateway-v1',kind:'review',
   requestId:'a'.repeat(32),issueNumber:13,fingerprint:'b'.repeat(64),
   prompt:'Review these changes without tools'};
-const wrap=(message,done=true)=>new Response(JSON.stringify({done,message}),{status:200});
+const wrap=(message,done=true)=>new Response(JSON.stringify({model:'qwen2.5-coder:3b',done,message}),{status:200});
 const ok={role:'assistant',content:'AUTODEV_JSON_BEGIN\n{"verdict":"FAIL","blockers":1,"feedback":"Missing tests"}\nAUTODEV_JSON_END'};
 const cfg={model:'qwen2.5-coder:3b',timeoutMs:150000,maxCompletionTokens:512};
 test('sends fixed loopback-only tool-free request and exact bound response',async()=>{
@@ -57,4 +57,10 @@ test('abort avoids network, HTTP error message excludes response contents',async
   assert.equal(count,0);
   const bad=createLocalOllamaReviewerChannel(cfg,async()=>new Response('secret',{status:503}));
   await assert.rejects(bad(req),e=>e.message.includes('HTTP 503')&&!e.message.includes('secret'));
+});
+
+test('different local model identity cannot impersonate configured reviewer',async()=>{
+  const channel=createLocalOllamaReviewerChannel(cfg,async()=>
+    new Response(JSON.stringify({model:'other-model:latest',done:true,message:ok}),{status:200}));
+  await assert.rejects(channel(req),/unfinished/);
 });
