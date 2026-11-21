@@ -103,6 +103,13 @@ try {
   await fixture(page);
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
+  // Real local inference is self-contained: its button MUST be available
+  // without re-clicking all seven independent sandbox readiness probes.
+  const localModelButton=page.getByRole('button',{name:'Lokales Review-Modell testen',exact:true});
+  assert.equal(await localModelButton.isVisible(),true);
+  assert.equal(await localModelButton.isEnabled(),true);
+  await click(page,'Lokales Review-Modell testen');
+  await page.getByText('Ollama-Modell antwortet strukturiert',{exact:false}).waitFor();
   await fullChain(page);
   for(const sentence of [
     'Schreibschutz und Start in Testumgebung bestätigt',
