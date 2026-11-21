@@ -467,7 +467,7 @@ function App(): React.JSX.Element {
                 <div className="button-group"><button disabled={savingRoleModels||!draftRoleModels.planner||!draftRoleModels.builder||!draftRoleModels.reviewer}
                   onClick={()=>void saveRoleModels()}>{savingRoleModels?'Speichere …':'Rollenzuordnung speichern'}</button></div>
                 {roleModelsMessage && <p role="status">{roleModelsMessage}</p>}
-              </div>
+              </div>}
             </div>}
 
             <div className="provider-heading"><div><h3>Lokale Provider</h3><p>Prüft nur Kilo CLI und GitHub-Anmeldung – keine Modellanfrage, keine Dateiänderungen.</p></div>
