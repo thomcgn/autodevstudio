@@ -34,6 +34,9 @@ export function createIsolatedQualityLaunch(projectPath:string, script:string):I
     '--setenv','GIT_TERMINAL_PROMPT','0',
     '--tmpfs','/',
     '--dir','/usr','--ro-bind','/usr','/usr','--dev','/dev',
+    // Node resolves its executable through /proc/self/exe. This procfs belongs
+    // to the PRIVATE PID namespace, not to the host; never bind host /proc.
+    '--proc','/proc',
   ];
   for(const name of ['/bin','/lib','/lib64']){
     let stat:fs.Stats;
