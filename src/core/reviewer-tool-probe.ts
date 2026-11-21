@@ -27,6 +27,6 @@ export async function probeReadonlyReviewerTool(
       return { supported: true, passed: false, reason: 'tool-failed', detail: null };
     return { supported: true, passed: true, reason: 'passed', detail: null };
   } catch {
-    return { supported: true, passed: false, reason: 'tool-failed' };
+    return { supported: true, passed: false, reason: 'tool-failed', detail: null };
   }
 }
