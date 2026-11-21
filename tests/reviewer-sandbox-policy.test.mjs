@@ -21,6 +21,18 @@ test('review tool launch has private root, project-only readonly access and no n
   assert.ok(launch.args.includes('--unshare-net'));
   assert.ok(launch.args.includes('--unshare-ipc'));
   assert.ok(launch.args.includes('--clearenv'));
+  assert.ok(launch.args.includes('--dev'));
+  assert.equal(launch.args[launch.args.indexOf('--dev')+1],'/dev');
+  assert.ok(launch.args.includes('GIT_OPTIONAL_LOCKS'));
+  for(const name of ['/bin','/lib','/lib64']) {
+    if (!fs.existsSync(name)) continue;
+    const index=launch.args.indexOf(name);
+    if (fs.lstatSync(name).isSymbolicLink()) {
+      assert.ok(index > 0);
+      assert.equal(launch.args[index-2], '--symlink');
+      assert.equal(launch.args[index-1], fs.readlinkSync(name));
+    }
+  }
   assert.deepEqual(launch.args.slice(-6),['--','/usr/bin/git','--no-pager','status','--porcelain=v1','--untracked-files=all']);
   const tmpfsIndex=launch.args.indexOf('--tmpfs');
   assert.equal(launch.args[tmpfsIndex+1],'/');

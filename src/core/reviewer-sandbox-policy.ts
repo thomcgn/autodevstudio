@@ -64,15 +64,37 @@ export function createReadonlyReviewerToolLaunch(spec: ReviewerSandboxSpec): Rev
     '--setenv','PATH','/usr/bin',
     '--setenv','HOME','/tmp',
     '--setenv','TMPDIR','/tmp',
+    '--setenv','GIT_CONFIG_NOSYSTEM','1',
+    '--setenv','GIT_CONFIG_GLOBAL','/dev/null',
+    '--setenv','GIT_OPTIONAL_LOCKS','0',
+    '--setenv','GIT_TERMINAL_PROMPT','0',
+    '--setenv','GIT_NO_REPLACE_OBJECTS','1',
     '--tmpfs','/',
     '--dir','/usr',
     '--ro-bind','/usr','/usr',
+    '--dev','/dev',
   ];
-  // The /usr-merged layout differs across distributions. Expose only
-  // runtime library/executable paths, and never bind the host root.
+  // On Arch (and other usr-merged distros) /bin, /lib and /lib64 are
+  // symlinks into /usr. Recreate those links in the private root instead
+  // of trying to bind-mount onto symlinks that resolve within /usr.
+  // Real directories on non-usr-merged systems are mounted read-only.
   for (const name of ['/bin','/lib','/lib64']) {
-    if (fs.existsSync(name)) {
-      args.push('--ro-bind',name,name);
+    let stat: fs.Stats;
+    try { stat = fs.lstatSync(name); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+    if (stat.isSymbolicLink()) {
+      const target = fs.readlinkSync(name);
+      if (!target.startsWith('usr/') || !/^usr\/(?:bin|lib|lib64)$/.test(target)) {
+        throw new Error('Unexpected host library symlink: cannot construct safe sandbox');
+      }
+      args.push('--symlink', target, name);
+    } else if (stat.isDirectory()) {
+      args.push('--ro-bind', name, name);
+    } else {
+      throw new Error('Unexpected host runtime directory type');
     }
   }
   args.push('--dir','/project','--ro-bind',root,'/project',

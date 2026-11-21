@@ -59,3 +59,17 @@ test('abort before start does not execute reviewer tools',async t=>{
   );
   assert.equal(started,false);
 });
+
+test('runner redacts known Bubblewrap mount failures into safe reason code',async t=>{
+  if(process.platform!=='linux')return;
+  const projectPath=repo(t);
+  try {
+    await runReadonlyReviewerTool({projectPath,binary:'/usr/bin/git',args:['--no-pager','status','--porcelain=v1','--untracked-files=all']},undefined,async()=>{
+      const e=new Error('secret private path');e.code=1;e.stderr='bwrap: Can\'t create file /bin: Read-only file system';throw e;
+    });
+    assert.fail('must reject');
+  } catch(error) {
+    assert.equal(error.reason,'mountpoint-failed');
+    assert.ok(!error.message.includes('secret'));
+  }
+});

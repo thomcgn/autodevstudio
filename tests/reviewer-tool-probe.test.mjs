@@ -28,7 +28,7 @@ test('isolated Git smoke test is strictly read-only and does not leak file names
   });
   if(process.platform==='linux'){
     assert.equal(runs,1);
-    assert.deepEqual(result,{supported:true,passed:true,reason:'passed'});
+    assert.deepEqual(result,{supported:true,passed:true,reason:'passed',detail:null});
     assert.ok(!JSON.stringify(result).includes('personal-document.txt'));
   } else {
     assert.equal(runs,0);
@@ -40,7 +40,20 @@ test('failed isolated tool probe does not expose sensitive process output',async
   const root=fixture(t);
   const result=await probeReadonlyReviewerTool(root,async()=>{throw new Error('token private home');});
   if(process.platform==='linux'){
-    assert.deepEqual(result,{supported:true,passed:false,reason:'tool-failed'});
+    assert.deepEqual(result,{supported:true,passed:false,reason:'tool-failed',detail:'sandbox-launch-failed'});
     assert.ok(!JSON.stringify(result).includes('private'));
   }
+});
+
+test('runtime failure category is preserved without raw subprocess diagnostics', async t => {
+  const root=fixture(t);
+  if(process.platform!=='linux') return;
+  const result=await probeReadonlyReviewerTool(root,async()=>{
+    const error=new Error('sensitive /home/user/secret');
+    error.code=1;
+    error.stderr='bwrap: Can\'t create file /bin: Read-only file system';
+    throw error;
+  });
+  assert.equal(result.detail,'mountpoint-failed');
+  assert.ok(!JSON.stringify(result).includes('/home/user'));
 });
