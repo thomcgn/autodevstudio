@@ -31,6 +31,7 @@ import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
+import {createKiloLearningModel} from '../core/kilo-learning-gateway';
 import {readCompletePublicHistory} from '../core/history-index-cache';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
@@ -344,8 +345,14 @@ app.whenReady().then(() => {
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
   });
-  ipcMain.handle('learning:deep-generate',async (_event,input:unknown) => {
+  ipcMain.handle('learning:deep-generate',async (_event,input:unknown,provider:unknown='ollama',consent:unknown=false) => {
     if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
+    if(provider!=='ollama'&&provider!=='kilo')throw Error('Invalid learning provider');
+    if(provider==='kilo'&&consent!==true)
+      throw Error('Cloud analysis requires explicit source-upload consent');
+    const modelName=provider==='kilo'?'kilo-auto/free':'qwen2.5-coder:3b';
+    const snapshotMode=provider==='kilo'?'deep-kilo':'deep';
+    const cloudModel=provider==='kilo'?createKiloLearningModel():undefined;
     if(learningController)throw Error('Learning analysis is already active');
     const controller=new AbortController();
     learningController=controller;
@@ -360,13 +367,13 @@ app.whenReady().then(() => {
             completed:commitsSeen,total:0,
             current:'Git-Historie: '+commitsSeen+' Commits · Seite '+page+
               (finished?' · vollständig indexiert':' · lade weitere Seiten'),
-            etaSeconds:null,preview:'',model:'qwen2.5-coder:3b',
+            etaSeconds:null,preview:'',model:modelName,
           });
         },
       });
-      const prior=loadHistoricalBook(app.getPath('userData'),index.repository,'deep');
+      const prior=loadHistoricalBook(app.getPath('userData'),index.repository,snapshotMode);
       const compatible=prior?.head===index.head&&
-        prior.deepSummary?.model==='qwen2.5-coder:3b';
+        prior.deepSummary?.model===modelName;
       let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
       let filesAnalyzed=compatible?(prior?.deepSummary?.filesAnalyzed??0):0;
       let bookMarkdown=compatible?(prior?.bookMarkdown??''):'';
@@ -390,10 +397,10 @@ app.whenReady().then(() => {
         deepCursor:sourceComplete?undefined:{
           nextOffset:offset,filesTotal:summary?.filesTotal??0,
           filesAnalyzed,filesSkipped:summary?.filesSkipped??0,
-          model:'qwen2.5-coder:3b',
+          model:modelName,
         },
         historyCursor,
-      },'deep');
+      },snapshotMode);
       while(!sourceComplete){
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const batchOffset=offset;
@@ -402,6 +409,7 @@ app.whenReady().then(() => {
             ...event,current:'Quelldateien ab '+(batchOffset+1)+' · '+event.current,
           }),controller.signal,{
             offset,chapterOffset:chapterNumber(),
+            ...(cloudModel?{model:cloudModel,preflight:async()=>{},modelName}:{}),
             history:index.commits.map(commit=>({
               sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
             })),
@@ -437,10 +445,11 @@ app.whenReady().then(() => {
             ?Math.round((Date.now()-historyStartedAt)/(i-historyStartIndex)*
               (index.commits.length-i)/1000):null,
           preview:reportsMarkdown.slice(-2500),
-          model:'qwen2.5-coder:3b',
+          model:modelName,
         });
         const history=await analyzeHistoricalCommitWithOllama(
-          index.repository,commit.sha,chapterNumber()+1,controller.signal);
+          index.repository,commit.sha,chapterNumber()+1,controller.signal,
+          cloudModel?{model:cloudModel}:{});
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         if(history.bookMarkdown)
           bookMarkdown+='\n\n'+history.bookMarkdown;
@@ -451,20 +460,20 @@ app.whenReady().then(() => {
         if(!history.complete)incomplete++;
         historyNext=i+1;
         persist({nextIndex:historyNext,total:index.commits.length,
-          chapters:historyChapters,incomplete,model:'qwen2.5-coder:3b'});
+          chapters:historyChapters,incomplete,model:modelName});
       }
-      const final=loadHistoricalBook(app.getPath('userData'),index.repository,'deep');
+      const final=loadHistoricalBook(app.getPath('userData'),index.repository,snapshotMode);
       if(!final||final.head!==index.head)throw Error('Final learning snapshot is unavailable');
       send('learning:progress',{
         runId,repository:index.repository,phase:'finished',startedAt,
         completed:index.commits.length,total:index.commits.length,
         current:'Historie abgeschlossen · '+incomplete+' unvollständige Commit-Belege',
-        etaSeconds:0,preview:reportsMarkdown.slice(-2500),model:'qwen2.5-coder:3b',
+        etaSeconds:0,preview:reportsMarkdown.slice(-2500),model:modelName,
       });
       return {repository:final.repository,head:final.head,lessons:filesAnalyzed,
         bookMarkdown:final.bookMarkdown,solutionsMarkdown:final.solutionsMarkdown,
         reportsMarkdown:final.reportsMarkdown,deepAnalysis:{
-          model:'qwen2.5-coder:3b',filesAnalyzed,
+          model:modelName,filesAnalyzed,
           filesSkipped:summary?.filesSkipped??0,
           complete:(summary?.complete??false)&&incomplete===0,
         }};
