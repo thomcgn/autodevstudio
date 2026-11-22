@@ -73,10 +73,12 @@ function getPaths(value:unknown):{paths:readonly string[];complete:boolean}{
   for(const item of commit.files){
     const file=record(item);
     if(file&&typeof file.filename==='string'&&file.filename.length<250&&
+      /^[A-Za-z0-9_./ -]+$/.test(file.filename)&&
       !file.filename.startsWith('/')&&!file.filename.includes('..')&&
       !file.filename.includes('\\'))paths.push(file.filename);
   }
-  return {paths:[...new Set(paths)].slice(0,60),complete:commit.files.length<100&&paths.length<=60};
+  return {paths:[...new Set(paths)].slice(0,60),complete:commit.files.length<100&&
+    paths.length===commit.files.length&&paths.length<=60};
 }
 /** Source discovery only. Never infer motives, quality PASS or a lesson from a commit message. */
 export async function indexPublicRepositoryHistory(

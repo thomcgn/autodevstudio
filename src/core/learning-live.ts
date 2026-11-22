@@ -24,9 +24,18 @@ export interface VerifiedIssueEvidence {
   reviewPassed:true;qualityPassed:true;
 }
 function isEvidence(e:VerifiedIssueEvidence):boolean {
- return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(e.repository)&&SHA.test(e.commitSha)&&
-  Number.isSafeInteger(e.issueNumber)&&e.issueNumber>0&&e.reviewPassed===true&&
-  e.qualityPassed===true&&e.draftUrl.startsWith('https://github.com/'+e.repository+'/pull/');
+ if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(e.repository)||!SHA.test(e.commitSha)||
+   !Number.isSafeInteger(e.issueNumber)||e.issueNumber<1||
+   e.reviewPassed!==true||e.qualityPassed!==true)return false;
+ try{
+   const url=new URL(e.draftUrl);
+   const segments=url.pathname.split('/');
+   return url.protocol==='https:'&&url.hostname==='github.com'&&
+     !url.username&&!url.password&&!url.port&&!url.search&&!url.hash&&
+     segments.length===5&&segments[0]===''&&
+     segments[1]+'/'+segments[2]===e.repository&&segments[3]==='pull'&&
+     /^[1-9][0-9]*$/.test(segments[4]);
+ }catch{return false;}
 }
 /** Pure orchestration from already verified local commit. No project writes.
  * This step must run only after the official publisher has returned a confirmed Draft PR.

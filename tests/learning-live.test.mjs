@@ -45,3 +45,16 @@ test('unsupported or unsafe changed files are ignored instead of executed',async
  assert.equal(result.recorded,false);
  assert.equal(result.reason,'unsupported-repository');
 });
+
+test('forged Draft PR URLs never become verified learning evidence',async()=>{
+ for(const bad of [
+  'https://github.com/example/studio/pull/17?token=abc',
+  'https://github.com/example/studio/pull/17/extra',
+  'https://github.com/example/studio/pull/17#other',
+  'https://github.com/other/studio/pull/17',
+ ]) {
+  const result=await createVerifiedIssueLearning('/not/accessed','/not/accessed',
+    {...evidence,draftUrl:bad},async()=>{throw Error('Git must not run');});
+  assert.equal(result.recorded,false);
+ }
+});
