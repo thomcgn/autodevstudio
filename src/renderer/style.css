@@ -495,3 +495,22 @@ html,body,#root{max-width:100%;overflow:hidden}
 .issue-stack-readiness strong{font-size:12px}
 .issue-stack-readiness p,.issue-stack-readiness details{font-size:12px;margin:6px 0;line-height:1.5}
 .issue-stack-readiness summary{cursor:pointer;font-weight:650}
+
+/* Own GitHub repositories: compact, readable and without nested scrolling. */
+.learning-owned{display:flex;flex-direction:column;gap:9px;border:1px solid #40516c;
+  padding:12px;border-radius:10px;background:#15213a;min-width:0}
+.learning-owned-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.learning-owned-heading h3{font-size:14px;margin:0}
+.learning-owned p{font-size:12px;line-height:1.4;margin:0;overflow-wrap:anywhere}
+.learning-owned input{min-width:0;padding:10px;border-radius:7px;background:#101827;
+  border:1px solid #61718e;color:#f1f6ff}
+.learning-owned-list{display:flex;flex-direction:column;gap:6px;min-width:0}
+.learning-owned-item{border:1px solid #40536f;border-radius:8px;padding:9px 11px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;min-width:0}
+.learning-owned-description{flex:1 1 210px;min-width:0;overflow-wrap:anywhere;
+  display:flex;flex-direction:column;gap:4px}
+.learning-owned-description strong{font-size:12px}
+.learning-owned-description small{font-size:11px;color:#afc5e0}
+.learning-owned-item button{flex:none}
+@media(max-width:850px){.learning-owned{padding:9px}
+  .learning-owned-item button{width:100%}}
