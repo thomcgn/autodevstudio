@@ -62,6 +62,9 @@ function App(): React.JSX.Element {
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [simulating, setSimulating] = useState<number | null>(null);
+  const [codingIssue, setCodingIssue] = useState<number | null>(null);
+  const [codeResult, setCodeResult] = useState<IssueCodeResult | null>(null);
+  const [codeError, setCodeError] = useState('');
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [issuesError, setIssuesError] = useState('');
   const [historyError, setHistoryError] = useState('');
@@ -125,6 +128,8 @@ function App(): React.JSX.Element {
     setHistory([]);
     setIssues([]);
     setIssuesError('');
+    setCodeResult(null);
+    setCodeError('');
     setGitStatus(null);
     setGitError('');
     setDiagnostics(null);
@@ -190,6 +195,22 @@ function App(): React.JSX.Element {
     try { setIssues(await window.studio.issues(selected)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const convertIssueToCode = async (issueNumber:number):Promise<void> => {
+    if(!selected||codingIssue!==null||simulating!==null)return;
+    setCodingIssue(issueNumber);
+    setCodeResult(null);
+    setCodeError('');
+    try{
+      const result=await window.studio.issueToCode(selected,issueNumber);
+      setCodeResult(result);
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+      void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
+    }catch{
+      setCodeError('Codegenerierung abgebrochen oder nicht sicher möglich. Git-Zustand und Studio-Checkpoint prüfen, bevor ein neuer Versuch startet.');
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+    }finally{setCodingIssue(null);}
   };
 
   const simulate = async (issueNumber: number): Promise<void> => {
@@ -657,18 +678,34 @@ function App(): React.JSX.Element {
         </div>}
 
         {tab === 'issues' && <div className="view issue-view">
-          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Projektunabhängig aus dem lokalen Git-Repository gelesen. Noch keine automatische Bearbeitung.</p></div>
+          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Erster echter Codepfad: vorhandene Quelldatei mit lokalem Ollama ändern, eigener Issue-Branch, anschließend Review-Pause. Ohne Commit oder Push.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
           {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ? 'ready' : 'needs-work'}`}><strong>{gitStatus.canExecute ? 'Git-Bereitschaft: geprüft' : 'Git: Vorbereitung erforderlich'}</strong><span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}{gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Sauberer Feature-Branch'}</span></div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
+          {codeError && <div className="error" role="alert">{codeError}</div>}
+          {codeResult && <div className="git-readiness ready" role="status">
+            <strong>Issue #{codeResult.issueNumber} wurde zu echtem Code!</strong>
+            <span>Branch: {codeResult.branch} · Änderung: {codeResult.changedFile} · Checkpoint: Review (Revision {codeResult.checkpointRevision})</span>
+            <small>Kein Commit, kein Push und kein PR. Nächster Schritt: isolierter Review und Quality Gates.</small>
+          </div>}
+          {codingIssue!==null && <div className="git-readiness" role="status">
+            <strong>Lokales Ollama arbeitet an Issue #{codingIssue} …</strong>
+            <span>Erst wird ein begrenzter Codevorschlag geprüft; anschließend wird ausschließlich auf einem neuen Issue-Branch geschrieben.</span>
+            <button type="button" className="quiet" onClick={()=>void window.studio.cancelIssueCode()}>Abbrechen</button>
+          </div>}
           {issuesLoading ? <div className="empty-state">Issues werden geladen …</div>
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
               : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
                   <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
-                  <div className="issue-actions"><button disabled={simulating !== null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
+                  <div className="issue-actions">
+                    <button type="button" disabled={codingIssue!==null||simulating!==null}
+                      onClick={()=>void convertIssueToCode(issue.number)}>
+                      {codingIssue===issue.number?'Erzeuge Code …':'Issue lokal in Code umwandeln'}
+                    </button>
+                    <button disabled={simulating !== null||codingIssue!==null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
                 </article>)}</div>}
-          <div className="agent-footnote">Die Simulation nutzt bereits den eigenständigen Studio-Workflow. Produktive Builder-/Reviewer-Adapter und die automatische Issue-Abwicklung werden nach zusätzlichen Sicherheitsprüfungen freigegeben.</div>
+          <div className="agent-footnote">Der lokale Issue→Code-Lauf kann eine bestehende TS/JS-Datei in einem neuen Git-Branch tatsächlich ändern. Er ist bewusst auf genau eine Datei begrenzt, benötigt ein sauberes Repository und erzeugt weder Commit noch PR. Der vollautomatische Kilo-Builder/Review/Quality/PR-Zyklus bleibt separat gesperrt.</div>
         </div>}
 
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}
