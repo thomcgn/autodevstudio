@@ -149,7 +149,7 @@ function createWindow(): void {
   const width=Math.max(640,Math.min(1160,workArea.width-24));
   const height=Math.max(400,Math.min(780,workArea.height-24));
   window = new BrowserWindow({ width, height, minWidth: 640, minHeight: 400,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     backgroundColor: '#111827', title: 'AutoDev Studio' });
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   else void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
