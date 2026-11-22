@@ -208,3 +208,33 @@ test('large real-shape Git history traverses 2005 commits without arbitrary end 
  assert.equal(visited.at(-1)[1],total);
  assert.equal(index.head,SHA);
 });
+
+test('large deep-analysis listing does not download duplicate commit details',async()=>{
+ const total=2105, pageSize=100;
+ let detailCalls=0,listingCalls=0;
+ const read=async endpoint=>{
+  if(endpoint==='repos/example/studio')return {private:false,
+    full_name:'example/studio',size:2000000,default_branch:'main'};
+  if(endpoint==='repos/example/studio/branches/main')return {commit:{sha:SHA}};
+  if(endpoint.includes('/commits?')){
+   listingCalls++;
+   const url=new URL('https://api.github.com/'+endpoint);
+   const page=Number(url.searchParams.get('page')??1);
+   return Array.from({length:Math.max(0,Math.min(pageSize,total-(page-1)*pageSize))},
+    (_,i)=>({sha:((page-1)*pageSize+i+1).toString(16).padStart(40,'0'),
+      commit:{message:'large history read'}}));
+  }
+  if(/\/commits\/[a-f0-9]{40}$/.test(endpoint)){
+   detailCalls++;
+   return {files:[]};
+  }
+  throw Error('Unexpected endpoint '+endpoint);
+ };
+ const result=await walkPublicRepositoryHistory('example/studio',{
+  read,pageSize,includeChangedPaths:false,
+ });
+ assert.equal(result.commits.length,total);
+ assert.equal(listingCalls,22);
+ assert.equal(detailCalls,0);
+ assert.ok(result.commits.every(commit=>commit.pathsComplete===false));
+});
