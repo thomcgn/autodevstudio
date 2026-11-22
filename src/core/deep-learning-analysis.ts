@@ -198,7 +198,7 @@ export async function analyzeSourceWithOllama(
  const tree=object(await read('repos/'+repository+'/git/trees/'+head+'?recursive=1'));
  if(!tree||tree.truncated!==false||!Array.isArray(tree.tree))
   throw Error('GitHub tree incomplete: cannot claim full analysis');
- const all=tree.tree.map(validEntry).filter(x=>x.type==='blob');
+ const all=tree.tree.filter(raw=>object(raw)?.type==='blob').map(validEntry);
  const eligibleFiles=all.filter(eligible).sort((a,b)=>a.path.localeCompare(b.path));
  if(eligibleFiles.length===0)throw Error('No suitable code files');
  if(eligibleFiles.length>FILE_LIMIT)throw Error('Repository has more than '+FILE_LIMIT+
