@@ -50,7 +50,9 @@ export function saveHistoricalBook(
  const root=rootFor(base,book.repository);
  fs.mkdirSync(root,{recursive:true,mode:0o700});
  const digest=createHash('sha256').update(book.bookMarkdown).update(book.solutionsMarkdown)
-  .update(book.reportsMarkdown).update(JSON.stringify(book.pagination??null)).digest('hex').slice(0,12);
+  .update(book.reportsMarkdown).update(JSON.stringify(book.pagination??null))
+  .update(JSON.stringify(book.deepCursor??null)).update(JSON.stringify(book.deepSummary??null))
+  .update(JSON.stringify(book.historyCursor??null)).digest('hex').slice(0,12);
  const snapshot=book.head+'--'+variant+'-'+digest;
  const target=path.join(root,snapshot);
  if(fs.existsSync(target)){
