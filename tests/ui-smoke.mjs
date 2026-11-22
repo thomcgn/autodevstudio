@@ -119,6 +119,7 @@ async function fixture(page){
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
       issues:()=>respond('issues'),issueQueue:()=>respond('issueQueue'),
+      installIssueLabels:async()=>({repository:'example/studio',protectedBranch:'main',created:['status:ready'],alreadyPresent:[],total:16}),
       publicRepoHistory:()=>respond('publicRepoHistory'),
       generateLearningBook:()=>respond('learningBook'),
       loadLearningBook:()=>respond('learningBook'),
@@ -219,6 +220,10 @@ try {
     delete window.__uiSmoke.overrides.issues;
     delete window.__uiSmoke.overrides.issueQueue;
   });
+  await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
+  await page.getByRole('button',{name:'Fehlende GitHub-Labels einrichten'}).waitFor();
+  await page.getByRole('button',{name:'Fehlende GitHub-Labels einrichten'}).click();
+  await page.getByText('1 fehlende Labels in example/studio angelegt.',{exact:false}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch',exact:true}).click();
   await page.getByPlaceholder('owner/repo oder https://github.com/owner/repo').fill('example/studio');
   await page.getByRole('button',{name:'Historie lesen',exact:true}).click();
