@@ -10,7 +10,7 @@ const FILE_LIMIT=600;
 const GROUP_SIZE=4;
 const FILE_BYTES=64_000;
 const CHUNK_CHARS=5500;
-export type LearningPhase='discovery'|'loading'|'architecture'|'model'|'writing'|'finished';
+export type LearningPhase='discovery'|'loading'|'architecture'|'model'|'history'|'writing'|'finished';
 export interface DeepLearningProgress {
  runId:string;repository:string;phase:LearningPhase;startedAt:number;
  completed:number;total:number;current:string;etaSeconds:number|null;
