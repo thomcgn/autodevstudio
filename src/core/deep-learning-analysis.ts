@@ -185,7 +185,8 @@ const SYSTEM=[
 export async function analyzeSourceWithOllama(
  input:string,head:string,runId:string,startedAt:number,
  emit:(event:DeepLearningProgress)=>void,signal:AbortSignal,
- deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>}={},
+ deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
+  history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[]}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
@@ -232,10 +233,18 @@ export async function analyzeSourceWithOllama(
  if(signal.aborted)throw Error('Learning analysis cancelled');
  const overviewFiles=sources.slice(0,8);
  const allPaths=sources.map(f=>f.path).join('\n');
+ const sourceHistory=(deps.history??[]).filter(h=>SHA.test(h.sha)&&
+   typeof h.title==='string'&&Array.isArray(h.changedPaths))
+   .slice(0,40);
+ const historyText=sourceHistory.map(h=>
+  h.sha.slice(0,12)+' '+h.title.replace(/[\r\n\t<>]/g,' ').slice(0,240)+
+  ' [Dateien: '+h.changedPaths.slice(0,8).join(', ')+']')
+  .join('\n').slice(0,6500);
  send('architecture',0,total,'Ollama erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
  const architecturePrompt='Gib die Gesamtarchitektur, die wichtigsten Module, Ein-/Ausgaben,'+
   ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
   'Nutze das folgende vollständige Verzeichnis analysierter Quelldateien:\n'+allPaths+
+  '\nDokumentierte Änderungsschritte aus Git (keine Gedanken der Entwickler):\n'+historyText+
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
    'DATEI '+f.path+'\n'+f.content.slice(0,2800)).join('\n\n');
  const architectureStarted=Date.now();
@@ -256,7 +265,10 @@ export async function analyzeSourceWithOllama(
   const prompt='Repository '+repository+' Commit '+head+'\n'+
    'ARCHITEKTURKONTEXT AUS DER VORHERIGEN ANALYSE:\n'+
    overview.implementation.slice(0,1300)+'\n'+overview.reasoning.slice(0,1000)+
-   '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,4500)+'\n'+
+   '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,4500)+
+   '\nGit-Nachweise mit Bezug zu dieser Codegruppe:\n'+sourceHistory
+    .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
+    .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
   const response=await model(SYSTEM,prompt,signal);
   const chapter=renderLesson(parseLesson(response),part,n+1);
@@ -273,6 +285,7 @@ export async function analyzeSourceWithOllama(
   'Abgedeckte Quelldateien: '+sources.length+' in '+chunks.length+' Codeabschnitten; ausgelassene Blob-Dateien: '+(all.length-sources.length),
   'Eine vollständige Abdeckung sämtlicher Dateiformate ist nur bei null ausgelassenen Dateien gegeben.',
   'Architekturgründe sind technische Einordnungen, nicht nachgewiesene Entwicklergedanken.',
+  'Dokumentierte Änderungsschritte als ergänzende Quellen: '+sourceHistory.length,
   '','## Inhaltsverzeichnis',
   ...chapters.map((_,i)=>(i+1)+'. Kapitel '+(i+1)),''];
  const result:DeepLearningResult={
