@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
@@ -22,6 +22,10 @@ function App(): React.JSX.Element {
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [learningInput, setLearningInput] = useState('');
   const [learningHistory, setLearningHistory] = useState<PublicHistoryIndex | null>(null);
+  const [learningBook, setLearningBook] = useState<LearningBookPreview|null>(null);
+  const [learningGenerating,setLearningGenerating] = useState(false);
+  const [learningExporting,setLearningExporting] = useState(false);
+  const [learningMessage,setLearningMessage] = useState('');
   const [learningLoading, setLearningLoading] = useState(false);
   const [learningError, setLearningError] = useState('');
   const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
@@ -238,6 +242,29 @@ function App(): React.JSX.Element {
     }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const generateLearning = async ():Promise<void>=>{
+    if(learningGenerating||!learningInput.trim())return;
+    setLearningGenerating(true);setLearningError('');setLearningMessage('');
+    try{
+      const result=await window.studio.generateLearningBook(learningInput.trim());
+      setLearningBook(result);
+      setLearningMessage(result.lessons===0
+        ?'Kein unterstütztes Konzept erkannt. Es wurden keine Inhalte erfunden.'
+        :'Lehrbuch im lokalen Arbeitsbereich gespeichert – '+result.lessons+' Themenkapitel.');
+    }catch{
+      setLearningError('Lehrbuch konnte nicht erzeugt werden. Quellenzugriff und Netzwerk prüfen.');
+    }finally{setLearningGenerating(false);}
+  };
+  const exportLearning=async(kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<void>=>{
+    if(!learningBook||learningExporting)return;
+    setLearningExporting(true);setLearningError('');
+    try{
+      const done=await window.studio.exportLearningBook(learningBook.repository,kind,format);
+      setLearningMessage(done.exported?'Export erfolgreich gespeichert.':'Export abgebrochen.');
+    }catch{setLearningError('Export fehlgeschlagen. Zielverzeichnis und PDF-Drucker prüfen.');}
+    finally{setLearningExporting(false);}
   };
 
   const inspectLearningHistory = async ():Promise<void> => {
@@ -971,7 +998,7 @@ function App(): React.JSX.Element {
             <label htmlFor="learning-repo">Öffentliches GitHub-Repository</label>
             <div className="learning-source-controls">
               <input id="learning-repo" value={learningInput} onChange={event=>{
-                setLearningInput(event.target.value);setLearningHistory(null);setLearningError('');
+                setLearningInput(event.target.value);setLearningHistory(null);setLearningBook(null);setLearningError('');
               }} placeholder="owner/repo oder https://github.com/owner/repo" autoComplete="off" />
               <button type="submit" disabled={learningLoading||!learningInput.trim()}>
                 {learningLoading?'GitHub-Historie wird geprüft …':'Historie lesen'}
@@ -979,6 +1006,29 @@ function App(): React.JSX.Element {
             </div>
             <p>Nur lesen · maximal 12 Commits · keine Downloads oder Codeausführung im Fremdprojekt</p>
           </form>
+          <div className="learning-source-controls">
+            <button type="button" disabled={learningGenerating||!learningInput.trim()}
+              onClick={()=>void generateLearning()}>
+              {learningGenerating?'Lehrbuch wird erstellt …':'Lehrbuch erstellen'}
+            </button>
+            {learningBook&&<span role="status">{learningBook.lessons} Themen · Stand {learningBook.head.slice(0,12)}</span>}
+          </div>
+          {learningMessage&&<p role="status">{learningMessage}</p>}
+          {learningBook&&<section className="learning-results" aria-label="Lehrbuch lesen und exportieren">
+            <h3>Dein Lehrbuch – {learningBook.repository}</h3>
+            <p>Automatisch erkannte Konzepte mit eigenen Übungsbeispielen.
+              Jede Lektion verlinkt auf ihre Git-Quelle; unbekannte Motive werden nicht behauptet.</p>
+            <div className="learning-export-actions">
+              <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','pdf')}>Lehrbuch als PDF</button>
+              <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','md')}>Markdown</button>
+              <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('solutions','pdf')}>Lösungen als PDF</button>
+              <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('solutions','md')}>Lösungen als MD</button>
+              <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('reports','md')}>Entwicklungsreports als MD</button>
+            </div>
+            <details><summary>Lehrbuch-Inhalt anzeigen</summary>
+              <pre className="learning-preview">{learningBook.bookMarkdown}</pre>
+            </details>
+          </section>}
           {learningError && <div className="error" role="alert">{learningError}</div>}
           {learningHistory && <section className="learning-results" aria-label="Historische Commit-Analyse">
             <h3>{learningHistory.repository}</h3>
