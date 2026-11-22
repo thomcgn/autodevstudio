@@ -8,6 +8,8 @@ import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
 import { implementIssueLocally } from '../core/local-issue-to-code';
+import { runIssueToDraftPr } from '../core/issue-draft-orchestrator';
+import { loadCoreCheckpoint } from '../core/checkpoint-store';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
@@ -310,6 +312,58 @@ app.whenReady().then(() => {
     return listIssues(project.path);
   });
   ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
+  ipcMain.handle('core:issue-auto-draft', async (_event,id:string,issueNumber:number) => {
+    if(active||localCodeController||publishingDraftPr)
+      throw Error('Another Studio run is active');
+    if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
+      throw Error('Invalid automated issue request');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)
+      throw Error('Not a Git repository');
+    // Reserve this process immediately, before any asynchronous gh/catalog call.
+    const controller=new AbortController();
+    localCodeController=controller;
+    try{
+      const issues=await listIssues(project.path);
+      const issue=issues.find(item=>item.number===issueNumber);
+      if(!issue)throw Error('Issue is not open or no longer available');
+      const base=app.getPath('userData');
+      const cp=loadCoreCheckpoint(base,project.path);
+      if(cp && cp.issueNumber!==issue.number)
+        throw Error('Another issue has a pending checkpoint');
+      if(!cp){
+        const local=await probeOllamaReadiness();
+        if(!local.ready)throw Error('Local builder unavailable');
+      }
+      const scripts=selectSafeQualityScripts(project.path);
+      const roles=loadKiloRoles(base,id);
+      const catalog=await fetchKiloFreeModels();
+      const quota=new FreeQuotaGuard(base);
+      // The local Qwen Builder is the ACTUAL author; Qwen never reviews itself.
+      const transport=createAttestedProjectReviewerTransport({
+        userData:base,projectId:id,
+        roles:{planner:roles?.planner??'',builder:'qwen2.5-coder:3b',
+          reviewer:roles?.reviewer??''},
+        freeCatalog:catalog.models,quota,
+        ollamaReadiness:{ready:false,reason:'unreachable'},
+      });
+      const canReview=async()=>{
+        if(!roles||!catalog.models.some(m=>m.id===roles.reviewer))
+          return {ready:false,reason:'Independent Kilo reviewer not configured as verified free'};
+        if(roles.reviewer==='qwen2.5-coder:3b')
+          return {ready:false,reason:'Self-review by local builder is forbidden'};
+        const permission=quota.decide('normal',true);
+        return permission.allowed
+          ?{ready:true,reason:'Verified independent reviewer available'}
+          :{ready:false,reason:'Independent review paused: provider-verified Kilo IP quota missing or exhausted'};
+      };
+      return await runIssueToDraftPr(base,project.path,{
+        number:issue.number,title:issue.title,body:issue.body,
+      },transport,scripts,controller.signal,undefined,undefined,canReview);
+    }finally{
+      if(localCodeController===controller)localCodeController=null;
+    }
+  });
   ipcMain.handle('core:issue-to-code', async (_event, id:string, issueNumber:number) => {
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
