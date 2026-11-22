@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
 import {explainIssueHold} from './issue-hold-explanation';
 
-type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
+type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues' | 'learning';
 type RunMode = 'status' | 'dry-run' | 'execute';
 interface ActiveRun { projectId: string; mode: string; startedAt: number }
 
@@ -20,6 +20,10 @@ function App(): React.JSX.Element {
   const [issueProgress, setIssueProgress] = useState<IssueProgressEvent | null>(null);
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
+  const [learningInput, setLearningInput] = useState('');
+  const [learningHistory, setLearningHistory] = useState<PublicHistoryIndex | null>(null);
+  const [learningLoading, setLearningLoading] = useState(false);
+  const [learningError, setLearningError] = useState('');
   const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
   const [branchProtection, setBranchProtection] = useState<BranchProtectionStatus | null>(null);
   const [diagnostics, setDiagnostics] = useState<ProviderDiagnostics | null>(null);
@@ -234,6 +238,22 @@ function App(): React.JSX.Element {
     }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const inspectLearningHistory = async ():Promise<void> => {
+    if(learningLoading || !learningInput.trim())return;
+    setLearningLoading(true);
+    setLearningError('');
+    setLearningHistory(null);
+    try{
+      const result=await window.studio.publicRepoHistory(learningInput.trim(),12);
+      setLearningHistory(result);
+    }catch(error){
+      const reason=error instanceof Error?error.message:'';
+      setLearningError(reason.startsWith('Public history:')
+        ?reason
+        :'Öffentliche GitHub-Historie konnte nicht gelesen werden. GitHub-Verbindung und Zugriff prüfen.');
+    }finally{setLearningLoading(false);}
   };
 
   const automateIssue = async (issueNumber:number):Promise<void> => {
@@ -607,6 +627,7 @@ function App(): React.JSX.Element {
           <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Live-Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
           <button className={tab === 'history' ? 'active' : ''} aria-current={tab === 'history' ? 'page' : undefined} onClick={() => setTab('history')}>Verlauf</button>
           <button className={tab === 'issues' ? 'active' : ''} aria-current={tab === 'issues' ? 'page' : undefined} onClick={() => { setTab('issues'); void loadIssues(); }}>Issues</button>
+          <button className={tab === 'learning' ? 'active' : ''} aria-current={tab === 'learning' ? 'page' : undefined} onClick={() => setTab('learning')}>Lehrbuch</button>
         </nav>
 
         {tab === 'overview' && <div className="view overview">
@@ -938,6 +959,52 @@ function App(): React.JSX.Element {
                   </div>
                 </article>;})}</div>}
           <div className="agent-footnote">Kilo plant, erstellt die Änderung und übergibt sie dem unabhängigen Reviewer und den Quality-Gates. Der Hauptlauf erstellt ausschließlich einen Draft-PR; kein automatischer Merge.</div>
+        </div>}
+
+        {tab === 'learning' && <div className="view issue-view learning-view">
+          <div className="view-intro">
+            <h2>Lehrbuch – historische Projekte verstehen</h2>
+            <p>Untersuche die Commit-Historie eigener oder fremder öffentlicher GitHub-Projekte.
+              Diese erste Stufe sammelt nur nachvollziehbare Quellen, keine automatisch erfundenen Erklärungen.</p>
+          </div>
+          <form className="learning-source-form" onSubmit={event=>{event.preventDefault();void inspectLearningHistory();}}>
+            <label htmlFor="learning-repo">Öffentliches GitHub-Repository</label>
+            <div className="learning-source-controls">
+              <input id="learning-repo" value={learningInput} onChange={event=>{
+                setLearningInput(event.target.value);setLearningHistory(null);setLearningError('');
+              }} placeholder="owner/repo oder https://github.com/owner/repo" autoComplete="off" />
+              <button type="submit" disabled={learningLoading||!learningInput.trim()}>
+                {learningLoading?'GitHub-Historie wird geprüft …':'Historie lesen'}
+              </button>
+            </div>
+            <p>Nur lesen · maximal 12 Commits · keine Downloads oder Codeausführung im Fremdprojekt</p>
+          </form>
+          {learningError && <div className="error" role="alert">{learningError}</div>}
+          {learningHistory && <section className="learning-results" aria-label="Historische Commit-Analyse">
+            <h3>{learningHistory.repository}</h3>
+            <p>Default-Branch: <strong>{learningHistory.defaultBranch}</strong> ·
+              Fester HEAD: <code>{learningHistory.fixedHead.slice(0,12)}</code> ·
+              Lizenz: <strong>{learningHistory.licenseSpdx??'Unbekannt – Lizenz vor Übernahme prüfen'}</strong></p>
+            <div className="git-readiness" role="status">
+              <strong>Quellenindex, noch kein fertiges Lehrbuch</strong>
+              <span>Die Commits sind Belege für Änderungen. Entwicklungsabsichten und technische Qualität
+                lassen sich daraus nicht ohne zusätzliche Prüfung ableiten.</span>
+            </div>
+            <div className="learning-commit-list">{learningHistory.commits.map(commit=>
+              <article className="learning-commit" key={commit.sha}>
+                <div className="learning-commit-heading">
+                  <strong>{commit.title}</strong>
+                  <a href={commit.evidenceUrl} target="_blank" rel="noopener noreferrer">Commit {commit.sha.slice(0,10)}</a>
+                </div>
+                <small>{commit.committedAt
+                  ?new Date(commit.committedAt).toLocaleDateString('de-DE'):'Datum unbekannt'}</small>
+                <p>{commit.changedPaths.length>0?commit.changedPaths.join(' · '):
+                  'Dateipfade nicht verfügbar'}</p>
+                {!commit.pathsComplete && <small>Änderungsliste eventuell unvollständig</small>}
+              </article>)}</div>
+            <p>Aus diesem Quellenindex entstehen später geprüfte Themenkapitel mit Übungen,
+              getrennten Lösungen und PDF-Export. Das Original-Repository bleibt unverändert.</p>
+          </section>}
         </div>}
 
         <ScrollJumpControls scopeRef={scrollScopeRef} refreshKey={`${tab}:${selected}`} />

@@ -23,6 +23,7 @@ import { inspectGitPreflight } from '../core/git-preflight';
 import { assertBranchProtection } from '../core/branch-protection';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
+import { indexPublicRepositoryHistory } from '../core/public-history';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
 import { probeIsolatedQualityRuntime } from '../core/isolated-quality-probe';
@@ -332,6 +333,10 @@ app.whenReady().then(() => {
     if(active||startingLegacyRun)return {busy:true,kind:'legacy-run',
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
+  });
+  ipcMain.handle('learning:public-history', async (_event, input: unknown, limit: unknown) => {
+    if(typeof input!=='string'||typeof limit!=='number')throw Error('Invalid history request');
+    return indexPublicRepositoryHistory(input,undefined,limit);
   });
   ipcMain.handle('core:status', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');

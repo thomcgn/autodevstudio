@@ -31,6 +31,11 @@ const success={
     sandboxTool:'bwrap',sandboxToolAvailable:true,ghInstalled:true,ghAuthenticated:true,
     checkedAt:'2026-01-01'},
   studioActivity:{busy:false,kind:null,projectId:null,issueNumber:null},
+  publicRepoHistory:{repository:'example/studio',defaultBranch:'main',
+    fixedHead:'a'.repeat(40),licenseSpdx:'MIT',readOnly:true,requiresInterpretation:true,
+    commits:[{sha:'b'.repeat(40),title:'feat: introduce typed list',
+      committedAt:'2026-11-01T10:00:00Z',changedPaths:['src/list.ts'],
+      pathsComplete:true,evidenceUrl:'https://github.com/example/studio/commit/'+'b'.repeat(40)}]},
   branchProtection:{protected:true,evidence:{repository:'example/studio',branch:'main',rulesetId:111,requiredChecks:['typecheck'],verifiedAt:'2026-11-22T00:00:00.000Z'}},
   sandboxProbe:{available:true,isolated:true,reason:'passed',detail:null,exitCode:0},
   reviewerProbe:{supported:true,passed:true,reason:'passed',detail:null},
@@ -111,6 +116,7 @@ async function fixture(page){
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
       issues:()=>respond('issues'),issueQueue:()=>respond('issueQueue'),
+      publicRepoHistory:()=>respond('publicRepoHistory'),
       branchProtection:()=>respond('branchProtection'),
       workflowStages:async()=>[],simulateIssue:async()=>null,
       historyLog:async()=>'',runInfo:async()=>null,start:async()=>{throw Error('not authorized');},
@@ -201,6 +207,11 @@ try {
     delete window.__uiSmoke.overrides.issues;
     delete window.__uiSmoke.overrides.issueQueue;
   });
+  await page.getByRole('button',{name:'Lehrbuch',exact:true}).click();
+  await page.getByPlaceholder('owner/repo oder https://github.com/owner/repo').fill('example/studio');
+  await page.getByRole('button',{name:'Historie lesen',exact:true}).click();
+  await page.getByText('feat: introduce typed list',{exact:true}).waitFor();
+  await page.getByText('Quellenindex, noch kein fertiges Lehrbuch',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
