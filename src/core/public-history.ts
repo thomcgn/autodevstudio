@@ -82,7 +82,7 @@ function getPaths(value:unknown):{paths:readonly string[];complete:boolean}{
 /** Source discovery only. Never infer motives, quality PASS or a lesson from a commit message. */
 export async function indexPublicRepositoryHistory(
   input:string,read:GitHubHistoryRead=readGitHubPublicJson,limit=12,
-  page=1,pinnedHead?:string,
+  page=1,pinnedHead?:string,includeChangedPaths=true,
 ):Promise<PublicHistoryIndex>{
   const slug=parsePublicRepository(input);
   if(!Number.isSafeInteger(limit)||limit<1||limit>MAX_COMMITS)fail('invalid commit limit');
@@ -118,8 +118,9 @@ export async function indexPublicRepositoryHistory(
     const date=author?.date;
     const committedAt=typeof date==='string'&&!Number.isNaN(Date.parse(date))
       ?new Date(date).toISOString():null;
-    const details=await read('repos/'+slug+'/commits/'+sha);
-    const paths=getPaths(details);
+    const paths=includeChangedPaths
+      ?getPaths(await read('repos/'+slug+'/commits/'+sha))
+      :{paths:[] as readonly string[],complete:false};
     commits.push({sha,title:commitTitle(info.message),committedAt,
       changedPaths:paths.paths,pathsComplete:paths.complete,
       evidenceUrl:'https://github.com/'+slug+'/commit/'+sha});
@@ -138,6 +139,7 @@ export async function walkPublicRepositoryHistory(
  input:string,options:{
   read?:GitHubHistoryRead;pageSize?:number;signal?:AbortSignal;
   startPage?:number;pinnedHead?:string;initialCount?:number;collect?:boolean;
+  includeChangedPaths?:boolean;
   onPage?:(page:PublicHistoryIndex,commitsSeen:number)=>Promise<void>|void;
  }={},
 ):Promise<{repository:string;head:string;licenseSpdx:string|null;commits:HistoricalCommit[]}>{
@@ -159,7 +161,8 @@ export async function walkPublicRepositoryHistory(
  let licenseSpdx:string|null=null;
  while(true){
   if(options.signal?.aborted)throw Error('Learning history cancelled');
-  const index=await indexPublicRepositoryHistory(input,read,pageSize,page,pinnedHead);
+  const index=await indexPublicRepositoryHistory(input,read,pageSize,page,pinnedHead,
+   options.includeChangedPaths??true);
   if(pinnedHead!==undefined&&index.fixedHead!==pinnedHead)
    fail('pinned repository HEAD changed during traversal');
   pinnedHead=index.fixedHead;
