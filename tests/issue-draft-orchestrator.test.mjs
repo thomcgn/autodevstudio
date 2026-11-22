@@ -171,3 +171,47 @@ test('approved reviewer after pause resumes without calling Builder twice',async
   assert.deepEqual(f.calls,['review','draft']);
  }finally{f.close();}
 });
+
+test('automatic fix loop re-reviews newly changed checkpoint and publishes only after PASS',async()=>{
+ const f=fixture('review');let reviews=0;let repairs=0;
+ try{
+  f.deps.review=async()=>{
+   reviews++;
+   f.calls.push('review');
+   if(reviews===1)return {kind:'review-failed',issueNumber:14,
+     checkpointRevision:1,feedback:'Fix null handling',publishAuthorized:false};
+   const cp=f.advance('quality',true,true);
+   return {kind:'quality-passed',issueNumber:14,
+     checkpointRevision:cp.revision,publishAuthorized:false};
+  };
+  f.deps.repair=async()=>{
+   repairs++;
+   f.calls.push('repair');
+   f.advance('review',false,false);
+  };
+  const result=await f.run();
+  assert.equal(result.status,'draft-created');
+  assert.equal(reviews,2);
+  assert.equal(repairs,1);
+  assert.deepEqual(f.calls,['stage:review','review','stage:build','repair',
+    'stage:review','review','stage:publish','draft']);
+ }finally{f.close();}
+});
+test('auto-fix attempt loop stops after exactly two failed retries',async()=>{
+ const f=fixture('review');let reviews=0;let repairs=0;
+ try{
+  f.deps.review=async()=>{
+   reviews++;
+   return {kind:'review-failed',issueNumber:14,
+     checkpointRevision:loadCoreCheckpoint(f.base,f.project).revision,
+     feedback:'still missing',publishAuthorized:false};
+  };
+  f.deps.repair=async()=>{repairs++;f.advance('review',false,false)};
+  const outcome=await f.run();
+  assert.equal(outcome.status,'paused');
+  assert.equal(outcome.stage,'review');
+  assert.equal(reviews,3);
+  assert.equal(repairs,2);
+  assert.equal(f.calls.includes('draft'),false);
+ }finally{f.close();}
+});
