@@ -81,15 +81,18 @@ test('request only uses local Ollama URL, without tools or Kilo token API',async
  const calls=[];
  const fetcher=async(url,init)=>{
   calls.push({url,init});
-  return new Response(JSON.stringify({done:true,message:{content:chapter}}),{
-   headers:{'Content-Type':'application/json'}});
+  return new Response([
+   JSON.stringify({done:false,message:{content:chapter.slice(0,40)}}),
+   JSON.stringify({done:false,message:{content:chapter.slice(40)}}),
+   JSON.stringify({done:true,message:{content:''}}),'',
+  ].join('\n'),{headers:{'Content-Type':'application/x-ndjson'}});
  };
  const answer=await localOllamaModel('qwen2.5-coder:3b',fetcher)(
   'system','user',new AbortController().signal);
  assert.equal(answer,chapter);
  assert.equal(calls[0].url,'http://127.0.0.1:11434/api/chat');
  const payload=JSON.parse(calls[0].init.body);
- assert.equal(payload.stream,false);
+ assert.equal(payload.stream,true);
  assert.equal(payload.model,'qwen2.5-coder:3b');
  assert.equal(JSON.stringify(payload).includes('tools'),false);
 });
@@ -132,4 +135,21 @@ test('large source file is analyzed in multiple distinct Ollama contexts without
  assert.ok(prompts.length>2);
  assert.ok(prompts.some(prompt=>prompt.includes('importantAtEnd()')));
  assert.match(book.bookMarkdown,/Abschnitt 2/);
+});
+
+test('streamed local Ollama emits activity pulses without leaking raw content',async()=>{
+ let pulses=0;
+ const stream=Array.from({length:40},(_,i)=>JSON.stringify({
+  done:false,message:{content:i===0?chapter:''},
+ })).concat(JSON.stringify({done:true,message:{content:''}})).join('\n')+'\n';
+ const model=localOllamaModel('qwen2.5-coder:3b',
+  async()=>new Response(stream));
+ const result=await model('system','prompt',new AbortController().signal,()=>{pulses++;});
+ assert.equal(result,chapter);
+ assert.ok(pulses>=2);
+});
+test('unterminated Ollama streams are never silently accepted as complete',async()=>{
+ const bad=async()=>new Response(JSON.stringify({done:false,message:{content:chapter}})+'\n');
+ await assert.rejects(localOllamaModel('qwen2.5-coder:3b',bad)(
+  'system','prompt',new AbortController().signal),/unfinished/);
 });
