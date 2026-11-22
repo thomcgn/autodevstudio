@@ -30,7 +30,7 @@ import { indexPublicRepositoryHistory, parsePublicRepository, readGitHubPublicJs
 import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
-import {analyzeSourceWithOllama} from '../core/deep-learning-analysis';
+import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
@@ -364,24 +364,43 @@ app.whenReady().then(() => {
         },
       });
       const prior=loadHistoricalBook(app.getPath('userData'),index.repository);
-      const resume=prior?.head===index.head&&
-        prior.deepCursor?.model==='qwen2.5-coder:3b';
-      let offset=resume?(prior?.deepCursor?.nextOffset??0):0;
-      let filesAnalyzed=resume?(prior?.deepCursor?.filesAnalyzed??0):0;
-      let bookMarkdown=resume?(prior?.bookMarkdown??''):'';
-      let solutionsMarkdown=resume?(prior?.solutionsMarkdown??''):'';
-      let reportsMarkdown=resume?(prior?.reportsMarkdown??''):'';
-      while(true){
+      const compatible=prior?.head===index.head&&
+        prior.deepSummary?.model==='qwen2.5-coder:3b';
+      let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
+      let filesAnalyzed=compatible?(prior?.deepSummary?.filesAnalyzed??0):0;
+      let bookMarkdown=compatible?(prior?.bookMarkdown??''):'';
+      let solutionsMarkdown=compatible?(prior?.solutionsMarkdown??''):'';
+      let reportsMarkdown=compatible?(prior?.reportsMarkdown??''):'';
+      let sourceComplete=compatible&&prior?.deepCursor===undefined&&
+        prior?.deepSummary?.filesAnalyzed===prior?.deepSummary?.filesTotal;
+      let summary=compatible?prior?.deepSummary:undefined;
+      const chapterNumber=():number=>{
+        let highest=0;
+        for(const match of bookMarkdown.matchAll(/^## Kapitel (\\d+)/gm))
+          highest=Math.max(highest,Number(match[1]));
+        return highest;
+      };
+      const persist=(historyCursor?:{
+        nextIndex:number;total:number;chapters:number;incomplete:number;model:string;
+      })=>saveHistoricalBook(app.getPath('userData'),{
+        repository:index.repository,head:index.head,license:index.licenseSpdx,
+        lessons:[],bookMarkdown,solutionsMarkdown,reportsMarkdown,
+        deepSummary:summary,
+        deepCursor:sourceComplete?undefined:{
+          nextOffset:offset,filesTotal:summary?.filesTotal??0,
+          filesAnalyzed,filesSkipped:summary?.filesSkipped??0,
+          model:'qwen2.5-coder:3b',
+        },
+        historyCursor,
+      });
+      while(!sourceComplete){
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const batchOffset=offset;
-        let chapterOffset=0;
-        for(const match of bookMarkdown.matchAll(/^## Kapitel (\d+)/gm))
-          chapterOffset=Math.max(chapterOffset,Number(match[1]));
         const result=await analyzeSourceWithOllama(index.repository,index.head,
           runId,startedAt,event=>send('learning:progress',{
             ...event,current:'Quelldateien ab '+(batchOffset+1)+' · '+event.current,
           }),controller.signal,{
-            offset,chapterOffset,
+            offset,chapterOffset:chapterNumber(),
             history:index.commits.map(commit=>({
               sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
             })),
@@ -391,27 +410,58 @@ app.whenReady().then(() => {
         bookMarkdown+=(bookMarkdown?'\n\n':'')+result.bookMarkdown;
         solutionsMarkdown+=(solutionsMarkdown?'\n\n':'')+result.solutionsMarkdown;
         reportsMarkdown+=(reportsMarkdown?'\n\n':'')+result.reportsMarkdown;
-        const saved=saveHistoricalBook(app.getPath('userData'),{
-          repository:result.repository,head:result.head,license:index.licenseSpdx,
-          lessons:[],bookMarkdown,solutionsMarkdown,reportsMarkdown,
-          deepCursor:result.nextOffset===null?undefined:{
-            nextOffset:result.nextOffset,filesTotal:result.filesTotal,
-            filesAnalyzed,filesSkipped:result.filesSkipped,model:result.model,
-          },
-          deepSummary:{model:result.model,filesAnalyzed,
-            filesSkipped:result.filesSkipped,filesTotal:result.filesTotal,
-            complete:result.complete},
-        });
-        if(result.nextOffset===null){
-          return {repository:saved.repository,head:saved.head,lessons:filesAnalyzed,
-            bookMarkdown:saved.bookMarkdown,solutionsMarkdown:saved.solutionsMarkdown,
-            reportsMarkdown:saved.reportsMarkdown,deepAnalysis:{
-              model:result.model,filesAnalyzed,filesSkipped:result.filesSkipped,
-              complete:result.complete,
-            }};
-        }
-        offset=result.nextOffset;
+        sourceComplete=result.nextOffset===null;
+        offset=result.nextOffset??0;
+        summary={model:result.model,filesAnalyzed,filesSkipped:result.filesSkipped,
+          filesTotal:result.filesTotal,complete:result.complete};
+        persist();
       }
+      let historyNext=compatible&&prior?.historyCursor?.total===index.commits.length
+        ?prior.historyCursor.nextIndex:0;
+      let historyChapters=compatible&&prior?.historyCursor?.total===index.commits.length
+        ?prior.historyCursor.chapters:0;
+      let incomplete=compatible&&prior?.historyCursor?.total===index.commits.length
+        ?prior.historyCursor.incomplete:0;
+      for(let i=historyNext;i<index.commits.length;i++){
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        const commit=index.commits[i];
+        send('learning:progress',{
+          runId,repository:index.repository,phase:'history',startedAt,
+          completed:i,total:index.commits.length,
+          current:'Historische Codeänderung '+(i+1)+'/'+index.commits.length+
+            ' · '+commit.sha.slice(0,12),
+          etaSeconds:null,preview:reportsMarkdown.slice(-2500),
+          model:'qwen2.5-coder:3b',
+        });
+        const history=await analyzeHistoricalCommitWithOllama(
+          index.repository,commit.sha,chapterNumber()+1,controller.signal);
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        if(history.bookMarkdown)
+          bookMarkdown+='\n\n'+history.bookMarkdown;
+        if(history.solutionsMarkdown)
+          solutionsMarkdown+='\n\n'+history.solutionsMarkdown;
+        reportsMarkdown+='\n\n'+history.reportsMarkdown;
+        historyChapters+=history.chapters;
+        if(!history.complete)incomplete++;
+        historyNext=i+1;
+        persist({nextIndex:historyNext,total:index.commits.length,
+          chapters:historyChapters,incomplete,model:'qwen2.5-coder:3b'});
+      }
+      const final=loadHistoricalBook(app.getPath('userData'),index.repository);
+      if(!final||final.head!==index.head)throw Error('Final learning snapshot is unavailable');
+      send('learning:progress',{
+        runId,repository:index.repository,phase:'finished',startedAt,
+        completed:index.commits.length,total:index.commits.length,
+        current:'Historie abgeschlossen · '+incomplete+' unvollständige Commit-Belege',
+        etaSeconds:0,preview:reportsMarkdown.slice(-2500),model:'qwen2.5-coder:3b',
+      });
+      return {repository:final.repository,head:final.head,lessons:filesAnalyzed,
+        bookMarkdown:final.bookMarkdown,solutionsMarkdown:final.solutionsMarkdown,
+        reportsMarkdown:final.reportsMarkdown,deepAnalysis:{
+          model:'qwen2.5-coder:3b',filesAnalyzed,
+          filesSkipped:summary?.filesSkipped??0,
+          complete:(summary?.complete??false)&&incomplete===0,
+        }};
     }finally{
       if(learningController===controller)learningController=null;
     }
