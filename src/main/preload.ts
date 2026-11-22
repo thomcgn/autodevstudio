@@ -10,7 +10,8 @@ contextBridge.exposeInMainWorld('studio', {
   studioStatus: (id: string) => ipcRenderer.invoke('core:status', id),
   publicRepoHistory: (input: string, limit: number) => ipcRenderer.invoke('learning:public-history', input, limit),
   generateLearningBook: (input:string,page=1,pinnedHead?:string) => ipcRenderer.invoke('learning:generate', input,page,pinnedHead),
-  deepLearningBook: (input:string) => ipcRenderer.invoke('learning:deep-generate',input),
+  deepLearningBook: (input:string,provider:'ollama'|'kilo'='ollama',consent=false) =>
+    ipcRenderer.invoke('learning:deep-generate',input,provider,consent),
   cancelDeepLearning: () => ipcRenderer.invoke('learning:deep-cancel'),
   onLearningProgress: (callback:(value:DeepLearningProgress)=>void) => {
     const listener=(_event:Electron.IpcRendererEvent,value:DeepLearningProgress):void=>callback(value);
@@ -19,7 +20,7 @@ contextBridge.exposeInMainWorld('studio', {
   },
   loadLearningBook: (repo:string) => ipcRenderer.invoke('learning:load', repo),
   exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',
-    format:'md'|'pdf',mode:'history'|'deep'='history') =>
+    format:'md'|'pdf',mode:'history'|'deep'|'deep-kilo'='history') =>
     ipcRenderer.invoke('learning:export',repo,kind,format,mode),
   studioActivity: (id: string) => ipcRenderer.invoke('core:activity', id),
   diagnostics: (id: string) => ipcRenderer.invoke('core:diagnostics', id),
