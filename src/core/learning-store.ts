@@ -82,7 +82,8 @@ export function loadHistoricalBook(
 ):SavedLearningBook|null{
  if(!SLUG.test(input))throw Error('Invalid learning repository');
  const root=rootFor(base,input);
- const file=path.join(root,variant==='deep'?'latest-deep.json':'latest.json');
+ const file=path.join(root,variant==='deep'?'latest-deep.json':
+  variant==='deep-kilo'?'latest-deep-kilo.json':'latest.json');
  if(!fs.existsSync(file))return null;
  const value:unknown=JSON.parse(fs.readFileSync(file,'utf8'));
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid learning index');
