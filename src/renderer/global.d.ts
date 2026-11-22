@@ -129,6 +129,7 @@ declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
+    installIssueLabels(id:string):Promise<{repository:string;protectedBranch:string;created:readonly string[];alreadyPresent:readonly string[];total:number}>;
     branchProtection(id: string): Promise<BranchProtectionStatus>;
     issueQueue(id: string): Promise<IssueQueuePreview>;
     gitPreflight(id: string): Promise<GitPreflight>;

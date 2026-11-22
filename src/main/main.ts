@@ -21,6 +21,7 @@ import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
 import { assertBranchProtection } from '../core/branch-protection';
+import {installRequiredIssueLabels} from '../core/issue-label-onboarding';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
 import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/public-history';
@@ -426,6 +427,13 @@ app.whenReady().then(() => {
       return {protected:false,reason:error instanceof Error?error.message:
         'GitHub protection could not be verified'} as const;
     }
+  });
+  ipcMain.handle('core:issue-labels:install', async (_event,id:unknown) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    if(active||localCodeController||publishingDraftPr)throw Error('Cannot change labels during active workflow');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    return installRequiredIssueLabels(project.path);
   });
   ipcMain.handle('core:issues', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
