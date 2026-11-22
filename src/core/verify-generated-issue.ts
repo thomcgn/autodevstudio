@@ -57,7 +57,7 @@ export async function verifyGeneratedIssue(
         'Reject missing tests, unsafe changes and incomplete requirements'],
     };
     const build:BuildResult={summary:
-      'Local Qwen2.5-Coder 3B produced one uncommitted change on this issue branch. '+
+      'Configured Builder produced one uncommitted change on this issue branch. '+
       'No unit tests or functional correctness have been established.'};
     const handoff:ReviewHandoff=await reviewAndCheckpointQuality(
       base,projectPath,lock.record.token,cp.revision,issue,plan,build,
