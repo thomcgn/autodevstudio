@@ -55,10 +55,11 @@ export class FreeQuotaGate {
   private readonly accepted:number[]=[];
   private evidence:RateLimitEvidence|null=null;
   private blockedUntil:number|null=null;
-  constructor(
-    private readonly limit=KILO_FREE_HOURLY_LIMIT,
-    private readonly reserve=KILO_FINALIZATION_RESERVE,
-  ){
+  private readonly limit:number;
+  private readonly reserve:number;
+  constructor(limit=KILO_FREE_HOURLY_LIMIT,reserve=KILO_FINALIZATION_RESERVE){
+    this.limit=limit;
+    this.reserve=reserve;
     if(!Number.isSafeInteger(limit)||limit<=0||!Number.isSafeInteger(reserve)||reserve<0||reserve>=limit)
       throw Error('Invalid free-quota policy');
   }
@@ -115,7 +116,9 @@ export class FreeQuotaGate {
 }
 export class QuotaPauseError extends Error {
   readonly name='QuotaPauseError';
-  constructor(readonly snapshot:FreeQuotaSnapshot){
+  readonly snapshot:FreeQuotaSnapshot;
+  constructor(snapshot:FreeQuotaSnapshot){
     super('Free-provider quota not confirmed; checkpoint and suspend safely');
+    this.snapshot=snapshot;
   }
 }

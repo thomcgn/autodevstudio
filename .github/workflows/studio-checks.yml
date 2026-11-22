@@ -17,16 +17,17 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Install dependencies (skip desktop binary on CI)
-        run: npm ci
+        run: node scripts/strict-check.mjs install
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: TypeScript
-        run: npm run typecheck
+        run: node scripts/strict-check.mjs typecheck
       - name: Execution approval policy tests
-        run: npm run test:policy
+        run: node scripts/strict-check.mjs policy
 
   ui-smoke:
     name: Renderer click tests (Playwright)
+    needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -36,20 +37,21 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Install project dependencies
-        run: npm ci
+        run: node scripts/strict-check.mjs install
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Install pinned Playwright test runner without modifying lockfile
-        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
+        run: node scripts/strict-check.mjs playwrightDependency
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Install headless Chromium
-        run: npx playwright install --with-deps chromium
+        run: node scripts/strict-check.mjs playwrightBrowser
       - name: Click-test real React UI with mocked IPC
-        run: npm run test:ui
+        run: node scripts/strict-check.mjs ui
 
   desktop-smoke:
     name: Packaged Electron integration (Playwright)
+    needs: [typecheck, ui-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -59,10 +61,10 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Install desktop dependencies
-        run: npm ci
+        run: node scripts/strict-check.mjs install
       - name: Install pinned Playwright test runner without lockfile changes
-        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
+        run: node scripts/strict-check.mjs playwrightDependency
       - name: Build standalone desktop app
-        run: npm run package
+        run: node scripts/strict-check.mjs package
       - name: Native Electron desktop click and IPC smoke
-        run: xvfb-run -a npm run test:desktop
+        run: xvfb-run -a node scripts/strict-check.mjs desktop

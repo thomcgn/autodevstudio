@@ -3,12 +3,14 @@ import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
 import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview } from './global';
 import './style.css';
+import {ScrollJumpControls} from './scroll-jump-controls';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
 type RunMode = 'status' | 'dry-run' | 'execute';
 interface ActiveRun { projectId: string; mode: string; startedAt: number }
 
 function App(): React.JSX.Element {
+  const scrollScopeRef=React.useRef<HTMLElement|null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState(() => localStorage.getItem('autodev:selected') ?? '');
   const [tab, setTab] = useState<Tab>('overview');
@@ -554,7 +556,7 @@ function App(): React.JSX.Element {
           </button>)}</div>
       </aside>
 
-      <section className="content">
+      <section className="content" ref={scrollScopeRef}>
         <div className="project-heading">
           <div className="project-identity"><h1>{project?.name ?? 'Projekt auswählen'}</h1><p title={project?.path}>{project?.path ?? 'Füge links ein Projekt hinzu.'}</p></div>
           <div className="heading-actions">{busy && <button className="danger" onClick={() => void stop()}>Prozess stoppen</button>}
@@ -747,29 +749,8 @@ function App(): React.JSX.Element {
         {tab === 'issues' && <div className="view issue-view">
           <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Kilo ist primärer Planner, Builder und unabhängiger Reviewer: Issue → echter Code → isolierte Tests → Draft-PR. Ollama ist ausschließlich optionaler Fallback.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
-          {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ||
-            (gitStatus.clean && !!gitStatus.remoteSlug && !!gitStatus.branch &&
-              gitStatus.reasons.every(reason=>reason==='Protected branch – create an isolated feature branch first'))
-              ? 'ready' : 'needs-work'}`}>
-            <strong>{gitStatus.canExecute ? 'Git bereit' :
-              gitStatus.clean && !!gitStatus.remoteSlug && !!gitStatus.branch &&
-              gitStatus.reasons.every(reason=>reason==='Protected branch – create an isolated feature branch first')
-              ? 'Git bereit · Issue-Branch wird automatisch erstellt' : 'Git: Vorbereitung erforderlich'}</strong>
-            <span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}
-              {gitStatus.clean && gitStatus.reasons.length===1 &&
-                gitStatus.reasons[0]==='Protected branch – create an isolated feature branch first'
-                ? ' · main bleibt unverändert'
-                : gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Arbeitsverzeichnis sauber'}</span>
-          </div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
-          {issueQueue && <div className={`git-readiness ${issueQueue.readyToStart?'ready':'needs-work'}`} role="status">
-            <strong>Issue-Warteschlange · {issueQueue.queue.filter(i=>i.state==='candidate').length} Kandidaten</strong>
-            <span>{issueQueue.readyToStart
-              ?`Vorschlag: Issue #${issueQueue.nextIssueNumber} · ${issueQueue.reason}`
-              :issueQueue.reason}</span>
-            <small>Nur Vorschau. Ein vorhandener Checkpoint, auch nach einem Draft-PR, sperrt automatisch das nächste Issue.</small>
-          </div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
           {verificationError && <div className="error" role="alert">{verificationError}</div>}
           {draftPrError && <div className="error" role="alert">{draftPrError}</div>}
@@ -865,6 +846,7 @@ function App(): React.JSX.Element {
           <div className="agent-footnote">Kilo plant, erstellt die Änderung und übergibt sie dem unabhängigen Reviewer und den Quality-Gates. Der Hauptlauf erstellt ausschließlich einen Draft-PR; kein automatischer Merge.</div>
         </div>}
 
+        <ScrollJumpControls scopeRef={scrollScopeRef} refreshKey={`${tab}:${selected}`} />
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}
       </section>
     </div>

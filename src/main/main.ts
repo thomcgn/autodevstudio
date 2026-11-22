@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -132,9 +132,24 @@ function terminate(): void {
   }, 4000);
   pendingStop.unref();
 }
+/** Only issues from the selected project's verified GitHub origin may ever
+ * be displayed or executed. gh's contextual repository selection is NOT an
+ * authorization boundary, and issue text cannot redirect to another repo.
+ */
+async function listProjectIssues(projectPath:string) {
+  const git=await inspectGitPreflight(projectPath);
+  if(!git.remoteSlug)throw Error('Selected project must have a verified GitHub origin');
+  return listIssues(projectPath,undefined,git.remoteSlug);
+}
 function createWindow(): void {
-  window = new BrowserWindow({ width: 1160, height: 780, minWidth: 820, minHeight: 560,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
+  // Fit within the usable display area including panels/taskbars. In
+  // particular, 10-inch 1024x600 and 800x480 displays must not get an
+  // oversized default window or an unshrinkable 820x560 minimum.
+  const workArea=screen.getPrimaryDisplay().workAreaSize;
+  const width=Math.max(640,Math.min(1160,workArea.width-24));
+  const height=Math.max(400,Math.min(780,workArea.height-24));
+  window = new BrowserWindow({ width, height, minWidth: 640, minHeight: 400,
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     backgroundColor: '#111827', title: 'AutoDev Studio' });
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   else void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
@@ -312,13 +327,13 @@ app.whenReady().then(() => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
     if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
-    return listIssues(project.path);
+    return listProjectIssues(project.path);
   });
   ipcMain.handle('core:issue-queue', async (_event,id:string) => {
     if(typeof id!=='string')throw Error('Invalid project ID');
     const project=getProject(id);
     if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
-    const issues=await listIssues(project.path);
+    const issues=await listProjectIssues(project.path);
     return previewIssueQueue(app.getPath('userData'),project.path,issues);
   });
   ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
@@ -334,7 +349,7 @@ app.whenReady().then(() => {
     const controller=new AbortController();
     localCodeController=controller;
     try{
-      const issues=await listIssues(project.path);
+      const issues=await listProjectIssues(project.path);
       const issue=issues.find(item=>item.number===issueNumber);
       if(!issue)throw Error('Issue is not open or no longer available');
       const base=app.getPath('userData');
@@ -364,7 +379,7 @@ app.whenReady().then(() => {
     if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
     // Authoritative issue fetched by Main: never trust renderer-supplied title,
     // code, file names, paths, or model instructions.
-    const issues=await listIssues(project.path);
+    const issues=await listProjectIssues(project.path);
     const issue=issues.find(x=>x.number===issueNumber);
     if(!issue)throw Error('Issue is not open or no longer available');
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
@@ -388,7 +403,7 @@ app.whenReady().then(() => {
     const project=getProject(id);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
-    const issues=await listIssues(project.path);
+    const issues=await listProjectIssues(project.path);
     const issue=issues.find(item=>item.number===issueNumber);
     if(!issue)throw Error('Issue not found among open issues');
     const scripts=selectSafeQualityScripts(project.path);
@@ -420,7 +435,7 @@ app.whenReady().then(() => {
       throw Error('Not a Git repository');
     publishingDraftPr=true;
     try{
-      const issues=await listIssues(project.path);
+      const issues=await listProjectIssues(project.path);
       if(!issues.some(item=>item.number===issueNumber))
         throw Error('Issue is not open or no longer available');
       return await publishVerifiedDraftPullRequest(app.getPath('userData'),
@@ -439,7 +454,7 @@ app.whenReady().then(() => {
     const project = getProject(projectId);
     if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
     // Obtain issue details in the trusted main process rather than accepting a renderer-supplied prompt.
-    const issues = await listIssues(project.path);
+    const issues = await listProjectIssues(project.path);
     const issue = issues.find(item => item.number === issueNumber);
     if (!issue) throw new Error('Issue not found among open issues');
     // Inert test adapters: no Kilo, Git commit, push or issue close.

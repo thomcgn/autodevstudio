@@ -16,7 +16,9 @@ const defaultRunner: CommandRunner = async (bin, args, cwd) => {
   return stdout;
 };
 
-export function parseIssues(json: string): StudioIssue[] {
+export function parseIssues(json: string, expectedRepository?: string): StudioIssue[] {
+  if(expectedRepository && !/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(expectedRepository))
+    throw new Error('Invalid expected GitHub repository');
   const parsed: unknown = JSON.parse(json);
   if (!Array.isArray(parsed)) throw new Error('Unexpected GitHub issue response');
   return parsed.map(value => {
@@ -32,7 +34,10 @@ export function parseIssues(json: string): StudioIssue[] {
     const segments = url.pathname.split('/').filter(Boolean);
     if (url.protocol !== 'https:' || url.hostname !== 'github.com' ||
       segments.length !== 4 || segments[2] !== 'issues' ||
-      !/^[0-9]+$/.test(segments[3])) {
+      !/^[0-9]+$/.test(segments[3]) ||
+      Number(segments[3])!==item.number ||
+      (expectedRepository!==undefined &&
+        (segments[0]+'/'+segments[1]).toLowerCase()!==expectedRepository.toLowerCase())) {
       throw new Error('Invalid GitHub issue URL');
     }
     const labels = Array.isArray(item.labels) ? item.labels.flatMap(label =>
@@ -46,12 +51,13 @@ export function parseIssues(json: string): StudioIssue[] {
 
 /** Reads issues using user's existing gh CLI authentication.
  * Does not run a shell and never modifies GitHub or the working tree. */
-export async function listIssues(cwd: string, runner: CommandRunner = defaultRunner): Promise<StudioIssue[]> {
+export async function listIssues(cwd: string, runner: CommandRunner = defaultRunner,
+  expectedRepository?: string): Promise<StudioIssue[]> {
   try {
     const result = await runner('gh',
       ['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,body,url,labels'],
       cwd);
-    return parseIssues(result);
+    return parseIssues(result,expectedRepository);
   } catch (error) {
     throw new Error(`GitHub-Issues konnten nicht geladen werden. Ist gh installiert und angemeldet? ${String(error)}`);
   }
