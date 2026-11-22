@@ -67,3 +67,13 @@ test('pagination remains pinned to first HEAD even if default branch advanced',a
  assert.equal(requests.some(q=>q.includes('sha='+A)),true);
  assert.equal(result.page,2);
 });
+
+test('all commits in a page contribute evidence, including commits after twelve',async()=>{
+ const commits=Array.from({length:16},(_,i)=>commit(
+  (i+1).toString(16).padStart(40,'0'),'Generic change '+i,'src/Generics.java'));
+ const result=await generateHistoricalBook({...base,commits},
+  async()=>({files:[{filename:'src/Generics.java',
+    patch:'@@\n+List<String> names = List.of("Ada");'}]}));
+ const generics=result.lessons.find(lesson=>lesson.key==='java-generics');
+ assert.equal(generics?.commits.length,16);
+});
