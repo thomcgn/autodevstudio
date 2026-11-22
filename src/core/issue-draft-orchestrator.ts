@@ -69,6 +69,7 @@ export async function runIssueToDraftPr(
   approvedScripts:readonly string[],
   signal?:AbortSignal,onStep?:IssueAutomationStep,
   deps:IssueAutomationDependencies=defaultDeps,
+  canReview?:()=>Promise<{ready:boolean;reason:string}>,
 ):Promise<IssueAutomationOutcome>{
   if(!Number.isSafeInteger(issue?.number)||issue.number<1||
     typeof issue.title!=='string'||typeof issue.body!=='string')
@@ -88,6 +89,10 @@ export async function runIssueToDraftPr(
   if(signal?.aborted)throw Error('Automation cancelled');
   if(cp.stage==='review'){
     report('review');
+    if(canReview){
+      const gate=await canReview();
+      if(!gate.ready)return pause('review',issue.number,cp.revision,gate.reason);
+    }
     const result=await deps.review(base,project,issue,reviewer,approvedScripts,signal);
     if(result.kind==='review-failed'||result.kind==='quality-failed')
       return pause(result.kind==='review-failed'?'review':'quality',
