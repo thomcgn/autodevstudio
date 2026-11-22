@@ -10,7 +10,7 @@ export interface SavedLearningBook {
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
   lessonEntries:HistoricalLesson[];license:string|null;
   caseStudies:DevelopmentDecision[];
-  pagination?:{page:number;hasMore:boolean};
+  pagination?:{page:number;hasMore:boolean;pageSize?:number};
 }
 const SHA=/^[0-9a-f]{40}$/i;
 const SLUG=/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -110,9 +110,13 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
  const p=metadata?.pagination;
  const pagination=p!==null&&typeof p==='object'&&!Array.isArray(p)&&
    Number.isSafeInteger((p as {page?:unknown}).page)&&
-   (p as {page:number}).page>=1&&(p as {page:number}).page<=100&&
-   typeof (p as {hasMore?:unknown}).hasMore==='boolean'
-   ?p as {page:number;hasMore:boolean}:undefined;
+   (p as {page:number}).page>=1&&
+   typeof (p as {hasMore?:unknown}).hasMore==='boolean'&&
+   ((p as {pageSize?:unknown}).pageSize===undefined||
+     (Number.isSafeInteger((p as {pageSize?:unknown}).pageSize)&&
+      Number((p as {pageSize?:unknown}).pageSize)>=1&&
+      Number((p as {pageSize?:unknown}).pageSize)<=100))
+   ?p as {page:number;hasMore:boolean;pageSize?:number}:undefined;
  return {repository:input,head:info.head,directory,
   lessons:Array.isArray(list)?list.length:0,lessonEntries,license,pagination,caseStudies,
   bookMarkdown:fs.readFileSync(path.join(directory,'book.md'),'utf8'),
