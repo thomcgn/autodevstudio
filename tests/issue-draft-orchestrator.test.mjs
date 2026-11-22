@@ -149,3 +149,25 @@ test('foreign issue checkpoint blocks mutation and publication',async()=>{
   assert.deepEqual(f.calls,[]);
  }finally{f.close();}
 });
+
+test('unknown shared Kilo quota pauses AFTER local code creation, without reviewer or publication',async()=>{
+ const f=fixture();try{
+  const outcome=await runIssueToDraftPr(f.base,f.project,issue,async()=>'',[
+   'typecheck','test'],undefined,stage=>f.calls.push('stage:'+stage),
+   f.deps,async()=>({ready:false,reason:'Provider quota unverified'}));
+  assert.equal(outcome.status,'paused');
+  assert.equal(outcome.stage,'review');
+  assert.match(outcome.reason,/unverified/);
+  assert.equal(loadCoreCheckpoint(f.base,f.project).stage,'review');
+  assert.deepEqual(f.calls,['stage:build','build','stage:review']);
+ }finally{f.close();}
+});
+test('approved reviewer after pause resumes without calling Builder twice',async()=>{
+ const f=fixture('review');try{
+  const result=await runIssueToDraftPr(f.base,f.project,issue,async()=>'',[
+   'typecheck','test'],undefined,undefined,f.deps,
+   async()=>({ready:true,reason:'Verified reviewer ready'}));
+  assert.equal(result.status,'draft-created');
+  assert.deepEqual(f.calls,['review','draft']);
+ }finally{f.close();}
+});
