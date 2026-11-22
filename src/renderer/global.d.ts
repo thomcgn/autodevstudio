@@ -1,4 +1,10 @@
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
+export interface StudioActivity {
+  busy:boolean;
+  kind:'issue-auto-draft'|'issue-build'|'issue-review'|'draft-publish'|'legacy-run'|null;
+  projectId:string|null;
+  issueNumber:number|null;
+}
 export interface StandaloneStatus {
   git: GitPreflight;
   lock: { held: boolean; startedAt: string | null };
@@ -113,6 +119,7 @@ declare global {
     issueQueue(id: string): Promise<IssueQueuePreview>;
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
+    studioActivity(id: string): Promise<StudioActivity>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
     sandboxProbe(id: string): Promise<SandboxProbeResult>;
     reviewerProbe(id: string): Promise<ReviewerToolProbe>;

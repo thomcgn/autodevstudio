@@ -75,6 +75,7 @@ async function fixture(page){
       onIssueProgress:()=>()=>{},
       snapshot:async()=>({currentIssue:null,reviewIteration:0,processedIssues:[],failedIssues:[],
         checkpoint:null,hasState:false,updatedAt:null}),
+      studioActivity:async()=>({busy:false,kind:null,projectId:null,issueNumber:null}),
       studioStatus:async()=>({git:{root:project.path,branch:'main',head:'a'.repeat(40),
           remoteSlug:null,clean:true,canExecute:false,reasons:[]},
         lock:{held:false,startedAt:null},checkpoint:null,

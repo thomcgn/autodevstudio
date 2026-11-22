@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
@@ -90,6 +90,7 @@ function App(): React.JSX.Element {
   const [clock, setClock] = useState(Date.now());
   const [snapshot, setSnapshot] = useState<ControllerSnapshot | null>(null);
   const [studioStatus, setStudioStatus] = useState<StandaloneStatus | null>(null);
+  const [studioActivity, setStudioActivity] = useState<StudioActivity | null>(null);
   const [studioStatusError, setStudioStatusError] = useState('');
   const [snapshotError, setSnapshotError] = useState('');
   const [error, setError] = useState('');
@@ -143,6 +144,7 @@ function App(): React.JSX.Element {
     setSnapshot(null);
     setSnapshotError('');
     setStudioStatus(null);
+    setStudioActivity(null);
     setStudioStatusError('');
     setHistory([]);
     setIssues([]);
@@ -218,6 +220,7 @@ function App(): React.JSX.Element {
     setIssuesLoading(true);
     setIssuesError('');
     setBranchProtection(null);
+    void window.studio.studioActivity(selected).then(setStudioActivity).catch(()=>setStudioActivity(null));
     void window.studio.branchProtection(selected).then(setBranchProtection).catch(()=>
       setBranchProtection({protected:false,reason:'GitHub-Branch-Protection konnte nicht geprüft werden'}));
     setGitError('');
@@ -243,8 +246,27 @@ function App(): React.JSX.Element {
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
       void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
     }catch(error){
-      setAutomationError(formatIssueFailure(error));
-      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+      const classified=formatIssueFailure(error);
+      if(classified.includes('[conflict]')){
+        const [activity,status]=await Promise.all([
+          window.studio.studioActivity(selected).catch(()=>null),
+          window.studio.studioStatus(selected).catch(()=>null),
+        ]);
+        setStudioActivity(activity);
+        if(status)setStudioStatus(status);
+        if(activity?.busy){
+          const origin=activity.projectId===selected?'diesem Projekt':'einem anderen Projekt';
+          const detail=activity.issueNumber===null?'':', Issue #'+activity.issueNumber;
+          setAutomationError(classified+' Sperrhalter: '+activity.kind+detail+' in '+origin+'.');
+        }else if(status?.lock.held){
+          setAutomationError(classified+' Das ausgewählte Projekt hat einen aktiven oder verwaisten Git-Projektlock.');
+        }else{
+          setAutomationError(classified+' Kein aktiver In-App-Lauf nachweisbar; Checkpoint und Projektlock prüfen.');
+        }
+      }else{
+        setAutomationError(classified);
+        void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+      }
     }finally{setAutomatingIssue(null);}
   };
 
@@ -779,6 +801,11 @@ function App(): React.JSX.Element {
           {codeError && <div className="error" role="alert">{codeError}</div>}
           {verificationError && <div className="error" role="alert">{verificationError}</div>}
           {draftPrError && <div className="error" role="alert">{draftPrError}</div>}
+          {studioActivity?.busy && <div className="git-readiness" role="status">
+            <strong>Studio-Prozess belegt</strong>
+            <span>{studioActivity.kind}{studioActivity.issueNumber!==null?' · Issue #'+studioActivity.issueNumber:''}
+              {studioActivity.projectId!==selected?' · anderes Projekt':''}</span>
+          </div>}
           {automationError && <div className="error" role="alert">{automationError}</div>}
           {automationResult && <div className="git-readiness" role="status">
             <strong>{automationResult.status==='draft-created'?'Draft-PR automatisch erstellt':'Automatisierung sicher pausiert'}</strong>
