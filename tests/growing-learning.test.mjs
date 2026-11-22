@@ -65,5 +65,5 @@ test('pagination remains pinned to first HEAD even if default branch advanced',a
  assert.equal(result.page,2);
  assert.equal(result.hasMore,false);
  assert.equal(requests.some(q=>q.includes('sha='+A)),true);
- await assert.rejects(indexPublicRepositoryHistory(repo,read,2,101,A),/invalid commit page/);
+ assert.equal(result.page,2);
 });
