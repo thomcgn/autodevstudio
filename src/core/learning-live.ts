@@ -4,8 +4,8 @@ import {loadCoreCheckpoint} from './checkpoint-store.ts';
 import {captureGitIdentity} from './git-identity.ts';
 import {parseGitHubRemote} from './git-preflight.ts';
 import type {PublicHistoryIndex,GitHubHistoryRead} from './public-history.ts';
-import {generateHistoricalBook} from './historical-lessons.ts';
-import {saveHistoricalBook} from './learning-store.ts';
+import {generateHistoricalBook,mergeHistoricalBook} from './historical-lessons.ts';
+import {saveHistoricalBook,loadHistoricalBook} from './learning-store.ts';
 
 const exec=promisify(execFile);
 const SHA=/^[0-9a-f]{40}$/i;
@@ -52,7 +52,7 @@ export async function createVerifiedIssueLearning(
   commitSha:evidence.commitSha,reason:'unsupported-repository'};
  const index:PublicHistoryIndex={repository:evidence.repository,
   defaultBranch:'local-verified-issue',fixedHead:evidence.commitSha,licenseSpdx:null,
-  readOnly:true,requiresInterpretation:true,
+  readOnly:true,requiresInterpretation:true,page:1,hasMore:false,
   commits:[{sha:evidence.commitSha,title:'Geprüfter Issue-Commit #'+evidence.issueNumber,
     committedAt:null,changedPaths:files,pathsComplete:true,
     evidenceUrl:'https://github.com/'+evidence.repository+'/commit/'+evidence.commitSha}]};
@@ -61,7 +61,20 @@ export async function createVerifiedIssueLearning(
     throw Error('Unexpected source endpoint');
   return {files:parsedFiles};
  };
- const book=await generateHistoricalBook(index,reader);
+ const candidate=await generateHistoricalBook(index,reader);
+ const previous=loadHistoricalBook(base,evidence.repository);
+ if(previous&&previous.lessons>0&&previous.lessonEntries.length===0)
+  throw Error('Previous learning snapshot lacks typed topic records');
+ const book=mergeHistoricalBook(previous?{
+  repository:previous.repository,head:previous.head,license:previous.license,
+  lessons:previous.lessonEntries,bookMarkdown:previous.bookMarkdown,
+  solutionsMarkdown:previous.solutionsMarkdown,reportsMarkdown:previous.reportsMarkdown,
+ }:null,candidate);
+ const marker='\n## Abgeschlossener AutoDev-Lauf\n';
+ const oldReports=previous?.reportsMarkdown??'';
+ const firstAudit=oldReports.indexOf(marker);
+ if(firstAudit>=0)book.reportsMarkdown+=oldReports.slice(firstAudit);
+ if(!book.reportsMarkdown.includes('- Draft-PR: '+evidence.draftUrl))
  book.reportsMarkdown+='\n## Abgeschlossener AutoDev-Lauf\n'+
   '- Issue: https://github.com/'+evidence.repository+'/issues/'+evidence.issueNumber+'\n'+
   '- Draft-PR: '+evidence.draftUrl+'\n'+

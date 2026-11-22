@@ -257,6 +257,18 @@ function App(): React.JSX.Element {
       setLearningError('Lehrbuch konnte nicht erzeugt werden. Quellenzugriff und Netzwerk prüfen.');
     }finally{setLearningGenerating(false);}
   };
+  const growLearning=async():Promise<void>=>{
+    if(!learningBook?.hasMore||!learningBook.page||learningGenerating)return;
+    setLearningGenerating(true);setLearningError('');setLearningMessage('');
+    try{
+      const next=await window.studio.generateLearningBook(
+        learningBook.repository,learningBook.page+1,learningBook.head);
+      setLearningBook(next);
+      setLearningMessage('Weitere Commits geprüft. Das Lehrbuch enthält jetzt '+next.lessons+' Themen.');
+    }catch{
+      setLearningError('Weitere Historie konnte nicht analysiert werden. Der bisherige Stand bleibt unverändert.');
+    }finally{setLearningGenerating(false);}
+  };
   const exportLearning=async(kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<void>=>{
     if(!learningBook||learningExporting)return;
     setLearningExporting(true);setLearningError('');
@@ -1038,6 +1050,11 @@ function App(): React.JSX.Element {
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('solutions','pdf')}>Lösungen als PDF</button>
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('solutions','md')}>Lösungen als MD</button>
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('reports','md')}>Entwicklungsreports als MD</button>
+              <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('reports','pdf')}>Entwicklungsreports als PDF</button>
+              {learningBook.hasMore&&<button type="button"
+                disabled={learningGenerating||learningExporting} onClick={()=>void growLearning()}>
+                Weitere 12 Commits analysieren
+              </button>}
             </div>
             <details><summary>Lehrbuch-Inhalt anzeigen</summary>
               <pre className="learning-preview">{learningBook.bookMarkdown}</pre>

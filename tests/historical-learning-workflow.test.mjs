@@ -50,8 +50,11 @@ test('repeated imports are idempotent snapshots and never modify source reposito
  assert.equal(first.directory,again.directory);
  assert.equal(loadHistoricalBook(root,index.repository)?.bookMarkdown,book.bookMarkdown);
  assert.equal(fs.readFileSync(path.join(first.directory,'solutions.md'),'utf8'),book.solutionsMarkdown);
- assert.equal(fs.existsSync(path.join(root,'learning-library','example__studio',A+'--history','reports.md')),true);
- assert.throws(()=>saveHistoricalBook(root,{...book,bookMarkdown:'modified'}),/refusing overwrite/);
+ assert.equal(fs.existsSync(path.join(first.directory,'reports.md')),true);
+ const changed=saveHistoricalBook(root,{...book,bookMarkdown:'modified'});
+ assert.notEqual(changed.directory,first.directory);
+ assert.equal(fs.existsSync(path.join(first.directory,'book.md')),true);
+ assert.equal(loadHistoricalBook(root,index.repository)?.bookMarkdown,'modified');
 });
 test('HTML export is printable, escapes source text and keeps HTTPS links',()=>{
  const html=markdownToPrintHtml('# Titel\n\n## Thema\n\nText <script>x</script>\n\n~~~typescript\nconst x = "<b>";\n~~~\n\n- [Doc](https://example.org/help)');

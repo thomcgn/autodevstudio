@@ -22,6 +22,8 @@ export interface PublicHistoryIndex {
   commits:readonly HistoricalCommit[];
   readOnly:true;
   requiresInterpretation:true;
+  page:number;
+  hasMore:boolean;
 }
 export type GitHubHistoryRead=(endpoint:string)=>Promise<unknown>;
 function record(value:unknown):Record<string,unknown>|null {
@@ -79,9 +81,12 @@ function getPaths(value:unknown):{paths:readonly string[];complete:boolean}{
 /** Source discovery only. Never infer motives, quality PASS or a lesson from a commit message. */
 export async function indexPublicRepositoryHistory(
   input:string,read:GitHubHistoryRead=readGitHubPublicJson,limit=12,
+  page=1,pinnedHead?:string,
 ):Promise<PublicHistoryIndex>{
   const slug=parsePublicRepository(input);
   if(!Number.isSafeInteger(limit)||limit<1||limit>MAX_COMMITS)fail('invalid commit limit');
+  if(!Number.isSafeInteger(page)||page<1||page>100)fail('invalid commit page');
+  if(pinnedHead!==undefined&&!SHA.test(pinnedHead))fail('invalid pinned commit SHA');
   const metadata=requiredRecord(await read('repos/'+slug),'repository metadata missing');
   if(metadata.private!==false||typeof metadata.full_name!=='string'||
      metadata.full_name.toLowerCase()!==slug.toLowerCase())
@@ -94,9 +99,10 @@ export async function indexPublicRepositoryHistory(
   const branch=metadata.default_branch;
   const branchInfo=requiredRecord(await read('repos/'+slug+'/branches/'+encodeURIComponent(branch)),
     'default branch metadata missing');
-  const head=record(branchInfo.commit)?.sha;
-  if(typeof head!=='string'||!SHA.test(head))fail('invalid branch HEAD');
-  const history=await read('repos/'+slug+'/commits?sha='+head+'&per_page='+limit);
+  const liveHead=record(branchInfo.commit)?.sha;
+  if(typeof liveHead!=='string'||!SHA.test(liveHead))fail('invalid branch HEAD');
+  const head=pinnedHead??liveHead;
+  const history=await read('repos/'+slug+'/commits?sha='+head+'&per_page='+limit+(page===1?'':'&page='+page));
   if(!Array.isArray(history)||history.length>limit)fail('invalid commits response');
   const commits:HistoricalCommit[]=[];
   const seen=new Set<string>();
@@ -121,5 +127,5 @@ export async function indexPublicRepositoryHistory(
   const licenseSpdx=typeof license==='string'&&license!=='NOASSERTION'&&
     /^[A-Za-z0-9-.+]{1,60}$/.test(license)?license:null;
   return {repository:slug,defaultBranch:branch,fixedHead:head,licenseSpdx,
-    commits,readOnly:true,requiresInterpretation:true};
+    commits,readOnly:true,requiresInterpretation:true,page,hasMore:commits.length===limit};
 }

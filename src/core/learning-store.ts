@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
+import type {HistoricalLesson} from './historical-lessons.ts';
 import type {HistoricalBook} from './historical-lessons.ts';
 
 export interface SavedLearningBook {
   repository:string;head:string;directory:string;lessons:number;
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
+  lessonEntries:HistoricalLesson[];license:string|null;
 }
 const SHA=/^[0-9a-f]{40}$/i;
 const SLUG=/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -25,8 +28,7 @@ function storeFiles(directory:string,book:HistoricalBook):void {
  fs.writeFileSync(path.join(directory,'reports.md'),book.reportsMarkdown,{mode:0o600,flag:'wx'});
  fs.writeFileSync(path.join(directory,'sources.json'),JSON.stringify({
   repository:book.repository,head:book.head,license:book.license,
-  lessons:book.lessons.map(l=>({key:l.key,commits:l.commits,paths:l.paths,
-   documentation:l.sourceUrl})),
+  lessons:book.lessons,
  },null,2),{mode:0o600,flag:'wx'});
 }
 /** Local application data only. Never writes into source repositories.
@@ -39,7 +41,9 @@ export function saveHistoricalBook(
  if(!/^(?:history|issue-[1-9][0-9]*)$/.test(variant))throw Error('Invalid learning snapshot kind');
  const root=rootFor(base,book.repository);
  fs.mkdirSync(root,{recursive:true,mode:0o700});
- const snapshot=book.head+'--'+variant;
+ const digest=createHash('sha256').update(book.bookMarkdown).update(book.solutionsMarkdown)
+  .update(book.reportsMarkdown).digest('hex').slice(0,12);
+ const snapshot=book.head+'--'+variant+'-'+digest;
  const target=path.join(root,snapshot);
  if(fs.existsSync(target)){
   if(!fs.statSync(target).isDirectory())throw Error('Invalid existing learning snapshot');
@@ -59,7 +63,8 @@ export function saveHistoricalBook(
  fs.writeFileSync(temporary,JSON.stringify({head:book.head,repository:book.repository,snapshot}),{
   mode:0o600,flag:'w'});
  fs.renameSync(temporary,latest);
- return {...book,directory:target,lessons:book.lessons.length};
+ return {...book,directory:target,lessons:book.lessons.length,
+  lessonEntries:book.lessons,license:book.license};
 }
 export function loadHistoricalBook(base:string,input:string):SavedLearningBook|null{
  if(!SLUG.test(input))throw Error('Invalid learning repository');
@@ -73,7 +78,7 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
   throw Error('Invalid stored learning index');
  const snapshot=info.snapshot??info.head;
  if(typeof snapshot!=='string'||!(SHA.test(snapshot)||
-    /^[0-9a-f]{40}--(?:history|issue-[1-9][0-9]*)$/i.test(snapshot)))
+    /^[0-9a-f]{40}--(?:history|issue-[1-9][0-9]*)(?:-[0-9a-f]{12})?$/i.test(snapshot)))
   throw Error('Invalid stored learning snapshot');
  const directory=path.join(root,snapshot);
  for(const filename of ['book.md','solutions.md','reports.md']){
@@ -82,10 +87,17 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
    throw Error('Invalid stored learning file');
  }
  const sources:unknown=JSON.parse(fs.readFileSync(path.join(directory,'sources.json'),'utf8'));
- const list=typeof sources==='object'&&sources!==null&&!Array.isArray(sources)
-  ?(sources as {lessons?:unknown}).lessons:null;
+ const metadata=typeof sources==='object'&&sources!==null&&!Array.isArray(sources)
+  ?sources as {lessons?:unknown;license?:unknown}:null;
+ const list=metadata?.lessons;
+ const lessonEntries:HistoricalLesson[]=Array.isArray(list)?list.filter((x:unknown):
+    x is HistoricalLesson=>typeof x==='object'&&x!==null&&!Array.isArray(x)&&
+      typeof (x as {key?:unknown}).key==='string'&&
+      typeof (x as {plain?:unknown}).plain==='string'&&
+      Array.isArray((x as {commits?:unknown}).commits)):[];
+ const license=typeof metadata?.license==='string'?metadata.license:null;
  return {repository:input,head:info.head,directory,
-  lessons:Array.isArray(list)?list.length:0,
+  lessons:Array.isArray(list)?list.length:0,lessonEntries,license,
   bookMarkdown:fs.readFileSync(path.join(directory,'book.md'),'utf8'),
   solutionsMarkdown:fs.readFileSync(path.join(directory,'solutions.md'),'utf8'),
   reportsMarkdown:fs.readFileSync(path.join(directory,'reports.md'),'utf8')};

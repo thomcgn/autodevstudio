@@ -24,7 +24,7 @@ import { assertBranchProtection } from '../core/branch-protection';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
 import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/public-history';
-import { generateHistoricalBook } from '../core/historical-lessons';
+import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import { documentFinishedIssue } from '../core/learning-live';
@@ -338,14 +338,27 @@ app.whenReady().then(() => {
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
   });
-  ipcMain.handle('learning:generate', async (_event, input: unknown) => {
-    if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
-    const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12);
-    const book=await generateHistoricalBook(index,readGitHubPublicJson);
-    const saved=saveHistoricalBook(app.getPath('userData'),book);
+  ipcMain.handle('learning:generate', async (_event, input: unknown,
+    page:unknown=1,pinnedHead?:unknown) => {
+    if(typeof input!=='string'||input.length>250||typeof page!=='number'||
+      (pinnedHead!==undefined&&typeof pinnedHead!=='string'))
+      throw Error('Invalid learning source');
+    const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12,page,
+      pinnedHead as string|undefined);
+    const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
+    const previous=loadHistoricalBook(app.getPath('userData'),index.repository);
+    if(previous&&previous.lessons>0&&previous.lessonEntries.length===0)
+      throw Error('Previous learning snapshot lacks typed topic records: migration required');
+    const prior=previous?{repository:previous.repository,head:previous.head,
+      license:previous.license,lessons:previous.lessonEntries,
+      bookMarkdown:previous.bookMarkdown,solutionsMarkdown:previous.solutionsMarkdown,
+      reportsMarkdown:previous.reportsMarkdown}:null;
+    const grown=mergeHistoricalBook(prior,candidate);
+    const saved=saveHistoricalBook(app.getPath('userData'),grown);
     return {repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
-      solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown};
+      solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
+      page:index.page,hasMore:index.hasMore};
   });
   ipcMain.handle('learning:load', (_event, repository: unknown) => {
     if(typeof repository!=='string')throw Error('Invalid learning repository');
