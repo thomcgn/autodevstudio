@@ -304,15 +304,15 @@ export async function analyzeSourceWithOllama(
  const allPaths=sources.map(f=>f.path).join('\n');
  // The architecture is a documented sample; later chapters still inspect
  // every selected source chunk. Avoid pretending this sample is the whole tree.
- const overviewPaths=cloud?allPaths.slice(0,3000):allPaths;
- const overviewSnippetChars=cloud?650:2800;
+ const overviewPaths=cloud?allPaths.slice(0,2500):allPaths;
+ const overviewSnippetChars=cloud?500:2800;
  const sourceHistory=(deps.history??[]).filter(h=>SHA.test(h.sha)&&
    typeof h.title==='string'&&Array.isArray(h.changedPaths))
    .slice(0,40);
  const historyText=sourceHistory.map(h=>
   h.sha.slice(0,12)+' '+h.title.replace(/[\r\n\t<>]/g,' ').slice(0,240)+
   ' [Dateien: '+h.changedPaths.slice(0,8).join(', ')+']')
-  .join('\n').slice(0,cloud?2000:6500);
+  .join('\n').slice(0,cloud?1200:6500);
  send('architecture',0,total,'Ollama erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
  const architecturePrompt='Gib die Gesamtarchitektur, die wichtigsten Module, Ein-/Ausgaben,'+
   ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
