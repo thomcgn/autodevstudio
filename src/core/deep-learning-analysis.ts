@@ -18,6 +18,7 @@ export interface DeepLearningProgress {
 }
 export interface DeepLearningResult {
  repository:string;head:string;model:string;filesAnalyzed:number;
+ filesTotal:number;nextOffset:number|null;
  filesSkipped:number;complete:boolean;bookMarkdown:string;
  solutionsMarkdown:string;reportsMarkdown:string;
 }
@@ -218,7 +219,8 @@ export async function analyzeSourceWithOllama(
  input:string,head:string,runId:string,startedAt:number,
  emit:(event:DeepLearningProgress)=>void,signal:AbortSignal,
  deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
-  history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[]}={},
+  history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[];
+  offset?:number;}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
@@ -241,20 +243,24 @@ export async function analyzeSourceWithOllama(
  const all=tree.tree.filter(raw=>object(raw)?.type==='blob').map(validEntry);
  const eligibleFiles=all.filter(eligible).sort((a,b)=>a.path.localeCompare(b.path));
  if(eligibleFiles.length===0)throw Error('No suitable code files');
- if(eligibleFiles.length>FILE_LIMIT)throw Error('Repository has more than '+FILE_LIMIT+
-  ' eligible files; complete analysis is beyond the safe per-run source limit');
- send('loading',0,eligibleFiles.length,'Quelldateien werden schreibgeschützt geladen','',null);
+ const offset=deps.offset??0;
+ if(!Number.isSafeInteger(offset)||offset<0||offset>=eligibleFiles.length)
+  throw Error('Invalid source-analysis continuation cursor');
+ const selectedFiles=eligibleFiles.slice(offset,offset+FILE_LIMIT);
+ const nextOffset=offset+selectedFiles.length<eligibleFiles.length
+  ?offset+selectedFiles.length:null;
+ send('loading',0,selectedFiles.length,'Quelldateien werden schreibgeschützt geladen','',null);
  await (deps.preflight??(()=>requireOllama()))();
  const sources:SourceFile[]=[];
  const chunks:SourceFile[]=[];
- for(const item of eligibleFiles){
+ for(const item of selectedFiles){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const content=decodeBlob(await read('repos/'+repository+'/git/blobs/'+item.sha),item.sha);
   sources.push({path:item.path,sha:item.sha,content});
   for(let start=0,n=1;start<content.length;start+=CHUNK_CHARS,n++)
    chunks.push({path:item.path+' (Abschnitt '+n+')',sha:item.sha,
      content:content.slice(start,start+CHUNK_CHARS)});
-  send('loading',sources.length,eligibleFiles.length,
+  send('loading',sources.length,selectedFiles.length,
    'Quelldatei '+sources.length+'/'+eligibleFiles.length+': '+item.path,'',null);
  }
  const total=Math.ceil(chunks.length/GROUP_SIZE)+1;
@@ -319,7 +325,7 @@ export async function analyzeSourceWithOllama(
  }
  const index=['# Code-Lehrbuch: '+repository,'','Commit: '+head,
   'Modell: lokales Ollama '+MODEL+' (kein externer Tokenverbrauch)',
-  'Abgedeckte Quelldateien: '+sources.length+' in '+chunks.length+' Codeabschnitten; ausgelassene Blob-Dateien: '+(all.length-sources.length),
+  'Abgedeckte Quelldateien in diesem Batch: '+sources.length+' von insgesamt '+eligibleFiles.length+' geeigneten Dateien; Abschnittsbeginn '+offset+'; ausgelassene Blob-Dateien: '+(all.length-eligibleFiles.length),
   'Eine vollständige Abdeckung sämtlicher Dateiformate ist nur bei null ausgelassenen Dateien gegeben.',
   'Architekturgründe sind technische Einordnungen, nicht nachgewiesene Entwicklergedanken.',
   'Dokumentierte Änderungsschritte als ergänzende Quellen: '+sourceHistory.length,
@@ -327,7 +333,9 @@ export async function analyzeSourceWithOllama(
   ...chapters.map((_,i)=>(i+1)+'. Kapitel '+(i+1)),''];
  const result:DeepLearningResult={
   repository,head,model:MODEL,filesAnalyzed:sources.length,
-  filesSkipped:all.length-sources.length,complete:all.length===sources.length,
+  filesTotal:eligibleFiles.length,nextOffset,
+  filesSkipped:all.length-eligibleFiles.length,
+  complete:nextOffset===null&&all.length===eligibleFiles.length,
   bookMarkdown:index.join('\n')+chapters.join('\n\n')+'\n',
   solutionsMarkdown:'# Getrennte Musterlösungen – '+repository+'\n\n'+solutions.join('\n\n')+'\n',
   reportsMarkdown:'# Quellen und Einschränkungen – '+repository+'\n\n'+reports.join('\n\n')+'\n',
