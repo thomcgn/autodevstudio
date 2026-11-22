@@ -35,7 +35,7 @@ interface ExistingLabel {name:string;color:string;description:string}
 function parseExisting(raw:string):Map<string,ExistingLabel>{
  let source:unknown;
  try{source=JSON.parse(raw);}catch{throw Error('GitHub label response malformed');}
- if(!Array.isArray(source)||source.length>1000)
+ if(!Array.isArray(source)||source.length>=1000)
   throw Error('GitHub label list incomplete or invalid');
  const found=new Map<string,ExistingLabel>();
  for(const item of source){
@@ -43,11 +43,11 @@ function parseExisting(raw:string):Map<string,ExistingLabel>{
    throw Error('Invalid GitHub label');
   const x=item as Record<string,unknown>;
   if(typeof x.name!=='string'||typeof x.color!=='string'||
-    typeof x.description!=='string'||!/^[a-fA-F0-9]{6}$/.test(x.color))
+    (x.description!==null&&typeof x.description!=='string')||!/^[a-fA-F0-9]{6}$/.test(x.color))
     throw Error('Invalid GitHub label metadata');
   const key=x.name.toLowerCase();
   if(found.has(key))throw Error('Duplicate GitHub label');
-  found.set(key,{name:x.name,color:x.color.toLowerCase(),description:x.description});
+  found.set(key,{name:x.name,color:x.color.toLowerCase(),description:typeof x.description==='string'?x.description:''});
  }
  return found;
 }
