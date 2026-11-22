@@ -47,15 +47,15 @@ test('large repository resumes at cached page after API rate limit',async()=>{
   assert.equal(result.head,HEAD);
   assert.equal(result.licenseSpdx,'MIT');
   assert.equal(new Set(result.commits.map(x=>x.sha)).size,2055);
-  assert.equal(resumedRequests.some(x=>x.includes('page=2')),false);
-  assert.equal(resumedRequests.some(x=>x.includes('page=6')),false);
-  assert.equal(resumedRequests.some(x=>x.includes('page=7')),true);
+  assert.equal(resumedRequests.some(x=>/[&?]page=2(?:&|$)/.test(x)),false);
+  assert.equal(resumedRequests.some(x=>/[&?]page=6(?:&|$)/.test(x)),false);
+  assert.equal(resumedRequests.some(x=>/[&?]page=7(?:&|$)/.test(x)),true);
   const fullyCachedRequests=[];
   const cached=await readCompletePublicHistory(directory,'example/studio',{
    read:api({requests:fullyCachedRequests}),
   });
   assert.equal(cached.commits.length,2055);
-  assert.equal(fullyCachedRequests.filter(x=>x.includes('page=')).length,1);
+  assert.equal(fullyCachedRequests.filter(x=>/[&?]page=/.test(x)).length,0);
  }finally{fs.rmSync(directory,{recursive:true,force:true});}
 });
 test('an invalid cache page fails closed rather than silently skipping history',async()=>{
