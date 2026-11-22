@@ -395,19 +395,31 @@ app.whenReady().then(() => {
     if(typeof input!=='string'||input.length>250||typeof page!=='number'||
       (pinnedHead!==undefined&&typeof pinnedHead!=='string'))
       throw Error('Invalid learning source');
-    const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12,page,
-      pinnedHead as string|undefined);
-    const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
-    const previous=loadHistoricalBook(app.getPath('userData'),index.repository);
-    if(previous&&previous.lessons>0&&previous.lessonEntries.length===0)
-      throw Error('Previous learning snapshot lacks typed topic records: migration required');
-    const prior=previous?{repository:previous.repository,head:previous.head,
-      license:previous.license,lessons:previous.lessonEntries,
-      bookMarkdown:previous.bookMarkdown,solutionsMarkdown:previous.solutionsMarkdown,
-      reportsMarkdown:previous.reportsMarkdown,caseStudies:previous.caseStudies}:null;
-    const grown=mergeHistoricalBook(prior,candidate);
-    grown.pagination={page:index.page,hasMore:index.hasMore};
-    const saved=saveHistoricalBook(app.getPath('userData'),grown);
+    // Automatic bounded paging: persist each successful page so an API error
+    // leaves the last verified Markdown snapshot recoverable.
+    let lastSaved:ReturnType<typeof saveHistoricalBook>|null=null;
+    await walkPublicRepositoryHistory(input,{
+      pageSize:20,
+      onPage:async index=>{
+        const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
+        const previous=loadHistoricalBook(app.getPath('userData'),index.repository);
+        if(previous&&previous.head===index.fixedHead&&previous.lessons>0&&
+          previous.lessonEntries.length===0)
+          throw Error('Previous learning snapshot lacks typed topic records: migration required');
+        const prior=previous&&previous.head===index.fixedHead
+          ?{repository:previous.repository,head:previous.head,
+            license:previous.license,lessons:previous.lessonEntries,
+            bookMarkdown:previous.bookMarkdown,
+            solutionsMarkdown:previous.solutionsMarkdown,
+            reportsMarkdown:previous.reportsMarkdown,
+            caseStudies:previous.caseStudies}:null;
+        const grown=mergeHistoricalBook(prior,candidate);
+        grown.pagination={page:index.page,hasMore:index.hasMore};
+        lastSaved=saveHistoricalBook(app.getPath('userData'),grown);
+      },
+    });
+    if(!lastSaved)throw Error('No history pages were analyzed');
+    const saved=lastSaved as ReturnType<typeof saveHistoricalBook>;
     return {repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
