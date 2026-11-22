@@ -18,7 +18,7 @@ import {previewCheckpointIssueStatus} from '../core/issue-status-policy';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
-import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
+import {assertSeniorStackPreflight,detectTechStackProfile} from '../core/tech-stack-profile';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
@@ -430,6 +430,12 @@ app.whenReady().then(() => {
         'GitHub protection could not be verified'} as const;
     }
   });
+  ipcMain.handle('core:tech-stack', (_event,id:unknown) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    return detectTechStackProfile(project.path);
+  });
   ipcMain.handle('core:issue-labels:install', async (_event,id:unknown) => {
     if(typeof id!=='string')throw Error('Invalid project ID');
     if(active||localCodeController||publishingDraftPr)throw Error('Cannot change labels during active workflow');
@@ -488,7 +494,7 @@ app.whenReady().then(() => {
       if(cp && cp.issueNumber!==issue.number)
         throw Error('Another issue has a pending checkpoint');
       if(!cp)assertIssueStartReady(issue.labels);
-      const scripts=selectSafeQualityScripts(project.path);
+      const scripts=assertSeniorStackPreflight(project.path).qualityScripts;
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
       const quota=new FreeQuotaGuard(base);
@@ -533,6 +539,7 @@ app.whenReady().then(() => {
     localCodeOwner={projectId:id,issueNumber,kind:'issue-build'};
     try{
       await assertBranchProtection(project.path);
+      assertSeniorStackPreflight(project.path);
       const base=app.getPath('userData');
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -553,7 +560,7 @@ app.whenReady().then(() => {
     const issues=await listProjectIssues(project.path);
     const issue=issues.find(item=>item.number===issueNumber);
     if(!issue)throw Error('Issue not found among open issues');
-    const scripts=selectSafeQualityScripts(project.path);
+    const scripts=assertSeniorStackPreflight(project.path).qualityScripts;
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
@@ -586,6 +593,7 @@ app.whenReady().then(() => {
     publishingOwner={projectId:id,issueNumber,kind:'draft-publish'};
     try{
       await assertBranchProtection(project.path);
+      assertSeniorStackPreflight(project.path);
       const issues=await listProjectIssues(project.path);
       if(!issues.some(item=>item.number===issueNumber))
         throw Error('Issue is not open or no longer available');

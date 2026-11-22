@@ -14,6 +14,12 @@ export interface IssueStatusPreview {
  issueNumber:number;current:string|null;proposed:string|null;
  allowed:false;reason:string;provenance:'checkpoint'|'none';
 }
+export interface TechStackProfilePreview {
+ schemaVersion:1;kind:string;languages:readonly string[];frameworks:readonly string[];
+ packageManager:string|null;toolchain:Record<string,string>;strictTypechecking:boolean;
+ qualityScripts:readonly string[];evidence:readonly {file:string;sha256:string;bytes:number}[];
+ blockers:readonly string[];canDevelop:boolean;
+}
 export interface StudioActivity {
   busy:boolean;
   kind:'issue-auto-draft'|'issue-build'|'issue-review'|'draft-publish'|'legacy-run'|null;
@@ -133,6 +139,7 @@ declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
+    techStackProfile(id:string):Promise<TechStackProfilePreview>;
     issueStatusPreviews(id:string):Promise<IssueStatusPreview[]>;
     installIssueLabels(id:string):Promise<{repository:string;protectedBranch:string;created:readonly string[];alreadyPresent:readonly string[];total:number}>;
     branchProtection(id: string): Promise<BranchProtectionStatus>;

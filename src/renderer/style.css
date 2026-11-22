@@ -488,3 +488,10 @@ html,body,#root{max-width:100%;overflow:hidden}
 .issue-status-preview strong{font-size:12px}
 .issue-status-preview p{margin:5px 0;font-size:12px;line-height:1.4}
 .issue-status-preview small{color:#b9c9dd;font-size:11px}
+
+.issue-stack-readiness{border:1px solid #d38468;background:#3b282b;
+  padding:10px 12px;border-radius:8px;min-width:0;overflow-wrap:anywhere}
+.issue-stack-readiness--ready{border-color:#65a57d;background:#1b322d}
+.issue-stack-readiness strong{font-size:12px}
+.issue-stack-readiness p,.issue-stack-readiness details{font-size:12px;margin:6px 0;line-height:1.5}
+.issue-stack-readiness summary{cursor:pointer;font-weight:650}

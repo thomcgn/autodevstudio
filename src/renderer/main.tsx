@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview, IssueStatusPreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview, IssueStatusPreview, TechStackProfilePreview } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
@@ -75,6 +75,8 @@ function App(): React.JSX.Element {
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
+  const [stackProfile,setStackProfile] = useState<TechStackProfilePreview|null>(null);
+  const [stackProfileError,setStackProfileError] = useState('');
   const [labelsInstalling,setLabelsInstalling] = useState(false);
   const [labelsResult,setLabelsResult] = useState('');
   const [labelsError,setLabelsError] = useState('');
@@ -246,6 +248,10 @@ function App(): React.JSX.Element {
     if (!selected) return;
     setIssuesLoading(true);
     setIssuesError('');
+    setStackProfile(null);setStackProfileError('');
+    void window.studio.techStackProfile(selected).then(setStackProfile)
+      .catch(error=>setStackProfileError(error instanceof Error?error.message:
+        'TechStack-Profil konnte nicht geprüft werden'));
     setBranchProtection(null);
     void window.studio.studioStatus(selected).then(setStudioStatus)
       .catch(()=>setStudioStatus(null));
@@ -888,6 +894,21 @@ function App(): React.JSX.Element {
               :branchProtection?.protected===false?branchProtection.reason:
                 'Keine Entwicklung, bis GitHub die Regeln bestätigt hat'}</span>
           </div>
+          <section className={'issue-stack-readiness'+(stackProfile?.canDevelop?' issue-stack-readiness--ready':'')}
+            role="status">
+            <strong>{stackProfile?.canDevelop?'TechStack-Preflight bestanden':
+              'TechStack-Preflight: Entwicklung nicht freigegeben'}</strong>
+            {stackProfile && <p>{stackProfile.kind} · {stackProfile.packageManager??'kein bestätigter Package Manager'}
+              · {stackProfile.qualityScripts.length} Pflichtprüfungen</p>}
+            {stackProfile?.blockers.map((reason,i)=><p key={i}>Blocker: {reason}</p>)}
+            {stackProfileError&&<p>Diagnose: {stackProfileError}</p>}
+            {stackProfile && <details>
+              <summary>Verifizierte Projektdateien und Toolversionen</summary>
+              {stackProfile.evidence.map(item=><p key={item.file}>{item.file} · SHA256 {item.sha256.slice(0,12)}</p>)}
+              {Object.entries(stackProfile.toolchain).map(([name,version])=>
+                <p key={name}>{name}: {version}</p>)}
+            </details>}
+          </section>
           {studioStatus && (studioStatus.recovery.state!=='none'||studioStatus.lock.held) &&
             <section className="issue-safety-alert" role="alert" aria-label="Checkpoint-Sperre">
               <strong>⛔ CHECKPOINT / PROJEKTSPERRE</strong>

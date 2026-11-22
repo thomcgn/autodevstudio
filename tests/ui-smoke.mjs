@@ -20,6 +20,12 @@ const secondary={id:'fixture-other',name:'another-repo',path:'/tmp/another-ui-fi
 const success={
   issues:[],
   issueStatusPreviews:[],
+  techStackProfile:{schemaVersion:1,kind:'typescript-electron-react',
+    languages:['TypeScript'],frameworks:['React','Electron'],packageManager:'npm',
+    toolchain:{typescript:'^5.9.0'},strictTypechecking:true,
+    qualityScripts:['typecheck','test:policy'],
+    evidence:[{file:'tsconfig.json',sha256:'a'.repeat(64),bytes:350}],
+    blockers:[],canDevelop:true},
   issueQueue:{previewOnly:true,executionEnabled:false,readyToStart:false,nextIssueNumber:null,
     reason:'No eligible open issues',queue:[]},
   studioStatus:{git:{root:project.path,branch:'main',head:'a'.repeat(40),
@@ -121,6 +127,7 @@ async function fixture(page){
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
       issues:()=>respond('issues'),issueQueue:()=>respond('issueQueue'),
       issueStatusPreviews:()=>respond('issueStatusPreviews'),
+      techStackProfile:()=>respond('techStackProfile'),
       installIssueLabels:async()=>({repository:'example/studio',protectedBranch:'main',created:['status:ready'],alreadyPresent:[],total:16}),
       publicRepoHistory:()=>respond('publicRepoHistory'),
       generateLearningBook:()=>respond('learningBook'),
@@ -174,6 +181,8 @@ try {
       busy:true,kind:'issue-review',projectId:'fixture-other',issueNumber:5};
   });
   await page.getByRole('button',{name:'Issues',exact:true}).click();
+  await page.getByText('TechStack-Preflight bestanden',{exact:true}).waitFor();
+  await page.getByText('typescript-electron-react',{exact:false}).first().waitFor();
   await page.getByText('Studio-Prozess belegt',{exact:true}).waitFor();
   await page.getByText('anderes Projekt',{exact:false}).first().waitFor();
   await page.evaluate(()=>{
