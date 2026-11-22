@@ -9,6 +9,7 @@ const WARNING_PATTERNS=[
   /(?:^|\n)\s*(?:\([^)]*\)\s+)?(?:WARNING|WARN|Warning):\s/i,
   /(?:^|\n)\s*\[vite\]\s*(?:warn|warning)\b/i,
   /(?:^|\n)\s*(?:\[\d+\]\s+)?(?:deprecated|deprecation):\s/i,
+  /(?:^|\n)\s*\(!\)\s+/,
 ];
 export function findBuildWarnings(output){
   const text=output.replace(/\x1b\[[0-9;]*m/g,'');
@@ -23,7 +24,7 @@ const which={
     ...fs.readdirSync(path.join(root,'tests'))
       .filter(file=>file.endsWith('.test.mjs')).sort()
       .map(file=>'tests/'+file)]],
-  package:[process.execPath,['node_modules/@electron-forge/cli/dist/electron-forge.js','package']],
+  package:[process.execPath,['node_modules/.bin/electron-forge','package']],
   ui:[process.execPath,['tests/ui-smoke.mjs']],
   desktop:[process.execPath,['tests/electron-native-smoke.mjs']],
   install:['npm',['ci']],
@@ -39,13 +40,15 @@ async function main(){
    [process.env.NODE_OPTIONS,'--throw-deprecation'].filter(Boolean).join(' ')},
    stdio:['inherit','pipe','pipe'],shell:false});
  const output=[];
+ let length=0;
  let truncated=false;
  const relay=(part,target)=>{
    part.on('data',chunk=>{
      target.write(chunk);
      if(!truncated){
        output.push(chunk.toString('utf8'));
-       if(output.join('').length>4_000_000)truncated=true;
+       length+=chunk.length;
+       if(length>4_000_000)truncated=true;
      }
    });
  };
