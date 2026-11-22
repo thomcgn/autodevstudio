@@ -138,6 +138,7 @@ export async function indexPublicRepositoryHistory(
 export async function walkPublicRepositoryHistory(
  input:string,options:{
   read?:GitHubHistoryRead;pageSize?:number;signal?:AbortSignal;
+  startPage?:number;pinnedHead?:string;initialCount?:number;collect?:boolean;
   onPage?:(page:PublicHistoryIndex,commitsSeen:number)=>Promise<void>|void;
  }={},
 ):Promise<{repository:string;head:string;licenseSpdx:string|null;commits:HistoricalCommit[]}>{
@@ -147,8 +148,14 @@ export async function walkPublicRepositoryHistory(
   fail('invalid history page size');
  const commits:HistoricalCommit[]=[];
  const seen=new Set<string>();
- let page=1;
- let pinnedHead:string|undefined;
+ let page=options.startPage??1;
+ let pinnedHead=options.pinnedHead;
+ const initialCount=options.initialCount??0;
+ let processed=initialCount;
+ if(!Number.isSafeInteger(page)||page<1||
+   (page>1&&(!pinnedHead||!SHA.test(pinnedHead)))||
+   !Number.isSafeInteger(initialCount)||initialCount<0)
+  fail('invalid history resume cursor');
  let repository='';
  let licenseSpdx:string|null=null;
  while(true){
@@ -162,9 +169,10 @@ export async function walkPublicRepositoryHistory(
   for(const commit of index.commits){
    if(seen.has(commit.sha))fail('duplicate SHA across history pages');
    seen.add(commit.sha);
-   commits.push(commit);
+   if(options.collect!==false)commits.push(commit);
+   processed++;
   }
-  await options.onPage?.(index,commits.length);
+  await options.onPage?.(index,processed);
   if(!index.hasMore)break;
   page++;
   if(!Number.isSafeInteger(page))fail('commit page counter overflow');
