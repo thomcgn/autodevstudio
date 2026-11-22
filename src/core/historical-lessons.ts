@@ -220,7 +220,7 @@ export function renderHistoricalBook(
 ):HistoricalBook {
  const book=['# Programmieren verstehen: '+safe(index.repository),'',
   '## Beleglage',
-  'Die Kapitel beruhen auf erkannten Syntaxmustern in Git-Diffs. Beispiele sind eigens erstellte Übungen, keine Kopien des Projektcodes.',
+  'Die Git-Grundlagen stützen sich auf tatsächliche Commits. Zusätzliche Sprachkapitel entstehen nur bei erkannten Syntaxmustern in Git-Diffs. Alle Beispiele sind eigenständige Übungen.',
   'Die ursprüngliche Absicht und die Qualität des fremden Codes sind ohne zusätzliche Belege **nicht bestätigt**.',
   'Die Übungsbeispiele verwenden Java 21 bzw. modernes TypeScript/React. Ein historisches Projekt kann andere Sprach- und Framework-Versionen einsetzen.',
   'Commit-Stand: '+index.fixedHead+' · Lizenz: '+(index.licenseSpdx??'nicht verifiziert'),'',
@@ -249,7 +249,9 @@ export function renderHistoricalBook(
   solutions.push('','## '+l.title,'',code(l.solution,l.language),
    '','### Antworten auf die Kontrollfragen',
    ...(learningNotes[l.key]?.questions??[]).map((q,i)=>(i+1)+'. '+q.answer));
-  reports.push('','## '+l.title,'Beobachtet: passendes Syntaxmuster im hinzugefügten Git-Diff.',
+  reports.push('','## '+l.title,l.key==='git-history'
+    ?'Beobachtet: nachweisbare Commits und betroffene Pfade; kein Programmierkonzept behauptet.'
+    :'Beobachtet: passendes Syntaxmuster im hinzugefügten Git-Diff.',
    'Interpretation: Das Kapitel erklärt das Konzept, **nicht** die Absicht der Entwicklung.',
    'Dateien: '+l.paths.join(', '),
    ...l.commits.map(sha=>'- https://github.com/'+index.repository+'/commit/'+sha));

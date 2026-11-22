@@ -25,7 +25,7 @@ test('verified completed issue creates a local teaching report without executing
  assert.match(saved.reportsMarkdown,/Draft-PR: https:\/\/github.com\/example\/studio\/pull\/17/);
  assert.match(saved.reportsMarkdown,/Reviewer-Checkpoint: PASS/);
  assert.match(saved.reportsMarkdown,/Tatsächlich berührte Quell-Dateien: src\/EventService\.java/);
- assert.match(saved.reportsMarkdown,/In diesem Commit erkannte Konzepte: Java: Generics/);
+ assert.match(saved.reportsMarkdown,/In diesem Commit erkannte Konzepte: .*Java: Generics/);
  assert.match(saved.reportsMarkdown,/Grund der Anforderung: siehe verlinktes GitHub-Issue/);
  assert.match(saved.bookMarkdown,/Java: Generics/);
  assert.equal(args.every(a=>a[0]==='show'),true);

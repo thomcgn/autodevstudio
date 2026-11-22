@@ -76,5 +76,6 @@ test('HTML export is printable, escapes source text and keeps HTTPS links',()=>{
 test('public repository patches are bounded and never executed',async()=>{
  const evil=async()=>({files:[{filename:'src/A.ts',patch:'@@\n+<script>steal()</script>'}]});
  const book=await generateHistoricalBook(index,evil);
- assert.equal(book.lessons.length,0);
+ assert.equal(book.lessons.length,1);
+ assert.equal(book.lessons[0].key,'git-history');
 });
