@@ -9,7 +9,7 @@ export interface HistoricalLesson {
 export interface HistoricalBook {
   repository:string;head:string;license:string|null;lessons:HistoricalLesson[];
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
-  pagination?:{page:number;hasMore:boolean};
+  pagination?:{page:number;hasMore:boolean;pageSize?:number};
   caseStudies?:DevelopmentDecision[];
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
