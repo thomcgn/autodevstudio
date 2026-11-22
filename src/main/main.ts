@@ -398,6 +398,9 @@ app.whenReady().then(() => {
             nextOffset:result.nextOffset,filesTotal:result.filesTotal,
             filesAnalyzed,filesSkipped:result.filesSkipped,model:result.model,
           },
+          deepSummary:{model:result.model,filesAnalyzed,
+            filesSkipped:result.filesSkipped,filesTotal:result.filesTotal,
+            complete:result.complete},
         });
         if(result.nextOffset===null){
           return {repository:saved.repository,head:saved.head,lessons:filesAnalyzed,
@@ -466,7 +469,11 @@ app.whenReady().then(() => {
     return saved?{repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
-      page:saved.pagination?.page,hasMore:saved.pagination?.hasMore}:null;
+      page:saved.pagination?.page,hasMore:saved.pagination?.hasMore,
+      deepAnalysis:saved.deepSummary?{
+        model:saved.deepSummary.model,filesAnalyzed:saved.deepSummary.filesAnalyzed,
+        filesSkipped:saved.deepSummary.filesSkipped,complete:saved.deepSummary.complete,
+      }:undefined}:null;
   });
   ipcMain.handle('learning:export',async (_event,repository:unknown,
     kind:unknown,format:unknown) => {
