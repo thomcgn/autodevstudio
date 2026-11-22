@@ -18,6 +18,14 @@ const project={id:'fixture-repo',name:'autodev-studio',path:'/tmp/autodev-ui-fix
 const secondary={id:'fixture-other',name:'another-repo',path:'/tmp/another-ui-fixture',
   isGitRepo:true,hasCore:false};
 const success={
+  issues:[],
+  issueQueue:{previewOnly:true,executionEnabled:false,readyToStart:false,nextIssueNumber:null,
+    reason:'No eligible open issues',queue:[]},
+  studioStatus:{git:{root:project.path,branch:'main',head:'a'.repeat(40),
+    remoteSlug:null,clean:true,canExecute:false,reasons:[]},
+    lock:{held:false,startedAt:null},checkpoint:null,
+    recovery:{state:'none',identityMatches:null,reason:'Kein gespeicherter Issue-Lauf',automaticResume:false},
+    executionEnabled:false},
   diagnostics:{kiloInstalled:true,kiloVersion:'7.8.27',supportedFlags:['--model','--agent'],
     kiloRunCommandReady:true,agentCatalogReadable:true,agentCatalogProblem:null,
     sandboxTool:'bwrap',sandboxToolAvailable:true,ghInstalled:true,ghAuthenticated:true,
@@ -77,11 +85,7 @@ async function fixture(page){
       snapshot:async()=>({currentIssue:null,reviewIteration:0,processedIssues:[],failedIssues:[],
         checkpoint:null,hasState:false,updatedAt:null}),
       studioActivity:()=>respond('studioActivity'),
-      studioStatus:async()=>({git:{root:project.path,branch:'main',head:'a'.repeat(40),
-          remoteSlug:null,clean:true,canExecute:false,reasons:[]},
-        lock:{held:false,startedAt:null},checkpoint:null,
-        recovery:{state:'none',identityMatches:null,reason:'Kein gespeicherter Issue-Lauf',automaticResume:false},
-        executionEnabled:false}),
+      studioStatus:()=>respond('studioStatus'),
       history:async()=>[],
       diagnostics:()=>respond('diagnostics'),
       sandboxProbe:()=>respond('sandboxProbe'),
@@ -106,7 +110,8 @@ async function fixture(page){
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
-      issues:async()=>[],branchProtection:()=>respond('branchProtection'),
+      issues:()=>respond('issues'),issueQueue:()=>respond('issueQueue'),
+      branchProtection:()=>respond('branchProtection'),
       workflowStages:async()=>[],simulateIssue:async()=>null,
       historyLog:async()=>'',runInfo:async()=>null,start:async()=>{throw Error('not authorized');},
       stop:async()=>false,active:async()=>false,
@@ -156,7 +161,28 @@ try {
   await page.getByRole('button',{name:'Issues',exact:true}).click();
   await page.getByText('Studio-Prozess belegt',{exact:true}).waitFor();
   await page.getByText('anderes Projekt',{exact:false}).first().waitFor();
-  await page.evaluate(()=>{delete window.__uiSmoke.overrides.studioActivity;});
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.issues=[{
+      number:5,title:'Core integration',body:'Tracking only',
+      url:'https://github.com/example/studio/issues/5',
+      labels:['priority:p1','status:blocked'],
+    }];
+    window.__uiSmoke.overrides.issueQueue={
+      previewOnly:true,executionEnabled:false,readyToStart:false,
+      nextIssueNumber:null,reason:'No eligible open issues',
+      queue:[{number:5,title:'Core integration',priority:1,state:'held',
+        reason:'Issue status is status:blocked; manual triage or recovery required'}],
+    };
+  });
+  await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
+  await page.getByText('BLOCKED – Issue gesperrt',{exact:true}).waitFor();
+  await page.getByText('Das Label enthält keinen konkreten technischen Fehlergrund',{exact:false}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Issue → Draft-PR'}).isDisabled(),true);
+  await page.evaluate(()=>{
+    delete window.__uiSmoke.overrides.studioActivity;
+    delete window.__uiSmoke.overrides.issues;
+    delete window.__uiSmoke.overrides.issueQueue;
+  });
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
