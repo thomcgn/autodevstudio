@@ -233,10 +233,16 @@ export function renderHistoricalBook(
   'Die ursprüngliche Absicht und die Qualität des fremden Codes sind ohne zusätzliche Belege **nicht bestätigt**.',
   'Die Übungsbeispiele verwenden Java 21 bzw. modernes TypeScript/React. Ein historisches Projekt kann andere Sprach- und Framework-Versionen einsetzen.',
   'Commit-Stand: '+index.fixedHead+' · Lizenz: '+(index.licenseSpdx??'nicht verifiziert'),'',
-  '## Inhaltsverzeichnis',...lessons.map((l,i)=>(i+1)+'. '+l.title)];
+  '## Inhaltsverzeichnis',...(caseStudies.length?['1. Entwicklungsentscheidungen: vom Problem zur Lösung']:[]),
+  ...lessons.map((l,i)=>(i+1+(caseStudies.length?1:0))+'. '+l.title)];
  const solutions=['# Getrennte Musterlösungen – '+safe(index.repository)];
  const reports=['# Quellen- und Entwicklungsreport – '+safe(index.repository),
   'Fakten sind als Commit-Links belegt. Eine historische Motivationsbehauptung wird nicht abgeleitet.'];
+ if(caseStudies.length){
+  const cases=renderDevelopmentCaseStudies(caseStudies);
+  book.push('',cases.book);
+  reports.push('',cases.reports);
+ }
  for(const l of lessons){
   book.push('','## '+l.title,'','### Einfach erklärt',l.plain,
    '','### Technische Vertiefung',l.technical,
@@ -264,11 +270,6 @@ export function renderHistoricalBook(
    'Interpretation: Das Kapitel erklärt das Konzept, **nicht** die Absicht der Entwicklung.',
    'Dateien: '+l.paths.join(', '),
    ...l.commits.map(sha=>'- https://github.com/'+index.repository+'/commit/'+sha));
- }
- if(caseStudies.length){
-  const cases=renderDevelopmentCaseStudies(caseStudies);
-  book.push('',cases.book);
-  reports.push('',cases.reports);
  }
  if(!lessons.length)book.push('','Keine unterstützten Syntaxmuster erkannt; es wird kein Kapitel erfunden.');
  return {repository:index.repository,head:index.fixedHead,license:index.licenseSpdx,lessons,
