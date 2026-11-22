@@ -403,9 +403,9 @@ app.whenReady().then(() => {
       current.pagination.pageSize===20&&current.lessonEntries.length===current.lessons;
     await walkPublicRepositoryHistory(input,{
       pageSize:20,
-      startPage:resume?current.pagination!.page+1:1,
-      pinnedHead:resume?current.head:undefined,
-      initialCount:resume?current.pagination!.page*20:0,
+      startPage:resume?(current?.pagination?.page??0)+1:1,
+      pinnedHead:resume?current?.head:undefined,
+      initialCount:resume?(current?.pagination?.page??0)*20:0,
       collect:false,
       onPage:async index=>{
         const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
