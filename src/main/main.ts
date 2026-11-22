@@ -375,7 +375,7 @@ app.whenReady().then(() => {
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const batchOffset=offset;
         let chapterOffset=0;
-        for(const match of bookMarkdown.matchAll(/^## Kapitel (\\d+)/gm))
+        for(const match of bookMarkdown.matchAll(/^## Kapitel (\d+)/gm))
           chapterOffset=Math.max(chapterOffset,Number(match[1]));
         const result=await analyzeSourceWithOllama(index.repository,index.head,
           runId,startedAt,event=>send('learning:progress',{
