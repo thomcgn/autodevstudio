@@ -423,6 +423,8 @@ app.whenReady().then(() => {
         ?prior.historyCursor.chapters:0;
       let incomplete=compatible&&prior?.historyCursor?.total===index.commits.length
         ?prior.historyCursor.incomplete:0;
+      const historyStartIndex=historyNext;
+      const historyStartedAt=Date.now();
       for(let i=historyNext;i<index.commits.length;i++){
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const commit=index.commits[i];
@@ -431,7 +433,10 @@ app.whenReady().then(() => {
           completed:i,total:index.commits.length,
           current:'Historische Codeänderung '+(i+1)+'/'+index.commits.length+
             ' · '+commit.sha.slice(0,12),
-          etaSeconds:null,preview:reportsMarkdown.slice(-2500),
+          etaSeconds:i>historyStartIndex
+            ?Math.round((Date.now()-historyStartedAt)/(i-historyStartIndex)*
+              (index.commits.length-i)/1000):null,
+          preview:reportsMarkdown.slice(-2500),
           model:'qwen2.5-coder:3b',
         });
         const history=await analyzeHistoricalCommitWithOllama(
