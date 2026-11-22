@@ -31,7 +31,7 @@ test('Kilo learning refuses priced model identifiers and malformed responses',as
   choices:[{finish_reason:'length',message:{role:'assistant',content:'truncated'}}],
  }))});
  await assert.rejects(model('system','source',new AbortController().signal),
-  /Untrusted or truncated/);
+  /Kilo completion truncated at token limit/);
 });
 test('Kilo rate limits fail without hidden fallback or retry',async()=>{
  let calls=0;
@@ -49,4 +49,40 @@ test('Kilo learning cancellation blocks HTTP requests and oversized source promp
  await assert.rejects(model('system','x'.repeat(30000),
   new AbortController().signal),/exceeds safe size/);
  assert.equal(calls,0);
+});
+
+test('Kilo reports explicit output token exhaustion without accepting a partial lesson',async()=>{
+ let requests=0;
+ const model=createKiloLearningModel({fetcher:async(_url,init)=>{
+  requests++;
+  const body=JSON.parse(init.body);
+  assert.equal(body.max_tokens,4096);
+  return new Response(JSON.stringify({choices:[{
+   finish_reason:'length',
+   message:{role:'assistant',content:'{"title":"Partial reply"}'},
+  }]}));
+ }});
+ await assert.rejects(model('system','source',new AbortController().signal),
+  /Kilo completion truncated at token limit/);
+ assert.equal(requests,1);
+});
+
+test('Kilo completion errors identify safe finish categories without leaking model content',async()=>{
+ for(const [reason,message] of [
+  ['content_filter',/Kilo cloud filtered/],
+  ['tool_calls',/Kilo completion ended without a verified stop/],
+  ['unknown',/Kilo completion ended without a verified stop/],
+ ]){
+  const model=createKiloLearningModel({fetcher:async()=>new Response(JSON.stringify({
+   choices:[{finish_reason:reason,
+    message:{role:'assistant',content:'PRIVATE CODE DATA DO NOT SHOW'}}],
+  }))});
+  await assert.rejects(model('system','source',new AbortController().signal),message);
+ }
+ const model=createKiloLearningModel({fetcher:async()=>new Response(JSON.stringify({
+  choices:[{finish_reason:'stop',
+   message:{role:'assistant',content:'x'.repeat(16001)}}],
+ }))});
+ await assert.rejects(model('system','source',new AbortController().signal),
+  /maximum text length/);
 });

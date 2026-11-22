@@ -135,3 +135,30 @@ test('quick-history and deep-Ollama snapshots are independently resumable',()=>{
   assert.equal(loadHistoricalBook(dir,repo)?.pagination?.page,2);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('Kilo cloud chapter checkpoints survive restart independently of Ollama and quick books',()=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-kilo-chapter-'));
+ try{
+  const basic={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Code-Lehrbuch\n\n## Kapitel 1: Architektur',
+   solutionsMarkdown:'# Lösungen\n\n## Kapitel 1',
+   reportsMarkdown:'# Belege',
+   deepSummary:{model:'kilo-auto/free',filesAnalyzed:0,filesTotal:38,
+     filesSkipped:2,complete:false}};
+  saveHistoricalBook(directory,{...basic,deepCursor:{
+   nextOffset:0,filesTotal:38,filesAnalyzed:0,
+   filesSkipped:2,model:'kilo-auto/free',chapterIndex:1,
+  }},'deep-kilo');
+  const first=loadHistoricalBook(directory,repo,'deep-kilo');
+  assert.equal(first?.deepCursor?.chapterIndex,1);
+  assert.equal(first?.deepCursor?.nextOffset,0);
+  assert.match(first?.bookMarkdown??'',/Kapitel 1/);
+  const later={...basic,bookMarkdown:basic.bookMarkdown+'\n\n## Kapitel 2: Datenfluss',
+   deepCursor:{nextOffset:0,filesTotal:38,filesAnalyzed:0,
+     filesSkipped:2,model:'kilo-auto/free',chapterIndex:2}};
+  saveHistoricalBook(directory,later,'deep-kilo');
+  assert.equal(loadHistoricalBook(directory,repo,'deep-kilo')?.deepCursor?.chapterIndex,2);
+  assert.equal(loadHistoricalBook(directory,repo,'deep'),null);
+  assert.equal(loadHistoricalBook(directory,repo),null);
+ }finally{fs.rmSync(directory,{recursive:true,force:true});}
+});

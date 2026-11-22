@@ -11,7 +11,7 @@ export interface SavedLearningBook {
   lessonEntries:HistoricalLesson[];license:string|null;
   caseStudies:DevelopmentDecision[];
   deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
-    filesSkipped:number;model:string};
+    filesSkipped:number;model:string;chapterIndex?:number};
   deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
   historyCursor?:{nextIndex:number;total:number;chapters:number;incomplete:number;model:string};
   pagination?:{page:number;hasMore:boolean;pageSize?:number};
@@ -82,7 +82,8 @@ export function loadHistoricalBook(
 ):SavedLearningBook|null{
  if(!SLUG.test(input))throw Error('Invalid learning repository');
  const root=rootFor(base,input);
- const file=path.join(root,variant==='deep'?'latest-deep.json':'latest.json');
+ const file=path.join(root,variant==='deep'?'latest-deep.json':
+  variant==='deep-kilo'?'latest-deep-kilo.json':'latest.json');
  if(!fs.existsSync(file))return null;
  const value:unknown=JSON.parse(fs.readFileSync(file,'utf8'));
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid learning index');
@@ -120,14 +121,17 @@ export function loadHistoricalBook(
  const cursor=rawCursor!==null&&typeof rawCursor==='object'&&!Array.isArray(rawCursor)
   ?rawCursor as Record<string,unknown>:null;
  const deepCursor=cursor&&
-   Number.isSafeInteger(cursor.nextOffset)&&Number(cursor.nextOffset)>0&&
+   Number.isSafeInteger(cursor.nextOffset)&&Number(cursor.nextOffset)>=0&&
    Number.isSafeInteger(cursor.filesTotal)&&Number(cursor.filesTotal)>=Number(cursor.nextOffset)&&
    Number.isSafeInteger(cursor.filesAnalyzed)&&Number(cursor.filesAnalyzed)>=0&&
    Number.isSafeInteger(cursor.filesSkipped)&&Number(cursor.filesSkipped)>=0&&
-   typeof cursor.model==='string'&&cursor.model.length<100
+   typeof cursor.model==='string'&&cursor.model.length<100&&
+   (cursor.chapterIndex===undefined||
+     (Number.isSafeInteger(cursor.chapterIndex)&&Number(cursor.chapterIndex)>=0))
    ?{nextOffset:Number(cursor.nextOffset),filesTotal:Number(cursor.filesTotal),
      filesAnalyzed:Number(cursor.filesAnalyzed),filesSkipped:Number(cursor.filesSkipped),
-     model:cursor.model}:undefined;
+     model:cursor.model,
+     ...(cursor.chapterIndex===undefined?{}:{chapterIndex:Number(cursor.chapterIndex)})}:undefined;
  const rawSummary=metadata?.deepSummary;
  const summary=rawSummary!==null&&typeof rawSummary==='object'&&!Array.isArray(rawSummary)
   ?rawSummary as Record<string,unknown>:null;

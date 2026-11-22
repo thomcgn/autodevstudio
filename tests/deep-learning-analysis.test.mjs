@@ -304,3 +304,81 @@ test('Kilo cloud analyzes entire large UTF-8 sources without exceeding gateway p
  assert.ok(requests.some(x=>x.prompt.includes('Abschnitt 3')));
  assert.ok(result.bookMarkdown.includes('src/module23.ts'));
 });
+
+test('Kilo token exhaustion retries once with concise complete JSON instead of losing the lesson',async()=>{
+ let attempts=0;
+ const result=await requestValidatedLesson(async(_system,prompt)=>{
+  attempts++;
+  if(attempts===1)throw Error('Kilo completion truncated at token limit');
+  assert.match(prompt,/SEHR KURZ/);
+  return chapter;
+ },'trusted','real source',new AbortController().signal);
+ assert.equal(attempts,2);
+ assert.match(result.title,/Buchung/);
+});
+test('Kilo chapter checkpoints resume after a model failure without repeating finished chapters',async()=>{
+ const contents='export class BillingService { charge() { return 42; } }';
+ const files=[
+  {path:'src/BillingService.ts',type:'blob',size:Buffer.byteLength(contents),sha:BLOB},
+ ];
+ const readFixture=async endpoint=>{
+  if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
+  if(endpoint.endsWith('git/trees/'+TREE+'?recursive=1'))
+   return {sha:TREE,truncated:false,tree:files};
+  if(endpoint.endsWith('git/blobs/'+BLOB))return blob(contents);
+  throw Error('Unexpected fixture endpoint '+endpoint);
+ };
+ const checkpoints=[];
+ let calls=0;
+ const model=async()=>{
+  calls++;
+  if(calls===2)throw Error('Kilo free quota exceeded (HTTP 429)');
+  return chapter;
+ };
+ await assert.rejects(analyzeSourceWithOllama('example/project',COMMIT,
+  'run-12345678',Date.now(),()=>{},new AbortController().signal,{
+   read:readFixture,model,modelName:'kilo-auto/free',preflight:async()=>{},
+   onChapter:(text,completed,total)=>{
+    checkpoints.push({text,completed,total});
+   },
+  }),/quota exceeded/);
+ assert.equal(checkpoints.length,1);
+ assert.equal(checkpoints[0].completed,1);
+ assert.equal(checkpoints[0].total,1);
+ const recovered=[];
+ const result=await analyzeSourceWithOllama('example/project',COMMIT,
+  'run-12345679',Date.now(),()=>{},new AbortController().signal,{
+   read:readFixture,model:async()=>{calls++;return chapter;},
+   modelName:'kilo-auto/free',preflight:async()=>{},
+   resumeChapter:1,resumeContext:checkpoints[0].text.book,
+   onChapter:(text,completed)=>recovered.push({text,completed}),
+  });
+ assert.equal(recovered.length,1);
+ assert.equal(recovered[0].completed,2);
+ assert.equal(calls,3);
+ assert.equal(result.filesAnalyzed,1);
+ assert.equal(result.complete,true);
+});
+test('IDE metadata is not mistaken for core application source',async()=>{
+ const contents='class BillingService {}';
+ const custom=async endpoint=>{
+  if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
+  if(endpoint.endsWith('git/trees/'+TREE+'?recursive=1'))
+   return {sha:TREE,truncated:false,tree:[
+    {path:'.idea/compiler.xml',sha:BLOB,type:'blob',size:23},
+    {path:'.vscode/settings.json',sha:BLOB,type:'blob',size:23},
+    {path:'src/BillingService.java',sha:BLOB,type:'blob',size:contents.length},
+   ]};
+  if(endpoint.endsWith('git/blobs/'+BLOB))return blob(contents);
+  throw Error('Unexpected endpoint '+endpoint);
+ };
+ const prompts=[];
+ const result=await analyzeSourceWithOllama('example/project',COMMIT,
+  'run-12345678',Date.now(),()=>{},new AbortController().signal,{
+   read:custom,model:async(_,prompt)=>{prompts.push(prompt);return chapter;},
+   preflight:async()=>{},
+  });
+ assert.equal(result.filesAnalyzed,1);
+ assert.equal(result.filesSkipped,2);
+ assert.ok(prompts.every(x=>!x.includes('compiler.xml')&&!x.includes('settings.json')));
+});

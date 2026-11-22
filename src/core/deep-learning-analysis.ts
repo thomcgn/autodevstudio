@@ -30,7 +30,7 @@ const object=(value:unknown):Record<string,unknown>|null=>
  value!==null&&typeof value==='object'&&!Array.isArray(value)
   ?value as Record<string,unknown>:null;
 const secret=/(^|\/)(?:\.env(?:\..*)?|\.npmrc|\.pypirc|\.ssh|secrets?|credentials?|\.aws|\.git)(?:\/|$)/i;
-const excluded=/(^|\/)(?:node_modules|\.next|dist|build|target|coverage|vendor|generated|__pycache__|\.github)(?:\/|$)|(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|poetry\.lock)$/i;
+const excluded=/(^|\/)(?:\.idea|\.vscode|\.settings|\.gradle|node_modules|\.next|dist|build|target|coverage|vendor|generated|__pycache__|\.github)(?:\/|$)|(?:^|\/)(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|poetry\.lock)$/i;
 const sourceExtension=/\.(?:java|kt|kts|ts|tsx|js|jsx|mjs|cjs|py|rs|go|c|cpp|h|hpp|cs|rb|php|sql|sh|vue|svelte|json|yaml|yml|xml|md)$/i;
 const safePath=/^[A-Za-z0-9_./ -]{1,240}$/;
 function validEntry(value:unknown):TreeEntry {
@@ -192,7 +192,22 @@ export async function requestValidatedLesson(
   fields.join(', ')+'. Auch bei Unsicherheit jeden Abschnitt mit Quellenlage füllen.';
  for(let attempt=0;attempt<2;attempt++){
   if(signal.aborted)throw Error('Learning analysis cancelled');
-  const answer=await model(system,prompt+(attempt?reminder:''),signal,onPulse);
+  const concise=attempt===1
+   ?'\n\nWICHTIG: Antworte SEHR KURZ. Genau elf JSON-Stringfelder, maximal '+
+    'zwei kurze Sätze pro Feld und ein kurzes Codebeispiel. Keine Einleitung, '+
+    'kein Markdown, keine langen Überlegungen. '+reminder
+   :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern; '+
+    'pro Feld maximal zwei kurze Sätze, damit die Ausgabe vollständig bleibt.';
+  let answer:string;
+  try{
+   answer=await model(system,prompt+concise,signal,onPulse);
+  }catch(error){
+   // A bounded text completion that hit the Kilo token cap is recoverable.
+   // Network failures, rate limits, permissions and tool calls are not.
+   if(attempt===0&&error instanceof Error&&
+     error.message==='Kilo completion truncated at token limit')continue;
+   throw error;
+  }
   try{return parseLesson(answer)}
   catch(error){
    if(attempt===1)throw Error('KI-Antwort nach erneuter Formatprüfung ungültig: '+
@@ -242,7 +257,10 @@ export async function analyzeSourceWithOllama(
  emit:(event:DeepLearningProgress)=>void,signal:AbortSignal,
  deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
   history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[];
-  offset?:number;chapterOffset?:number;modelName?:string;}={},
+  offset?:number;chapterOffset?:number;modelName?:string;
+  resumeChapter?:number;resumeContext?:string;
+  onChapter?:(chapter:{book:string;solution:string;report:string},
+    completed:number,filesTotal:number,skipped:number)=>void;}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
@@ -296,6 +314,11 @@ export async function analyzeSourceWithOllama(
    'Quelldatei '+sources.length+'/'+eligibleFiles.length+': '+item.path,'',null);
  }
  const total=Math.ceil(chunks.length/chapterGroupSize)+1;
+ const resumeChapter=deps.resumeChapter??0;
+ if(!Number.isSafeInteger(resumeChapter)||resumeChapter<0||
+    resumeChapter>total||resumeChapter>0&&
+    (typeof deps.resumeContext!=='string'||!deps.resumeContext.trim()))
+  throw Error('Invalid chapter continuation cursor');
  const chapters:string[]=[];
  const solutions:string[]=[];
  const reports:string[]=[];
@@ -322,15 +345,21 @@ export async function analyzeSourceWithOllama(
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
    'DATEI '+f.path+'\n'+f.content.slice(0,overviewSnippetChars)).join('\n\n');
  const architectureStarted=Date.now();
- const overview=await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
-  send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
-   fragments+' Antwortteile empfangen','',null));
- const first=renderLesson(overview,overviewFiles,chapterOffset+1);
- chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
- durations.push(Date.now()-architectureStarted);
- send('writing',1,total,'Systemübersicht erstellt',first.book.slice(0,3400),
-  Math.round((total-1)*durations[0]/1000));
- for(let i=0;i<chunks.length;i+=chapterGroupSize){
+ const overview=resumeChapter>0
+  ?{implementation:deps.resumeContext??'',reasoning:''}
+  :await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
+    send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
+     fragments+' Antwortteile empfangen','',null));
+ if(resumeChapter===0){
+  const first=renderLesson(overview as Lesson,overviewFiles,chapterOffset+1);
+  chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
+  deps.onChapter?.(first,1,eligibleFiles.length,all.length-eligibleFiles.length);
+  durations.push(Date.now()-architectureStarted);
+  send('writing',1,total,'Systemübersicht gespeichert',first.book.slice(0,3400),
+   Math.round((total-1)*durations[0]/1000));
+ }
+ for(let i=Math.max(0,resumeChapter-1)*chapterGroupSize;i<chunks.length;
+    i+=chapterGroupSize){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const part=chunks.slice(i,i+chapterGroupSize);
   const n=Math.floor(i/chapterGroupSize)+1;
@@ -354,6 +383,7 @@ export async function analyzeSourceWithOllama(
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
   reports.push(chapter.report);
+  deps.onChapter?.(chapter,n+1,eligibleFiles.length,all.length-eligibleFiles.length);
   durations.push(Date.now()-started);
   const mean=durations.reduce((a,b)=>a+b,0)/durations.length;
   send('writing',n+1,total,'Kapitel '+(n+1)+' gespeichert',
