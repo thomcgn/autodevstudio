@@ -1,4 +1,10 @@
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
+export interface PublicHistoryIndex {
+  repository:string;defaultBranch:string;fixedHead:string;licenseSpdx:string|null;
+  commits:readonly {sha:string;title:string;committedAt:string|null;
+    changedPaths:readonly string[];pathsComplete:boolean;evidenceUrl:string}[];
+  readOnly:true;requiresInterpretation:true;
+}
 export interface StudioActivity {
   busy:boolean;
   kind:'issue-auto-draft'|'issue-build'|'issue-review'|'draft-publish'|'legacy-run'|null;
@@ -119,6 +125,7 @@ declare global {
     issueQueue(id: string): Promise<IssueQueuePreview>;
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
+    publicRepoHistory(input: string, limit: number): Promise<PublicHistoryIndex>;
     studioActivity(id: string): Promise<StudioActivity>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
     sandboxProbe(id: string): Promise<SandboxProbeResult>;

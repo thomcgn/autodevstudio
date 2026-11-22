@@ -440,3 +440,23 @@ html,body,#root{max-width:100%;overflow:hidden}
   .issue-safety-alert,.issue-hold-reason{padding:10px 11px;gap:5px}
   .issue-safety-alert>strong,.issue-hold-reason>strong{font-size:12px}
 }
+
+/* Read-only historical learning preview; compact and keyboard accessible. */
+.learning-view{gap:12px}
+.learning-source-form,.learning-results{display:flex;flex-direction:column;gap:10px;
+  border:1px solid #324661;border-radius:10px;padding:13px;background:#142037;min-width:0}
+.learning-source-form label{font-weight:700;font-size:13px}
+.learning-source-controls{display:flex;gap:8px;flex-wrap:wrap}
+.learning-source-controls input{flex:1 1 260px;min-width:0;padding:10px 12px;
+  border:1px solid #61718e;background:#101827;color:#f1f6ff;border-radius:8px}
+.learning-source-controls button{flex:none}
+.learning-source-form p,.learning-results p{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.learning-commit-list{display:flex;flex-direction:column;gap:9px;min-width:0}
+.learning-commit{padding:11px 12px;border:1px solid #354761;border-radius:8px;background:#101a2a;
+  min-width:0;display:flex;flex-direction:column;gap:5px}
+.learning-commit-heading{display:flex;justify-content:space-between;gap:9px;flex-wrap:wrap}
+.learning-commit-heading strong{font-size:13px;overflow-wrap:anywhere}
+.learning-commit-heading a{font-size:12px}
+.learning-commit small{font-size:11px;color:#abc1df}
+@media(max-width:850px){.learning-source-form,.learning-results{padding:10px}
+  .learning-source-controls button{width:100%}}
