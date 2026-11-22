@@ -187,7 +187,7 @@ export async function generateHistoricalBook(
  !/^[0-9a-f]{40}$/i.test(index.fixedHead))throw Error('Invalid historical source');
  const grouped=new Map<string,HistoricalLesson>();
  const studies:DevelopmentDecision[]=[];
- for(const commit of index.commits.slice(0,12)){
+ for(const commit of index.commits){
   if(!/^[0-9a-f]{40}$/i.test(commit.sha))throw Error('Invalid commit SHA');
   const detail=await read('repos/'+index.repository+'/commits/'+commit.sha);
   const added=additions(detail);
