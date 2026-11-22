@@ -193,10 +193,10 @@ export async function requestValidatedLesson(
  for(let attempt=0;attempt<2;attempt++){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const concise=attempt===1
-   ?'\\n\\nWICHTIG: Antworte SEHR KURZ. Genau elf JSON-Stringfelder, maximal '+
+   ?'\n\nWICHTIG: Antworte SEHR KURZ. Genau elf JSON-Stringfelder, maximal '+
     'zwei kurze Sätze pro Feld und ein kurzes Codebeispiel. Keine Einleitung, '+
     'kein Markdown, keine langen Überlegungen. '+reminder
-   :'\\nAntworte ausschließlich mit den elf JSON-Stringfeldern; '+
+   :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern; '+
     'pro Feld maximal zwei kurze Sätze, damit die Ausgabe vollständig bleibt.';
   let answer:string;
   try{
