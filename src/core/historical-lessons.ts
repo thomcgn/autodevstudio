@@ -11,6 +11,8 @@ export interface HistoricalBook {
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
   pagination?:{page:number;hasMore:boolean;pageSize?:number};
   caseStudies?:DevelopmentDecision[];
+  deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
+    filesSkipped:number;model:string};
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
 const concepts:readonly Concept[]=[
