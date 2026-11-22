@@ -52,7 +52,7 @@ test('end-to-end textbook creates real case studies and keeps them after saving'
    'backend/src/main/java/TableOrderService.java'),
    async()=>idempotency);
  assert.equal(book.caseStudies?.length,1);
- assert.match(book.bookMarkdown,/Fallstudien/);
+ assert.match(book.bookMarkdown,/Entwicklungsentscheidungen: vom Problem zur Lösung/);
  assert.match(book.bookMarkdown,/doppelte Buchungen/);
  assert.match(book.reportsMarkdown,/Entwicklungsfallstudien/);
  saveHistoricalBook(root,book);
