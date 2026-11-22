@@ -366,11 +366,11 @@ app.whenReady().then(() => {
       const prior=loadHistoricalBook(app.getPath('userData'),index.repository);
       const resume=prior?.head===index.head&&
         prior.deepCursor?.model==='qwen2.5-coder:3b';
-      let offset=resume?prior.deepCursor!.nextOffset:0;
-      let filesAnalyzed=resume?prior.deepCursor!.filesAnalyzed:0;
-      let bookMarkdown=resume?prior.bookMarkdown:'';
-      let solutionsMarkdown=resume?prior.solutionsMarkdown:'';
-      let reportsMarkdown=resume?prior.reportsMarkdown:'';
+      let offset=resume?(prior?.deepCursor?.nextOffset??0):0;
+      let filesAnalyzed=resume?(prior?.deepCursor?.filesAnalyzed??0):0;
+      let bookMarkdown=resume?(prior?.bookMarkdown??''):'';
+      let solutionsMarkdown=resume?(prior?.solutionsMarkdown??''):'';
+      let reportsMarkdown=resume?(prior?.reportsMarkdown??''):'';
       while(true){
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const batchOffset=offset;
