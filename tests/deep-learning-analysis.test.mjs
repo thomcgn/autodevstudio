@@ -117,7 +117,7 @@ test('sensitive files are not sent to Ollama',async()=>{
 });
 
 test('large source file is analyzed in multiple distinct Ollama contexts without truncating its ending',async()=>{
- const long='function start() {}\n'+ 'export const result = 1;\n'.repeat(330)+
+ const long='function start() {}\n'+ 'export const result = 1;\n'.repeat(1200)+
   'function importantAtEnd() { return 42; }\n';
  const prompts=[];
  const r=run('example/project',{read:async endpoint=>{
