@@ -6,7 +6,7 @@ test('clean code has no superficial violations; no false certainty about SOLID',
  const r=auditCodeSource('src/greet.ts',
    'export function greet(name: string): string {\n  return `Hello ${name}`;\n}\n');
  assert.equal(r.passed,true);
- assert.deepEqual(r.checked,['clean-code','solid','dry']);
+ assert.deepEqual(r.checked,['clean-code','solid','dry','security']);
  assert.deepEqual(r.findings,[]);
 });
 test('ban explicit any, suppression and oversized lines with concrete line references',()=>{
