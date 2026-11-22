@@ -5,7 +5,6 @@ const execute=promisify(execFile);
 const SLUG=/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA=/^[0-9a-f]{40}$/i;
 const MAX_COMMITS=100;
-const MAX_SIZE_KB=100_000;
 export interface HistoricalCommit {
   sha:string;
   title:string;
@@ -93,8 +92,8 @@ export async function indexPublicRepositoryHistory(
   if(metadata.private!==false||typeof metadata.full_name!=='string'||
      metadata.full_name.toLowerCase()!==slug.toLowerCase())
     fail('repository is not a verified public repository');
-  if(typeof metadata.size!=='number'||metadata.size<0||metadata.size>MAX_SIZE_KB)
-    fail('repository size unavailable or exceeds safe limit');
+  if(typeof metadata.size!=='number'||!Number.isSafeInteger(metadata.size)||metadata.size<0)
+    fail('repository size metadata invalid');
   if(typeof metadata.default_branch!=='string'||
     !/^[A-Za-z0-9._/-]{1,128}$/.test(metadata.default_branch)||
     metadata.default_branch.includes('..'))fail('default branch cannot be verified');
