@@ -21,7 +21,7 @@ export interface CompletedIssueLearning {
 }
 export interface VerifiedIssueEvidence {
   repository:string;issueNumber:number;commitSha:string;draftUrl:string;
-  reviewPassed:true;qualityPassed:true;
+  reviewPassed:true;qualityPassed:true;issueTitle?:string;
 }
 function isEvidence(e:VerifiedIssueEvidence):boolean {
  if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(e.repository)||!SHA.test(e.commitSha)||
@@ -79,6 +79,10 @@ export async function createVerifiedIssueLearning(
   lessons:previous.lessonEntries,bookMarkdown:previous.bookMarkdown,
   solutionsMarkdown:previous.solutionsMarkdown,reportsMarkdown:previous.reportsMarkdown,
  }:null,candidate);
+ const safeTitle=(evidence.issueTitle??'Kein Titel übergeben')
+   .slice(0,180).replace(/[\r\n\t]/g,' ').replace(/[<>\[\]`]/g,'');
+ const affected=files.length>0?files.join(', '):'Keine geeigneten Quellpfade';
+ const currentTopics=candidate.lessons.map(l=>l.title);
  const marker='\n## Abgeschlossener AutoDev-Lauf\n';
  const oldReports=previous?.reportsMarkdown??'';
  const firstAudit=oldReports.indexOf(marker);
@@ -86,6 +90,11 @@ export async function createVerifiedIssueLearning(
  if(!book.reportsMarkdown.includes('- Draft-PR: '+evidence.draftUrl))
  book.reportsMarkdown+='\n## Abgeschlossener AutoDev-Lauf\n'+
   '- Issue: https://github.com/'+evidence.repository+'/issues/'+evidence.issueNumber+'\n'+
+  '- Dokumentierter Auftrag: '+safeTitle+'\n'+
+  '- Tatsächlich berührte Quell-Dateien: '+affected+'\n'+
+  '- In diesem Commit erkannte Konzepte: '+(currentTopics.join(', ')||'keine der unterstützten Regeln')+'\n'+
+  '- Bedeutung: Die Kapitel erläutern diese Konzepte anhand eigenständiger, von Hand nachvollziehbarer Beispiele.\n'+
+  '- Grund der Anforderung: siehe verlinktes GitHub-Issue. Eine konkrete historische Architekturentscheidung ist nicht aus der Commit-Differenz allein nachweisbar.\n'+
   '- Draft-PR: '+evidence.draftUrl+'\n'+
   '- Verifizierter Commit: '+evidence.commitSha+'\n'+
   '- Reviewer-Checkpoint: PASS\n- Quality-Checkpoint: PASS\n'+
@@ -99,7 +108,7 @@ export async function createVerifiedIssueLearning(
  */
 export async function documentFinishedIssue(
  base:string,project:string,issueNumber:number,draftUrl:string,
- readGit:LearningGitRead=git,
+ readGit:LearningGitRead=git,issueTitle?:string,
 ):Promise<CompletedIssueLearning>{
  const cp=loadCoreCheckpoint(base,project);
  const fallback={recorded:false,topicCount:0,commitSha:cp?.git.head??'',
@@ -112,7 +121,7 @@ export async function documentFinishedIssue(
  const remote=parseGitHubRemote(await readGit(['remote','get-url','origin'],project));
  if(!remote)return {...fallback,reason:'unsupported-repository'};
  return createVerifiedIssueLearning(base,project,{
-  repository:remote,issueNumber,commitSha:cp.git.head,draftUrl,
+  repository:remote,issueNumber,commitSha:cp.git.head,draftUrl,issueTitle,
   reviewPassed:true,qualityPassed:true,
  },readGit);
 }
