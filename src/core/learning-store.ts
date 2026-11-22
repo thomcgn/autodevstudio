@@ -46,7 +46,7 @@ export function saveHistoricalBook(
  base:string,book:HistoricalBook,variant='history',
 ):SavedLearningBook{
  valid(book);
- if(!/^(?:history|deep|issue-[1-9][0-9]*)$/.test(variant))throw Error('Invalid learning snapshot kind');
+ if(!/^(?:history|deep|deep-kilo|issue-[1-9][0-9]*)$/.test(variant))throw Error('Invalid learning snapshot kind');
  const root=rootFor(base,book.repository);
  fs.mkdirSync(root,{recursive:true,mode:0o700});
  const digest=createHash('sha256').update(book.bookMarkdown).update(book.solutionsMarkdown)
@@ -68,7 +68,7 @@ export function saveHistoricalBook(
    if(fs.existsSync(staging))fs.rmSync(staging,{recursive:true,force:true});
   }
  }
- const latest=path.join(root,variant==='deep'?'latest-deep.json':'latest.json');
+ const latest=path.join(root,variant==='deep'?'latest-deep.json':variant==='deep-kilo'?'latest-deep-kilo.json':'latest.json');
  const temporary=path.join(root,'.latest-'+variant+'-'+process.pid+'.json');
  fs.writeFileSync(temporary,JSON.stringify({head:book.head,repository:book.repository,snapshot}),{
   mode:0o600,flag:'w'});
@@ -78,7 +78,7 @@ export function saveHistoricalBook(
   caseStudies:book.caseStudies??[]};
 }
 export function loadHistoricalBook(
- base:string,input:string,variant:'history'|'deep'='history',
+ base:string,input:string,variant:'history'|'deep'|'deep-kilo'='history',
 ):SavedLearningBook|null{
  if(!SLUG.test(input))throw Error('Invalid learning repository');
  const root=rootFor(base,input);
@@ -91,7 +91,7 @@ export function loadHistoricalBook(
   throw Error('Invalid stored learning index');
  const snapshot=info.snapshot??info.head;
  if(typeof snapshot!=='string'||!(SHA.test(snapshot)||
-    /^[0-9a-f]{40}--(?:history|deep|issue-[1-9][0-9]*)(?:-[0-9a-f]{12})?$/i.test(snapshot)))
+    /^[0-9a-f]{40}--(?:history|deep|deep-kilo|issue-[1-9][0-9]*)(?:-[0-9a-f]{12})?$/i.test(snapshot)))
   throw Error('Invalid stored learning snapshot');
  const directory=path.join(root,snapshot);
  for(const filename of ['book.md','solutions.md','reports.md']){
