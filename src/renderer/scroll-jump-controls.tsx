@@ -24,10 +24,11 @@ export function ScrollJumpControls({scopeRef,refreshKey}:ScrollJumpControlsProps
         element.scrollHeight>element.clientHeight+3;
     };
     const fallback=():HTMLElement|null=>{
+      if(scrollable(scope))return scope;
       const view=scope.querySelector<HTMLElement>('.view');
       if(view&&scrollable(view))return view;
       for(const node of scope.querySelectorAll<HTMLElement>(
-        '.console,.history-list,.saved-log,.simulation-scroll,.view,.modal')){
+        '.project-list,.console,.history-list,.saved-log,.simulation-scroll,.view,.modal')){
         if(scrollable(node))return node;
       }
       return null;
