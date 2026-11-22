@@ -62,12 +62,12 @@ export async function createVerifiedIssueLearning(
   return {files:parsedFiles};
  };
  const book=await generateHistoricalBook(index,reader);
- book.reportsMarkdown+='\\n## Abgeschlossener AutoDev-Lauf\\n'+
-  '- Issue: https://github.com/'+evidence.repository+'/issues/'+evidence.issueNumber+'\\n'+
-  '- Draft-PR: '+evidence.draftUrl+'\\n'+
-  '- Verifizierter Commit: '+evidence.commitSha+'\\n'+
-  '- Reviewer-Checkpoint: PASS\\n- Quality-Checkpoint: PASS\\n'+
-  '- Die ursprüngliche Motivation lässt sich ohne Review- oder Issue-Dokumentation nicht sicher ableiten.\\n';
+ book.reportsMarkdown+='\n## Abgeschlossener AutoDev-Lauf\n'+
+  '- Issue: https://github.com/'+evidence.repository+'/issues/'+evidence.issueNumber+'\n'+
+  '- Draft-PR: '+evidence.draftUrl+'\n'+
+  '- Verifizierter Commit: '+evidence.commitSha+'\n'+
+  '- Reviewer-Checkpoint: PASS\n- Quality-Checkpoint: PASS\n'+
+  '- Die ursprüngliche Motivation lässt sich ohne Review- oder Issue-Dokumentation nicht sicher ableiten.\n';
  saveHistoricalBook(base,book);
  return {recorded:true,topicCount:book.lessons.length,
   commitSha:evidence.commitSha,reason:'saved'};
