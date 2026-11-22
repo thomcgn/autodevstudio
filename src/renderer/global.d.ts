@@ -153,7 +153,8 @@ declare global {
     cancelDeepLearning():Promise<boolean>;
     onLearningProgress(callback:(value:DeepLearningProgress)=>void):()=>void;
     loadLearningBook(repo:string):Promise<LearningBookPreview|null>;
-    exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<{exported:boolean}>;
+    exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf',
+      mode?:'history'|'deep'):Promise<{exported:boolean}>;
     studioActivity(id: string): Promise<StudioActivity>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
     sandboxProbe(id: string): Promise<SandboxProbeResult>;
