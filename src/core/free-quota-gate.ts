@@ -72,7 +72,7 @@ export class FreeQuotaGate {
   recordAccepted(now=Date.now()):void {
     this.prune(now);
     this.accepted.push(now);
-    this.acceptedSequence.value++;
+    this.acceptedSequence++;
     // Provider measurements may be stale after another request: do not double count
     // requests already made before the last observation.
   }
@@ -82,7 +82,7 @@ export class FreeQuotaGate {
     // the limited model to find the precise reset time.
     this.blockedUntil=retry??now+60*60*1000;
     const evidence=parseQuotaHeaders(headers,now);
-    if(evidence){this.evidence=evidence;this.evidenceSequence=this.acceptedSequence.value;}
+    if(evidence){this.evidence=evidence;this.evidenceSequence=this.acceptedSequence;}
   }
   status(now=Date.now()):FreeQuotaSnapshot {
     this.prune(now);
@@ -91,7 +91,7 @@ export class FreeQuotaGate {
     const reserve=Math.min(this.reserve,limit-1);
     // Count events by occurrence order, not millisecond timestamps: a request
     // accepted in the same millisecond as a quota observation still consumes quota.
-    const afterEvidence=recent?this.acceptedSequence.value-this.evidenceSequence:0;
+    const afterEvidence=recent?this.acceptedSequence-this.evidenceSequence:0;
     const remaining=recent
       ?Math.max(0,recent.remaining-afterEvidence)
       :Math.max(0,limit-this.accepted.length);
