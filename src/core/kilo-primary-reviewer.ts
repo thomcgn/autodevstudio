@@ -61,7 +61,7 @@ export function createKiloPrimaryReviewer(
   const fallbackEligible=async()=>{
     if(!readLocalReviewFallback(userData,projectId)||
       !readLocalReviewCalibration(userData,projectId))return false;
-    const readiness=await probeOllamaReadiness(fetcher,5000,LOCAL);
+    const readiness=await probeOllamaReadiness(fetcher,5000);
     return readiness.ready;
   };
   return {
