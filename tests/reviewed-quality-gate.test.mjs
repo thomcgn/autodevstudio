@@ -27,6 +27,7 @@ function fixture(){
  const scripts=[];
  const dependencies={
   capture:async()=>({...state.git}),
+  audit:async()=>({passed:true,changedFile:'src/code.ts',findings:[]}),
   runScript:async(_cwd,script)=>{scripts.push(script)},
  };
  const run=(names=['typecheck','test'],deps=dependencies,revision=cp.revision)=>
@@ -102,6 +103,23 @@ test('checkpoint drift during scripts discards success',async()=>{
    },1);
   }};
   await assert.rejects(f.run(['test'],deps),/checkpoint changed during tests/);
+  assert.equal(loadCoreCheckpoint(f.base,f.project).qualityPassed,false);
+ }finally{f.close();}
+});
+
+test('new Clean Code/SOLID/DRY violations block Quality PASS and all scripts',async()=>{
+ const f=fixture();
+ try{
+  const result=await f.run(['typecheck','test'],{
+   ...f.dependencies,
+   audit:async()=>({passed:false,changedFile:'src/unsafe.ts',
+    findings:[{principle:'clean-code',rule:'explicit-any',line:3,
+      detail:'New any type'}]}),
+  });
+  assert.equal(result.kind,'quality-failed');
+  assert.match(result.feedback,/Clean Code\/SOLID\/DRY/);
+  assert.match(result.feedback,/explicit-any/);
+  assert.deepEqual(f.scripts,[]);
   assert.equal(loadCoreCheckpoint(f.base,f.project).qualityPassed,false);
  }finally{f.close();}
 });

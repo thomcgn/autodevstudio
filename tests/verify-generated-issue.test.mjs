@@ -36,6 +36,7 @@ function fixture(){
  const deps={
   reviewer:{capture:async()=>({...git}),evidence:async()=>evidence},
   quality:{capture:async()=>({...git}),
+    audit:async()=>({passed:true,changedFile:'src/code.ts',findings:[]}),
     runScript:async(_cwd,script)=>{called.push(script)}},
  };
  const run=(raw=pass,dependencies=deps,names=['typecheck','test'])=>

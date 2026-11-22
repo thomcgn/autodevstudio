@@ -4,6 +4,7 @@ import {inspectProjectLock} from './project-lock.ts';
 import {requireReviewedEvidenceProof} from './review-approval-proof.ts';
 import {runTrustedQualityGates,type QualityScriptRunner} from './quality-gates.ts';
 import {runIsolatedNpmScript} from './isolated-quality.ts';
+import {auditReviewedSource,type ReviewedSourceAudit} from './audit-reviewed-source.ts';
 
 export interface VerifiedQualityResult {
   kind:'quality-passed'|'quality-failed';
@@ -16,9 +17,11 @@ export interface VerifiedQualityResult {
 export interface QualityGateDependencies {
   capture:(projectPath:string)=>Promise<GitIdentity>;
   runScript:QualityScriptRunner;
+  audit:(projectPath:string)=>Promise<ReviewedSourceAudit>;
 }
 const defaultDependencies:QualityGateDependencies={
   capture:captureGitIdentity,runScript:runIsolatedNpmScript,
+  audit:auditReviewedSource,
 };
 const same=(a:GitIdentity,b:GitIdentity):boolean=>
   a.head===b.head&&a.branch===b.branch&&a.worktreeHash===b.worktreeHash;
@@ -47,6 +50,14 @@ export async function verifyQualityForReviewedIssue(
   if(!same(cp.git,gitBefore))throw Error('Repository drift before quality');
   const proof=requireReviewedEvidenceProof(base,projectPath,cp,gitBefore);
   if(signal?.aborted)throw Error('Quality cancelled');
+  const audit=await dependencies.audit(projectPath);
+  if(!audit.passed)return {
+    kind:'quality-failed',issueNumber:cp.issueNumber,
+    checkpointRevision:expectedRevision,reviewedFingerprint:proof.evidenceFingerprint,
+    feedback:'Clean Code/SOLID/DRY: '+audit.findings.slice(0,5)
+      .map(f=>f.rule+' at '+audit.changedFile+':'+f.line).join('; '),
+    publishAuthorized:false,
+  };
   const result=await runTrustedQualityGates({
     cwd:projectPath,scripts:approvedScripts,timeoutMs:120000,signal,
   },dependencies.runScript);
