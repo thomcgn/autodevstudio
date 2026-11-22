@@ -75,6 +75,9 @@ function App(): React.JSX.Element {
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
+  const [labelsInstalling,setLabelsInstalling] = useState(false);
+  const [labelsResult,setLabelsResult] = useState('');
+  const [labelsError,setLabelsError] = useState('');
   const [issueQueue, setIssueQueue] = useState<IssueQueuePreview | null>(null);
   const [simulating, setSimulating] = useState<number | null>(null);
   const [codingIssue, setCodingIssue] = useState<number | null>(null);
@@ -224,6 +227,20 @@ function App(): React.JSX.Element {
     return () => { cancelled = true; clearInterval(timer); };
   }, [selected]);
 
+  const installLabels = async ():Promise<void>=>{
+    if(!selected||labelsInstalling||branchProtection?.protected!==true)return;
+    setLabelsInstalling(true);setLabelsResult('');setLabelsError('');
+    try{
+      const r=await window.studio.installIssueLabels(selected);
+      setLabelsResult(r.created.length===0
+        ?'Alle '+r.total+' Label-Definitionen bereits vorhanden.'
+        :r.created.length+' fehlende Labels in '+r.repository+' angelegt. Bestehende Issue-Labels unverändert.');
+      await loadIssues();
+    }catch(error){
+      setLabelsError(error instanceof Error?error.message:
+        'Label-Definitionen nicht eingerichtet; GitHub-Berechtigungen und Konflikte prüfen.');
+    }finally{setLabelsInstalling(false);}
+  };
   const loadIssues = async (): Promise<void> => {
     if (!selected) return;
     setIssuesLoading(true);
@@ -850,6 +867,16 @@ function App(): React.JSX.Element {
         {tab === 'issues' && <div className="view issue-view">
           <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Kilo ist primärer Planner, Builder und unabhängiger Reviewer: Issue → echter Code → isolierte Tests → Draft-PR. Ollama ist ausschließlich optionaler Fallback.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
+          <div className="issue-label-onboarding">
+            <button type="button"
+              disabled={!selected||labelsInstalling||branchProtection?.protected!==true||Boolean(studioActivity?.busy)}
+              onClick={()=>void installLabels()}>
+              {labelsInstalling?'GitHub-Labels werden geprüft …':'Fehlende GitHub-Labels einrichten'}
+            </button>
+            <small>Nur für das ausgewählte Repository · bestehende Definitionen werden nicht geändert</small>
+            {labelsResult&&<p role="status">{labelsResult}</p>}
+            {labelsError&&<p role="alert">{labelsError}</p>}
+          </div>
           <div role="status" className={branchProtection?.protected===true?'git-readiness ready':'git-readiness'}>
             <strong>{branchProtection?.protected===true?'Branch Protection verifiziert':
               branchProtection===null?'Branch Protection wird geprüft':'Entwicklung gesperrt · Branch Protection fehlt'}</strong>
