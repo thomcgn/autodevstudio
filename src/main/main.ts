@@ -375,6 +375,7 @@ app.whenReady().then(() => {
       const compatible=prior?.head===index.head&&
         prior.deepSummary?.model===modelName;
       let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
+      let chapterIndex=compatible?(prior?.deepCursor?.chapterIndex??0):0;
       let filesAnalyzed=compatible?(prior?.deepSummary?.filesAnalyzed??0):0;
       let bookMarkdown=compatible?(prior?.bookMarkdown??''):'';
       let solutionsMarkdown=compatible?(prior?.solutionsMarkdown??''):'';
@@ -397,18 +398,33 @@ app.whenReady().then(() => {
         deepCursor:sourceComplete?undefined:{
           nextOffset:offset,filesTotal:summary?.filesTotal??0,
           filesAnalyzed,filesSkipped:summary?.filesSkipped??0,
-          model:modelName,
+          model:modelName,chapterIndex,
         },
         historyCursor,
       },snapshotMode);
       while(!sourceComplete){
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const batchOffset=offset;
+        const resumeContext=bookMarkdown.slice(0,3000);
         const result=await analyzeSourceWithOllama(index.repository,index.head,
           runId,startedAt,event=>send('learning:progress',{
             ...event,current:'Quelldateien ab '+(batchOffset+1)+' · '+event.current,
           }),controller.signal,{
-            offset,chapterOffset:chapterNumber(),
+            offset,resumeChapter:chapterIndex,resumeContext,
+            chapterOffset:chapterNumber()-chapterIndex,
+            onChapter:(chapter,completed,total,skipped)=>{
+              if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+              bookMarkdown+=(bookMarkdown?'\n\n':'# Code-Lehrbuch: '+index.repository+'\n\n')+
+                chapter.book;
+              solutionsMarkdown+=(solutionsMarkdown?'\n\n':'# Musterlösungen\n\n')+
+                chapter.solution;
+              reportsMarkdown+=(reportsMarkdown?'\n\n':'# Quellen und Einschränkungen\n\n')+
+                chapter.report;
+              chapterIndex=completed;
+              summary={model:modelName,filesAnalyzed,filesSkipped:skipped,
+                filesTotal:total,complete:false};
+              persist();
+            },
             ...(cloudModel?{model:cloudModel,preflight:async()=>{},modelName}:{}),
             history:index.commits.map(commit=>({
               sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
@@ -416,11 +432,9 @@ app.whenReady().then(() => {
           });
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         filesAnalyzed+=result.filesAnalyzed;
-        bookMarkdown+=(bookMarkdown?'\n\n':'')+result.bookMarkdown;
-        solutionsMarkdown+=(solutionsMarkdown?'\n\n':'')+result.solutionsMarkdown;
-        reportsMarkdown+=(reportsMarkdown?'\n\n':'')+result.reportsMarkdown;
         sourceComplete=result.nextOffset===null;
         offset=result.nextOffset??0;
+        chapterIndex=0;
         summary={model:result.model,filesAnalyzed,filesSkipped:result.filesSkipped,
           filesTotal:result.filesTotal,complete:result.complete};
         persist();
