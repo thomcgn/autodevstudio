@@ -43,7 +43,10 @@ test('complete source analysis produces file-grounded chapters, solutions and pr
  assert.match(book.solutionsMarkdown,/Sende dieselbe Buchung zweimal/);
  assert.ok(result.events.some(e=>e.phase==='discovery'));
  assert.ok(result.events.some(e=>e.phase==='model'));
- assert.ok(result.events.some(e=>e.phase==='writing'&&e.completed===1&&e.total===1));
+ assert.ok(result.events.some(e=>e.phase==='architecture'));
+ assert.ok(result.events.some(e=>e.phase==='writing'&&e.completed===1&&e.total===2));
+ assert.ok(result.events.some(e=>e.phase==='writing'&&e.completed===2&&e.total===2));
+ assert.match(book.bookMarkdown,/Systemübersicht|Kapitel 1/);
  assert.equal(result.events.at(-1).phase,'finished');
  assert.equal(result.events.at(-1).etaSeconds,0);
 });
