@@ -42,6 +42,11 @@ contextBridge.exposeInMainWorld('studio', {
   historyLog: (id: string, runId: string) => ipcRenderer.invoke('history:log', id, runId),
   stop: () => ipcRenderer.invoke('run:stop'),
   active: () => ipcRenderer.invoke('run:active'),
+  onIssueProgress: (callback: (event: IssueProgressEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: IssueProgressEvent): void => callback(value);
+    ipcRenderer.on('issue:progress', listener);
+    return () => ipcRenderer.removeListener('issue:progress', listener);
+  },
   onEvent: (callback: (event: StudioEvent) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, value: StudioEvent): void => callback(value);
     ipcRenderer.on('run:event', listener);
@@ -51,4 +56,11 @@ contextBridge.exposeInMainWorld('studio', {
 export interface StudioEvent {
   runId: string; type: 'start' | 'stdout' | 'stderr' | 'exit';
   message?: string; code?: number | null; signal?: string | null; mode?: string; project?: string; projectId?: string; time: number;
+}
+
+export interface IssueProgressEvent {
+  projectId:string;
+  issueNumber:number;
+  stage:'build'|'review'|'quality'|'publish'|'done';
+  time:number;
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { StudioEvent } from '../main/preload';
+import type { StudioEvent, IssueProgressEvent } from '../main/preload';
 import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
@@ -16,6 +16,7 @@ function App(): React.JSX.Element {
   const [selected, setSelected] = useState(() => localStorage.getItem('autodev:selected') ?? '');
   const [tab, setTab] = useState<Tab>('overview');
   const [events, setEvents] = useState<StudioEvent[]>([]);
+  const [issueProgress, setIssueProgress] = useState<IssueProgressEvent | null>(null);
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
@@ -127,7 +128,11 @@ function App(): React.JSX.Element {
         setActiveInfo(null);
       }
     });
-    return () => { clearInterval(ticker); unsubscribe(); };
+    const unsubscribeIssue=window.studio.onIssueProgress(event=>{
+      if(Number.isSafeInteger(event.issueNumber)&&event.issueNumber>0)
+        setIssueProgress(event);
+    });
+    return () => { clearInterval(ticker); unsubscribe(); unsubscribeIssue(); };
   }, []);
 
   useEffect(() => {
@@ -142,6 +147,7 @@ function App(): React.JSX.Element {
     setHistory([]);
     setIssues([]);
     setIssuesError('');
+    setIssueProgress(null);
     setCodeResult(null);
     setCodeError('');
     setVerificationResult(null);
@@ -228,6 +234,7 @@ function App(): React.JSX.Element {
     if(!selected||automatingIssue!==null||codingIssue!==null||
       verifyingIssue!==null||publishingIssue!==null)return;
     setAutomatingIssue(issueNumber);
+    setIssueProgress(null);
     setAutomationResult(null);
     setAutomationError('');
     try{
@@ -779,7 +786,10 @@ function App(): React.JSX.Element {
           </div>}
           {automatingIssue!==null && <div className="git-readiness" role="status">
             <strong>Issue #{automatingIssue}: automatisierter Ablauf …</strong>
-            <span>Kilo Planner → Kilo Builder → unabhängiger Kilo Reviewer → Quality → Draft-PR</span>
+            <span>{issueProgress?.projectId===selected && issueProgress.issueNumber===automatingIssue
+              ?'Aktuelle Phase: '+({build:'Builder',review:'Unabhängiger Review',quality:'Quality-Gates',
+                publish:'Draft-PR',done:'Abgeschlossen'} as const)[issueProgress.stage]
+              :'Startvorbereitung · Branch Protection und Modellbereitschaft werden geprüft'}</span>
             <button type="button" className="quiet" onClick={()=>void window.studio.cancelIssueCode()}>Vor Publish abbrechen</button>
           </div>}
           {draftPr && <div className="git-readiness ready" role="status">

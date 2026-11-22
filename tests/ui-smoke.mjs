@@ -72,6 +72,7 @@ async function fixture(page){
       projects:async()=>[project,secondary],
       runInfo:async()=>null,
       onEvent:()=>()=>{},
+      onIssueProgress:()=>()=>{},
       snapshot:async()=>({currentIssue:null,reviewIteration:0,processedIssues:[],failedIssues:[],
         checkpoint:null,hasState:false,updatedAt:null}),
       studioStatus:async()=>({git:{root:project.path,branch:'main',head:'a'.repeat(40),
