@@ -187,7 +187,7 @@ export async function requestValidatedLesson(
  model:LocalModel,system:string,prompt:string,signal:AbortSignal,
  onPulse?:(fragments:number)=>void,
 ):Promise<Lesson>{
- const reminder='\\n\\nANTWORTFORMAT VERBINDLICH: Genau ein valides JSON-Objekt, keine Markdown-Fences. '+
+ const reminder='\n\nANTWORTFORMAT VERBINDLICH: Genau ein valides JSON-Objekt, keine Markdown-Fences. '+
   'Jedes der elf String-Felder muss mindestens zwölf Zeichen besitzen: '+
   fields.join(', ')+'. Auch bei Unsicherheit jeden Abschnitt mit Quellenlage füllen.';
  for(let attempt=0;attempt<2;attempt++){
