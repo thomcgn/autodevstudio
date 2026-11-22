@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parsePublicRepository,indexPublicRepositoryHistory,readGitHubPublicJson}
+import {parsePublicRepository,indexPublicRepositoryHistory,readGitHubPublicJson,walkPublicRepositoryHistory}
   from '../src/core/public-history.ts';
 
 const SHA='a'.repeat(40);
