@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('studio', {
   branchProtection: (id: string) => ipcRenderer.invoke('core:branch-protection', id),
   gitPreflight: (id: string) => ipcRenderer.invoke('core:preflight', id),
   studioStatus: (id: string) => ipcRenderer.invoke('core:status', id),
+  studioActivity: (id: string) => ipcRenderer.invoke('core:activity', id),
   diagnostics: (id: string) => ipcRenderer.invoke('core:diagnostics', id),
   sandboxProbe: (id: string) => ipcRenderer.invoke('core:sandbox-probe', id),
   reviewerProbe: (id: string) => ipcRenderer.invoke('core:reviewer-probe', id),
