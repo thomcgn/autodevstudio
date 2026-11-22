@@ -46,7 +46,7 @@ export function saveHistoricalBook(
  base:string,book:HistoricalBook,variant='history',
 ):SavedLearningBook{
  valid(book);
- if(!/^(?:history|issue-[1-9][0-9]*)$/.test(variant))throw Error('Invalid learning snapshot kind');
+ if(!/^(?:history|deep|issue-[1-9][0-9]*)$/.test(variant))throw Error('Invalid learning snapshot kind');
  const root=rootFor(base,book.repository);
  fs.mkdirSync(root,{recursive:true,mode:0o700});
  const digest=createHash('sha256').update(book.bookMarkdown).update(book.solutionsMarkdown)
@@ -68,8 +68,8 @@ export function saveHistoricalBook(
    if(fs.existsSync(staging))fs.rmSync(staging,{recursive:true,force:true});
   }
  }
- const latest=path.join(root,'latest.json');
- const temporary=path.join(root,'.latest-'+process.pid+'.json');
+ const latest=path.join(root,variant==='deep'?'latest-deep.json':'latest.json');
+ const temporary=path.join(root,'.latest-'+variant+'-'+process.pid+'.json');
  fs.writeFileSync(temporary,JSON.stringify({head:book.head,repository:book.repository,snapshot}),{
   mode:0o600,flag:'w'});
  fs.renameSync(temporary,latest);
@@ -77,10 +77,12 @@ export function saveHistoricalBook(
   lessonEntries:book.lessons,license:book.license,pagination:book.pagination,deepCursor:book.deepCursor,deepSummary:book.deepSummary,historyCursor:book.historyCursor,
   caseStudies:book.caseStudies??[]};
 }
-export function loadHistoricalBook(base:string,input:string):SavedLearningBook|null{
+export function loadHistoricalBook(
+ base:string,input:string,variant:'history'|'deep'='history',
+):SavedLearningBook|null{
  if(!SLUG.test(input))throw Error('Invalid learning repository');
  const root=rootFor(base,input);
- const file=path.join(root,'latest.json');
+ const file=path.join(root,variant==='deep'?'latest-deep.json':'latest.json');
  if(!fs.existsSync(file))return null;
  const value:unknown=JSON.parse(fs.readFileSync(file,'utf8'));
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid learning index');
@@ -89,7 +91,7 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
   throw Error('Invalid stored learning index');
  const snapshot=info.snapshot??info.head;
  if(typeof snapshot!=='string'||!(SHA.test(snapshot)||
-    /^[0-9a-f]{40}--(?:history|issue-[1-9][0-9]*)(?:-[0-9a-f]{12})?$/i.test(snapshot)))
+    /^[0-9a-f]{40}--(?:history|deep|issue-[1-9][0-9]*)(?:-[0-9a-f]{12})?$/i.test(snapshot)))
   throw Error('Invalid stored learning snapshot');
  const directory=path.join(root,snapshot);
  for(const filename of ['book.md','solutions.md','reports.md']){
