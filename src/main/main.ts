@@ -522,7 +522,10 @@ app.whenReady().then(() => {
       page:saved.pagination?.page,hasMore:saved.pagination?.hasMore,
       deepAnalysis:saved.deepSummary?{
         model:saved.deepSummary.model,filesAnalyzed:saved.deepSummary.filesAnalyzed,
-        filesSkipped:saved.deepSummary.filesSkipped,complete:saved.deepSummary.complete,
+        filesSkipped:saved.deepSummary.filesSkipped,
+        complete:saved.deepSummary.complete&&saved.historyCursor!==undefined&&
+          saved.historyCursor.nextIndex===saved.historyCursor.total&&
+          saved.historyCursor.incomplete===0,
       }:undefined}:null;
   });
   ipcMain.handle('learning:export',async (_event,repository:unknown,
