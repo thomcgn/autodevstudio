@@ -2,12 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import type {HistoricalLesson} from './historical-lessons.ts';
+import type {DevelopmentDecision} from './development-case-studies.ts';
 import type {HistoricalBook} from './historical-lessons.ts';
 
 export interface SavedLearningBook {
   repository:string;head:string;directory:string;lessons:number;
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
   lessonEntries:HistoricalLesson[];license:string|null;
+  caseStudies:DevelopmentDecision[];
   pagination?:{page:number;hasMore:boolean};
 }
 const SHA=/^[0-9a-f]{40}$/i;
@@ -29,7 +31,7 @@ function storeFiles(directory:string,book:HistoricalBook):void {
  fs.writeFileSync(path.join(directory,'reports.md'),book.reportsMarkdown,{mode:0o600,flag:'wx'});
  fs.writeFileSync(path.join(directory,'sources.json'),JSON.stringify({
   repository:book.repository,head:book.head,license:book.license,
-  lessons:book.lessons,pagination:book.pagination??null,
+  lessons:book.lessons,caseStudies:book.caseStudies??[],pagination:book.pagination??null,
  },null,2),{mode:0o600,flag:'wx'});
 }
 /** Local application data only. Never writes into source repositories.
@@ -65,7 +67,8 @@ export function saveHistoricalBook(
   mode:0o600,flag:'w'});
  fs.renameSync(temporary,latest);
  return {...book,directory:target,lessons:book.lessons.length,
-  lessonEntries:book.lessons,license:book.license,pagination:book.pagination};
+  lessonEntries:book.lessons,license:book.license,pagination:book.pagination,
+  caseStudies:book.caseStudies??[]};
 }
 export function loadHistoricalBook(base:string,input:string):SavedLearningBook|null{
  if(!SLUG.test(input))throw Error('Invalid learning repository');
@@ -89,7 +92,7 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
  }
  const sources:unknown=JSON.parse(fs.readFileSync(path.join(directory,'sources.json'),'utf8'));
  const metadata=typeof sources==='object'&&sources!==null&&!Array.isArray(sources)
-  ?sources as {lessons?:unknown;license?:unknown;pagination?:unknown}:null;
+  ?sources as {lessons?:unknown;license?:unknown;pagination?:unknown;caseStudies?:unknown}:null;
  const list=metadata?.lessons;
  const lessonEntries:HistoricalLesson[]=Array.isArray(list)?list.filter((x:unknown):
     x is HistoricalLesson=>typeof x==='object'&&x!==null&&!Array.isArray(x)&&
@@ -97,6 +100,13 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
       typeof (x as {plain?:unknown}).plain==='string'&&
       Array.isArray((x as {commits?:unknown}).commits)):[];
  const license=typeof metadata?.license==='string'?metadata.license:null;
+ const caseStudies:DevelopmentDecision[]=Array.isArray(metadata?.caseStudies)
+  ?metadata.caseStudies.filter((x:unknown):x is DevelopmentDecision=>{
+    if(x===null||typeof x!=='object'||Array.isArray(x))return false;
+    const item=x as Record<string,unknown>;
+    return typeof item.repository==='string'&&typeof item.sha==='string'&&
+      typeof item.title==='string'&&Array.isArray(item.paths);
+  }):[];
  const p=metadata?.pagination;
  const pagination=p!==null&&typeof p==='object'&&!Array.isArray(p)&&
    Number.isSafeInteger((p as {page?:unknown}).page)&&
@@ -104,7 +114,7 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
    typeof (p as {hasMore?:unknown}).hasMore==='boolean'
    ?p as {page:number;hasMore:boolean}:undefined;
  return {repository:input,head:info.head,directory,
-  lessons:Array.isArray(list)?list.length:0,lessonEntries,license,pagination,
+  lessons:Array.isArray(list)?list.length:0,lessonEntries,license,pagination,caseStudies,
   bookMarkdown:fs.readFileSync(path.join(directory,'book.md'),'utf8'),
   solutionsMarkdown:fs.readFileSync(path.join(directory,'solutions.md'),'utf8'),
   reportsMarkdown:fs.readFileSync(path.join(directory,'reports.md'),'utf8')};
