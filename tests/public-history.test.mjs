@@ -146,3 +146,30 @@ test('history traversal honors cancellation before the next API page',async()=>{
   onPage:()=>controller.abort(),
  }),/cancelled/);
 });
+
+test('resume starts at the next pinned page without refetching earlier commits',async()=>{
+ const observed=[];
+ const read=async endpoint=>{
+  observed.push(endpoint);
+  if(endpoint==='repos/example/studio')return {private:false,full_name:'example/studio',
+    size:100,default_branch:'main'};
+  if(endpoint==='repos/example/studio/branches/main')
+   return {commit:{sha:'f'.repeat(40)}};
+  if(endpoint==='repos/example/studio/commits?sha='+SHA+'&per_page=20&page=3')
+   return [{sha:OLDER,commit:{message:'last commit'}}];
+  if(endpoint==='repos/example/studio/commits/'+OLDER)return {files:[]};
+  throw Error('Unexpected request '+endpoint);
+ };
+ const counts=[];
+ const result=await walkPublicRepositoryHistory('example/studio',{
+  read,pageSize:20,startPage:3,pinnedHead:SHA,initialCount:40,collect:false,
+  onPage:(page,count)=>counts.push([page.page,count]),
+ });
+ assert.deepEqual(counts,[[3,41]]);
+ assert.deepEqual(result.commits,[]);
+ assert.equal(result.head,SHA);
+ assert.equal(observed.some(endpoint=>endpoint.includes('page=1')||endpoint.includes('page=2')),false);
+ await assert.rejects(walkPublicRepositoryHistory('example/studio',{
+  read,startPage:3,
+ }),/resume cursor/);
+});
