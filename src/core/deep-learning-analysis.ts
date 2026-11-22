@@ -220,17 +220,18 @@ export async function analyzeSourceWithOllama(
  emit:(event:DeepLearningProgress)=>void,signal:AbortSignal,
  deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
   history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[];
-  offset?:number;chapterOffset?:number;}={},
+  offset?:number;chapterOffset?:number;modelName?:string;}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
   throw Error('Invalid learning run identity');
  const read=deps.read??readSourceGitHub;
  const model=deps.model??localOllamaModel();
+ const modelName=deps.modelName??MODEL;
  const send=(phase:LearningPhase,completed:number,total:number,current:string,
   preview:string,etaSeconds:number|null)=>emit({
    runId,repository,phase,startedAt,completed,total,current,etaSeconds,
-   preview,model:MODEL});
+   preview,model:modelName});
  send('discovery',0,0,'GitHub-Dateibaum wird geprüft','',null);
  if(signal.aborted)throw Error('Learning analysis cancelled');
  const commit=object(await read('repos/'+repository+'/git/commits/'+head));
@@ -327,7 +328,7 @@ export async function analyzeSourceWithOllama(
    chapter.book.slice(0,3400),Math.round((total-n-1)*mean/1000));
  }
  const index=['# Code-Lehrbuch: '+repository,'','Commit: '+head,
-  'Modell: lokales Ollama '+MODEL+' (kein externer Tokenverbrauch)',
+  'Modell: '+modelName+'; bei Kilo wird Code an einen Cloud-Dienst übertragen',
   'Abgedeckte Quelldateien in diesem Batch: '+sources.length+' von insgesamt '+eligibleFiles.length+' geeigneten Dateien; Abschnittsbeginn '+offset+'; ausgelassene Blob-Dateien: '+(all.length-eligibleFiles.length),
   'Eine vollständige Abdeckung sämtlicher Dateiformate ist nur bei null ausgelassenen Dateien gegeben.',
   'Architekturgründe sind technische Einordnungen, nicht nachgewiesene Entwicklergedanken.',
@@ -335,7 +336,7 @@ export async function analyzeSourceWithOllama(
   '','## Inhaltsverzeichnis',
   ...chapters.map((_,i)=>(chapterOffset+i+1)+'. Kapitel '+(chapterOffset+i+1)),''];
  const result:DeepLearningResult={
-  repository,head,model:MODEL,filesAnalyzed:sources.length,
+  repository,head,model:modelName,filesAnalyzed:sources.length,
   filesTotal:eligibleFiles.length,nextOffset,
   filesSkipped:all.length-eligibleFiles.length,
   complete:nextOffset===null&&all.length===eligibleFiles.length,
