@@ -5,6 +5,11 @@ export interface StandaloneStatus {
   checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
   executionEnabled: false;
 }
+export interface IssueVerificationResult {
+  kind:'review-failed'|'quality-failed'|'quality-passed';
+  issueNumber:number;checkpointRevision:number;feedback?:string;
+  publishAuthorized:false;
+}
 export interface IssueCodeResult {
   issueNumber:number;branch:string;changedFile:string;
   runId:string;checkpointRevision:number;stage:'review';
@@ -108,6 +113,7 @@ declare global {
     saveKiloRoleModels(id: string, roles: KiloRoleModels): Promise<KiloRoleModels>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     issueToCode(id: string, issueNumber: number): Promise<IssueCodeResult>;
+    verifyIssue(id: string, issueNumber: number): Promise<IssueVerificationResult>;
     cancelIssueCode(): Promise<boolean>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
