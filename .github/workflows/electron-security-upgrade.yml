@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   upgrade:
-    if: github.repository == 'thomcgn/autodevstudio' && github.event.head_commit.message == 'chore: bootstrap electron lock upgrade'
+    if: github.repository == 'thomcgn/autodevstudio'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
