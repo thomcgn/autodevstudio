@@ -23,8 +23,8 @@ function fixture(){
 test('stable priority and issue ID ordering from explicit trusted labels',()=>{
  const f=fixture();try{
   const q=planIssueQueue(f.base,f.project,[
-   issue(8,['priority:low']),issue(5,['priority:p1']),
-   issue(6,['priority:p0']),issue(4,['priority:p1'])],f.git);
+   issue(8,['status:ready','priority:p3']),issue(5,['status:ready','priority:p1']),
+   issue(6,['status:ready','priority:p0']),issue(4,['status:ready','priority:p1'])],f.git);
   assert.equal(q.previewOnly,true);
   assert.equal(q.executionEnabled,false);
   assert.equal(q.readyToStart,true);
@@ -35,8 +35,8 @@ test('stable priority and issue ID ordering from explicit trusted labels',()=>{
 test('manual/blocked labels never become queue candidates',()=>{
  const f=fixture();try{
   const q=planIssueQueue(f.base,f.project,[
-   issue(2,['blocked','priority:p0']),issue(3,['manual-only']),
-   issue(4,['priority:p2'])],f.git);
+   issue(2,['status:ready','blocked','priority:p0']),issue(3,['status:ready','manual-only','priority:p1']),
+   issue(4,['status:ready','priority:p2'])],f.git);
   assert.equal(q.nextIssueNumber,4);
   assert.equal(q.queue.find(i=>i.number===2)?.state,'held');
   assert.equal(q.queue.find(i=>i.number===3)?.state,'held');
@@ -53,7 +53,7 @@ test('any checkpoint, including done, blocks next issue without cleanup',()=>{
    sessions:{},reviewPassed:true,qualityPassed:true,
   },null);
   lock.release();
-  const q=planIssueQueue(f.base,f.project,[issue(5)],f.git);
+  const q=planIssueQueue(f.base,f.project,[issue(5,['status:ready','priority:p2'])],f.git);
   assert.equal(q.readyToStart,false);
   assert.equal(q.nextIssueNumber,null);
   assert.match(q.reason,/checkpoint/);
@@ -61,11 +61,11 @@ test('any checkpoint, including done, blocks next issue without cleanup',()=>{
 });
 test('dirty/untracked Git and active project lock block next issue',()=>{
  const f=fixture();try{
-  let q=planIssueQueue(f.base,f.project,[issue(3)],{
+  let q=planIssueQueue(f.base,f.project,[issue(3,['status:ready','priority:p2'])],{
    ...f.git,clean:false});
   assert.equal(q.readyToStart,false);
   const lock=acquireProjectLock(f.base,f.project);
-  q=planIssueQueue(f.base,f.project,[issue(3)],f.git);
+  q=planIssueQueue(f.base,f.project,[issue(3,['status:ready','priority:p2'])],f.git);
   assert.match(q.reason,/locked/);
   lock.release();
  }finally{f.close();}
@@ -74,5 +74,22 @@ test('duplicate issue IDs are rejected rather than silently reordered',()=>{
  const f=fixture();try{
   assert.throws(()=>planIssueQueue(f.base,f.project,[issue(1),issue(1)],f.git),
    /duplicate/);
+ }finally{f.close();}
+});
+
+test('only exactly one ready status and one explicit priority permit start',()=>{
+ const f=fixture();try{
+ const q=planIssueQueue(f.base,f.project,[
+  issue(11,['status:backlog','priority:p0']),
+  issue(12,['status:ready','priority:p1','status:review']),
+  issue(13,['status:ready']),
+  issue(14,['status:ready','priority:p2','priority:p0']),
+  issue(15,['status:ready','priority:p2']),
+  issue(16,['priority:p0']),
+  issue(17,['status:blocked','priority:p0']),
+ ],f.git);
+ assert.equal(q.nextIssueNumber,15);
+ for(const n of [11,12,13,14,16,17])
+  assert.equal(q.queue.find(item=>item.number===n)?.state,'held');
  }finally{f.close();}
 });

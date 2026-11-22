@@ -19,6 +19,28 @@ export interface IssueQueuePreview {
   queue:QueueItem[];
 }
 const SKIP=new Set(['blocked','do-not-automate','manual-only','needs-discussion','needs-triage']);
+const STATUS=new Set([
+ 'status:backlog','status:triage','status:ready','status:planning','status:in-progress',
+ 'status:review','status:approved','status:blocked','status:done',
+]);
+/** A new issue may start only with exactly one valid status and approved triage.
+ * Existing interrupted workflows are resumed through checkpoint validation, not
+ * by treating a label change as proof that a prior agent action completed.
+ */
+export function issueStartReadiness(labels:readonly string[]):{ready:boolean;reason:string}{
+ const normalized=labels.map(value=>value.trim().toLowerCase());
+ const statuses=normalized.filter(value=>value.startsWith('status:'));
+ if(statuses.length!==1||!STATUS.has(statuses[0]))
+   return {ready:false,reason:'Exactly one recognized workflow status is required'};
+ if(statuses[0]!=='status:ready')
+   return {ready:false,reason:'Issue status is '+statuses[0]+'; manual triage or recovery required'};
+ if(normalized.some(value=>SKIP.has(value)))
+   return {ready:false,reason:'Issue is blocked for manual triage'};
+ const priorities=normalized.filter(value=>/^priority:p[0-3]$/.test(value));
+ if(priorities.length!==1)
+   return {ready:false,reason:'Exactly one P0–P3 priority is required'};
+ return {ready:true,reason:'Ready with explicit workflow status and priority'};
+}
 function priority(labels:readonly string[]):0|1|2|3{
  const l=labels.map(x=>x.toLowerCase().trim());
  if(l.some(x=>['priority:p0','priority:critical','p0'].includes(x)))return 0;
@@ -45,10 +67,10 @@ export function planIssueQueue(
     throw Error('Invalid or duplicate queue issue');
   seen.add(issue.number);
   const labels=issue.labels.map(x=>x.toLowerCase().trim());
-  const held=labels.some(x=>SKIP.has(x));
+  const readiness=issueStartReadiness(labels);
   entries.push({number:issue.number,title:issue.title.slice(0,300),
-    priority:priority(issue.labels),state:held?'held':'candidate',
-    reason:held?'Issue requires manual triage':'Priority derived from explicit labels'});
+    priority:priority(issue.labels),state:readiness.ready?'candidate':'held',
+    reason:readiness.reason});
  }
  entries.sort((a,b)=>(a.state==='held'?1:0)-(b.state==='held'?1:0)||
    a.priority-b.priority||a.number-b.number);

@@ -7,7 +7,7 @@ import { assertRunApproved, type RunMode } from './run-policy';
 import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
-import { previewIssueQueue } from '../core/issue-queue-preview';
+import { previewIssueQueue, issueStartReadiness } from '../core/issue-queue-preview';
 import { implementIssueLocally } from '../core/local-issue-to-code';
 import { runIssueToDraftPr, defaultIssueAutomationDependencies } from '../core/issue-draft-orchestrator';
 import { createKiloPrimaryBuilder } from '../core/kilo-primary-builder';
@@ -54,6 +54,11 @@ let pendingStop: NodeJS.Timeout | null = null;
 const registry = (): string => path.join(app.getPath('userData'), 'projects.json');
 const history = (): RunHistory => new RunHistory(app.getPath('userData'));
 function emitRunEvent(event: Record<string, unknown>): void { send('run:event', event); }
+function assertIssueStartReady(labels:readonly string[]):void {
+  const readiness=issueStartReadiness(labels);
+  if(!readiness.ready)throw Error('Issue triage required: '+readiness.reason);
+}
+
 function projects(): Project[] {
   try {
     const raw: unknown = JSON.parse(fs.readFileSync(registry(), 'utf8'));
@@ -370,6 +375,7 @@ app.whenReady().then(() => {
       const cp=loadCoreCheckpoint(base,project.path);
       if(cp && cp.issueNumber!==issue.number)
         throw Error('Another issue has a pending checkpoint');
+      if(!cp)assertIssueStartReady(issue.labels);
       const scripts=selectSafeQualityScripts(project.path);
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -396,6 +402,8 @@ app.whenReady().then(() => {
     const issues=await listProjectIssues(project.path);
     const issue=issues.find(x=>x.number===issueNumber);
     if(!issue)throw Error('Issue is not open or no longer available');
+    if(!loadCoreCheckpoint(app.getPath('userData'),project.path))
+      assertIssueStartReady(issue.labels);
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
