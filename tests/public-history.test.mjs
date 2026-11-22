@@ -107,3 +107,42 @@ test('hostile filenames cannot inject Markdown sections or pretend full provenan
  assert.deepEqual(result.commits[0].changedPaths,['src/good.ts']);
  assert.equal(result.commits[0].pathsComplete,false);
 });
+
+test('walks beyond twelve commits, pins first HEAD and reports each bounded page',async()=>{
+ const commits=Array.from({length:25},(_,i)=>({sha:(i+1).toString(16).padStart(40,'0'),
+  commit:{message:'change '+i,author:{date:'2026-11-01T10:00:00Z'}}}));
+ const requests=[];
+ const read=async endpoint=>{
+  requests.push(endpoint);
+  if(endpoint==='repos/example/studio')return {private:false,full_name:'example/studio',
+    size:400,default_branch:'main',license:{spdx_id:'MIT'}};
+  if(endpoint==='repos/example/studio/branches/main')return {commit:{sha:SHA}};
+  if(endpoint.startsWith('repos/example/studio/commits?')){
+   const url=new URL('https://api.github.com/'+endpoint);
+   const page=Number(url.searchParams.get('page')??1);
+   const size=Number(url.searchParams.get('per_page'));
+   assert.equal(url.searchParams.get('sha'),SHA);
+   return commits.slice((page-1)*size,page*size);
+  }
+  if(/^repos\/example\/studio\/commits\/[a-f0-9]{40}$/.test(endpoint))
+   return {files:[{filename:'src/app.ts'}]};
+  throw Error('unexpected '+endpoint);
+ };
+ const pages=[];
+ const result=await walkPublicRepositoryHistory('example/studio',{
+  read,pageSize:10,onPage:(page,count)=>pages.push([page.page,count,page.hasMore]),
+ });
+ assert.equal(result.commits.length,25);
+ assert.deepEqual(pages,[[1,10,true],[2,20,true],[3,25,false]]);
+ assert.equal(result.head,SHA);
+ assert.equal(result.licenseSpdx,'MIT');
+ assert.equal(requests.some(x=>x.endsWith('&page=3')),true);
+});
+test('history traversal honors cancellation before the next API page',async()=>{
+ const controller=new AbortController();
+ const {read}=fixture();
+ await assert.rejects(walkPublicRepositoryHistory('example/studio',{
+  read,pageSize:2,signal:controller.signal,
+  onPage:()=>controller.abort(),
+ }),/cancelled/);
+});
