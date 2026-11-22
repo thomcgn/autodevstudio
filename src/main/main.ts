@@ -18,7 +18,6 @@ import {previewCheckpointIssueStatus} from '../core/issue-status-policy';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
-import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
 import {assertSeniorStackPreflight} from '../core/tech-stack-profile';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
@@ -588,6 +587,7 @@ app.whenReady().then(() => {
     publishingOwner={projectId:id,issueNumber,kind:'draft-publish'};
     try{
       await assertBranchProtection(project.path);
+      assertSeniorStackPreflight(project.path);
       const issues=await listProjectIssues(project.path);
       if(!issues.some(item=>item.number===issueNumber))
         throw Error('Issue is not open or no longer available');
