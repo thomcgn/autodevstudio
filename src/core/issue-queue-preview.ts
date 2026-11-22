@@ -50,7 +50,8 @@ export function planIssueQueue(
     priority:priority(issue.labels),state:held?'held':'candidate',
     reason:held?'Issue requires manual triage':'Priority derived from explicit labels'});
  }
- entries.sort((a,b)=>a.priority-b.priority||a.number-b.number);
+ entries.sort((a,b)=>(a.state==='held'?1:0)-(b.state==='held'?1:0)||
+   a.priority-b.priority||a.number-b.number);
  const checkpoint=loadCoreCheckpoint(base,projectPath);
  const lock=projectLockDirectoryExists(base,projectPath)||Boolean(inspectProjectLock(base,projectPath));
  let reason='';
