@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -65,6 +65,9 @@ function App(): React.JSX.Element {
   const [codingIssue, setCodingIssue] = useState<number | null>(null);
   const [codeResult, setCodeResult] = useState<IssueCodeResult | null>(null);
   const [codeError, setCodeError] = useState('');
+  const [verifyingIssue, setVerifyingIssue] = useState<number | null>(null);
+  const [verificationResult, setVerificationResult] = useState<IssueVerificationResult | null>(null);
+  const [verificationError, setVerificationError] = useState('');
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [issuesError, setIssuesError] = useState('');
   const [historyError, setHistoryError] = useState('');
@@ -130,6 +133,8 @@ function App(): React.JSX.Element {
     setIssuesError('');
     setCodeResult(null);
     setCodeError('');
+    setVerificationResult(null);
+    setVerificationError('');
     setGitStatus(null);
     setGitError('');
     setDiagnostics(null);
@@ -195,6 +200,21 @@ function App(): React.JSX.Element {
     try { setIssues(await window.studio.issues(selected)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const verifyIssueCode = async (issueNumber:number):Promise<void> => {
+    if(!selected||verifyingIssue!==null||codingIssue!==null)return;
+    setVerifyingIssue(issueNumber);
+    setVerificationError('');
+    setVerificationResult(null);
+    try{
+      const result=await window.studio.verifyIssue(selected,issueNumber);
+      setVerificationResult(result);
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+    }catch{
+      setVerificationError('Unabhängiger Review nicht freigegeben oder Quality-Gate fehlgeschlagen. Der Checkpoint bleibt zur Prüfung erhalten. Bei unbekanntem Kilo-Restbudget erfolgt keine Modellanfrage.');
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+    }finally{setVerifyingIssue(null);}
   };
 
   const convertIssueToCode = async (issueNumber:number):Promise<void> => {
@@ -684,6 +704,18 @@ function App(): React.JSX.Element {
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
+          {verificationError && <div className="error" role="alert">{verificationError}</div>}
+          {verificationResult && <div className="git-readiness" role="status">
+            <strong>{verificationResult.kind==='quality-passed'?'Review und Quality bestanden':
+              verificationResult.kind==='review-failed'?'Reviewer verlangt Korrektur':'Quality-Gates fehlgeschlagen'}</strong>
+            <span>Issue #{verificationResult.issueNumber} · Revision {verificationResult.checkpointRevision}
+              {verificationResult.feedback?' · '+verificationResult.feedback:''}</span>
+            <small>Kein Commit, Push oder PR. Die Veröffentlichung bleibt unabhängig vom Ergebnis gesperrt.</small>
+          </div>}
+          {verifyingIssue!==null && <div className="git-readiness" role="status">
+            <strong>Issue #{verifyingIssue}: unabhängiger Review und Quality …</strong>
+            <button type="button" className="quiet" onClick={()=>void window.studio.cancelIssueCode()}>Abbrechen</button>
+          </div>}
           {codeResult && <div className="git-readiness ready" role="status">
             <strong>Issue #{codeResult.issueNumber} wurde zu echtem Code!</strong>
             <span>Branch: {codeResult.branch} · Änderung: {codeResult.changedFile} · Checkpoint: Review (Revision {codeResult.checkpointRevision})</span>
@@ -699,11 +731,17 @@ function App(): React.JSX.Element {
               : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
                   <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
                   <div className="issue-actions">
-                    <button type="button" disabled={codingIssue!==null||simulating!==null}
+                    <button type="button" disabled={codingIssue!==null||simulating!==null||verifyingIssue!==null}
                       onClick={()=>void convertIssueToCode(issue.number)}>
                       {codingIssue===issue.number?'Erzeuge Code …':'Issue lokal in Code umwandeln'}
                     </button>
-                    <button disabled={simulating !== null||codingIssue!==null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
+                    {studioStatus?.checkpoint?.issueNumber===issue.number &&
+                      studioStatus.checkpoint.stage==='review' && <button type="button"
+                      disabled={verifyingIssue!==null||codingIssue!==null||simulating!==null}
+                      onClick={()=>void verifyIssueCode(issue.number)}>
+                      {verifyingIssue===issue.number?'Review läuft …':'Review + Quality prüfen'}
+                    </button>}
+                    <button disabled={simulating !== null||codingIssue!==null||verifyingIssue!==null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
                 </article>)}</div>}
           <div className="agent-footnote">Der lokale Issue→Code-Lauf kann eine bestehende TS/JS-Datei in einem neuen Git-Branch tatsächlich ändern. Er ist bewusst auf genau eine Datei begrenzt, benötigt ein sauberes Repository und erzeugt weder Commit noch PR. Der vollautomatische Kilo-Builder/Review/Quality/PR-Zyklus bleibt separat gesperrt.</div>
         </div>}
