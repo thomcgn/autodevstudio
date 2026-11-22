@@ -145,10 +145,10 @@ try{
   fs.writeFileSync(path.join(library,'latest.json'),
     JSON.stringify({repository:historicalRepo,head:verifiedHead,snapshot}),{mode:0o600});
   fs.writeFileSync(path.join(bookFolder,'book.md'),
-    '# Programmieren verstehen\\n\\n## Erste Lektion\\n\\nEin Absatz mit Umlauten: Ää Öö Üü.\\n\\n~~~java\\nList<String> namen = List.of("Ada");\\n~~~\\n',
+    '# Programmieren verstehen\n\n## Erste Lektion\n\nEin Absatz mit Umlauten: Ää Öö Üü.\n\n~~~java\nList<String> namen = List.of("Ada");\n~~~\n',
     {mode:0o600});
-  fs.writeFileSync(path.join(bookFolder,'solutions.md'),'# Musterlösungen\\n',{mode:0o600});
-  fs.writeFileSync(path.join(bookFolder,'reports.md'),'# Quellen\\n',{mode:0o600});
+  fs.writeFileSync(path.join(bookFolder,'solutions.md'),'# Musterlösungen\n',{mode:0o600});
+  fs.writeFileSync(path.join(bookFolder,'reports.md'),'# Quellen\n',{mode:0o600});
   fs.writeFileSync(path.join(bookFolder,'sources.json'),
     JSON.stringify({repository:historicalRepo,head:verifiedHead,license:'MIT',lessons:[]}),{mode:0o600});
   const exportFile=path.join(root,'test-book.pdf');
