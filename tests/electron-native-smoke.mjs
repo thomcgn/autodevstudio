@@ -135,6 +135,36 @@ try{
     catch{return true;}
   });
   assert.equal(previewRejected,true,'Route preview requires authorized Git project');
+  // Verify the actual packaged Electron PDF renderer, not only an HTML mock.
+  const historicalRepo='example/studio';
+  const verifiedHead='a'.repeat(40);
+  const snapshot=verifiedHead+'--history-'+'0'.repeat(12);
+  const library=path.join(userData,'learning-library','example__studio');
+  const bookFolder=path.join(library,snapshot);
+  fs.mkdirSync(bookFolder,{recursive:true,mode:0o700});
+  fs.writeFileSync(path.join(library,'latest.json'),
+    JSON.stringify({repository:historicalRepo,head:verifiedHead,snapshot}),{mode:0o600});
+  fs.writeFileSync(path.join(bookFolder,'book.md'),
+    '# Programmieren verstehen\\n\\n## Erste Lektion\\n\\nEin Absatz mit Umlauten: Ää Öö Üü.\\n\\n~~~java\\nList<String> namen = List.of("Ada");\\n~~~\\n',
+    {mode:0o600});
+  fs.writeFileSync(path.join(bookFolder,'solutions.md'),'# Musterlösungen\\n',{mode:0o600});
+  fs.writeFileSync(path.join(bookFolder,'reports.md'),'# Quellen\\n',{mode:0o600});
+  fs.writeFileSync(path.join(bookFolder,'sources.json'),
+    JSON.stringify({repository:historicalRepo,head:verifiedHead,license:'MIT',lessons:[]}),{mode:0o600});
+  const exportFile=path.join(root,'test-book.pdf');
+  const dialogIntercepted=await app.evaluate(({dialog},destination)=>{
+    const replacement=async()=>({canceled:false,filePath:destination});
+    dialog.showSaveDialog=replacement;
+    return dialog.showSaveDialog===replacement;
+  },exportFile);
+  assert.equal(dialogIntercepted,true,'Native export dialog must be safely intercepted in fixture');
+  const exported=await page.evaluate(()=>
+    window.studio.exportLearningBook('example/studio','book','pdf'));
+  assert.deepEqual(exported,{exported:true});
+  const pdf=fs.readFileSync(exportFile);
+  assert.equal(pdf.subarray(0,5).toString('ascii'),'%PDF-');
+  assert.ok(pdf.length>1500,'Generated PDF must not be empty');
+  console.log('PASS: real packaged Electron offline PDF export with stored Markdown');
   assert.deepEqual(pageErrors,[]);
   console.log('PASS: packaged Electron, preload, IPC, sandbox preferences, fixture UI, authorization');
 }finally{
