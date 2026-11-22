@@ -23,7 +23,7 @@ export interface KiloAdaptersConfig {
   invokeReviewer?: (input: KiloInvocation) => Promise<KiloInvocationResult>;
 }
 
-function parseDelimitedObject(output: string): Record<string, unknown> {
+export function parseDelimitedObject(output: string): Record<string, unknown> {
   const startTag = 'AUTODEV_JSON_BEGIN';
   const endTag = 'AUTODEV_JSON_END';
   const end = output.lastIndexOf(endTag);
