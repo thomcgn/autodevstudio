@@ -6,6 +6,7 @@ import path from 'node:path';
 import {analyzeDevelopmentDecision,renderDevelopmentCaseStudies} from '../src/core/development-case-studies.ts';
 import {generateHistoricalBook,mergeHistoricalBook} from '../src/core/historical-lessons.ts';
 import {saveHistoricalBook,loadHistoricalBook} from '../src/core/learning-store.ts';
+import {markdownToPrintHtml} from '../src/core/learning-pdf-html.ts';
 const A='a'.repeat(40),B='b'.repeat(40);
 const repository='thomcgn/FassWerk';
 const index=(sha,title,file)=>({repository,defaultBranch:'main',fixedHead:A,
@@ -54,6 +55,10 @@ test('end-to-end textbook creates real case studies and keeps them after saving'
  assert.equal(book.caseStudies?.length,1);
  assert.match(book.bookMarkdown,/Entwicklungsentscheidungen: vom Problem zur Lösung/);
  assert.match(book.bookMarkdown,/doppelte Buchungen/);
+ const printHtml=markdownToPrintHtml(book.bookMarkdown);
+ assert.match(printHtml,/<h2 id="entwicklungsentscheidungen-vom-problem-zur-losung">/);
+ assert.match(printHtml,/<strong>Warum ist das technisch sinnvoll\?/);
+ assert.match(printHtml,/doppelte Buchungen/);
  assert.match(book.reportsMarkdown,/Entwicklungsfallstudien/);
  saveHistoricalBook(root,book);
  const saved=loadHistoricalBook(root,repository);
