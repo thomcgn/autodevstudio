@@ -264,7 +264,7 @@ try {
   await page.getByText('feat: introduce typed list',{exact:true}).waitFor();
   await page.getByText('Quellenindex, noch kein fertiges Lehrbuch',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch mit Ollama analysieren'}).click();
-  await page.getByRole('dialog',{name:'Code-Lehrbuch mit lokalem Ollama'}).waitFor();
+  await page.getByRole('dialog',{name:'Code-Lehrbuch · lokales Ollama'}).waitFor();
   await page.getByText('Kapitel 1 geschrieben',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Schließen',exact:true}).click();
   await page.getByText('Dein Lehrbuch – example/studio',{exact:true}).waitFor();
