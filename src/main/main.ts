@@ -364,7 +364,7 @@ app.whenReady().then(() => {
           });
         },
       });
-      const prior=loadHistoricalBook(app.getPath('userData'),index.repository);
+      const prior=loadHistoricalBook(app.getPath('userData'),index.repository,'deep');
       const compatible=prior?.head===index.head&&
         prior.deepSummary?.model==='qwen2.5-coder:3b';
       let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
@@ -393,7 +393,7 @@ app.whenReady().then(() => {
           model:'qwen2.5-coder:3b',
         },
         historyCursor,
-      });
+      },'deep');
       while(!sourceComplete){
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         const batchOffset=offset;
@@ -453,7 +453,7 @@ app.whenReady().then(() => {
         persist({nextIndex:historyNext,total:index.commits.length,
           chapters:historyChapters,incomplete,model:'qwen2.5-coder:3b'});
       }
-      const final=loadHistoricalBook(app.getPath('userData'),index.repository);
+      const final=loadHistoricalBook(app.getPath('userData'),index.repository,'deep');
       if(!final||final.head!==index.head)throw Error('Final learning snapshot is unavailable');
       send('learning:progress',{
         runId,repository:index.repository,phase:'finished',startedAt,
@@ -521,7 +521,8 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('learning:load', (_event, repository: unknown) => {
     if(typeof repository!=='string')throw Error('Invalid learning repository');
-    const saved=loadHistoricalBook(app.getPath('userData'),repository);
+    const saved=loadHistoricalBook(app.getPath('userData'),repository,'deep')??
+      loadHistoricalBook(app.getPath('userData'),repository);
     return saved?{repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
@@ -535,10 +536,12 @@ app.whenReady().then(() => {
       }:undefined}:null;
   });
   ipcMain.handle('learning:export',async (_event,repository:unknown,
-    kind:unknown,format:unknown) => {
+    kind:unknown,format:unknown,mode:unknown='history') => {
     if(typeof repository!=='string'||!['book','solutions','reports'].includes(String(kind))||
-       !['md','pdf'].includes(String(format)))throw Error('Invalid learning export');
-    const saved=loadHistoricalBook(app.getPath('userData'),repository);
+       !['md','pdf'].includes(String(format))||
+       !['history','deep'].includes(String(mode)))throw Error('Invalid learning export');
+    const saved=loadHistoricalBook(app.getPath('userData'),repository,
+      mode as 'history'|'deep');
     if(!saved)throw Error('No saved learning book found');
     const content=kind==='book'?saved.bookMarkdown:
       kind==='solutions'?saved.solutionsMarkdown:saved.reportsMarkdown;
