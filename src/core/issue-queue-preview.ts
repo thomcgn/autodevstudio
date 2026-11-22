@@ -9,6 +9,8 @@ export interface QueueItem {
   priority:0|1|2|3;
   state:'candidate'|'held';
   reason:string;
+  triage:{source:'github-labels';evidence:readonly string[];dependencyIssues:readonly number[];
+    proposalOnly:true;confidence:'high'|'limited'};
 }
 export interface IssueQueuePreview {
   previewOnly:true;
@@ -41,6 +43,27 @@ export function issueStartReadiness(labels:readonly string[]):{ready:boolean;rea
    return {ready:false,reason:'Exactly one P0–P3 priority is required'};
  return {ready:true,reason:'Ready with explicit workflow status and priority'};
 }
+/** Only explicit project-local GitHub issue dependencies count as blockers.
+ * No GitHub close event is inferred from missing entries in the open-issue list.
+ */
+export function inspectIssueDependencies(labels:readonly string[],issueNumber:number):{
+  dependencies:readonly number[];error:string|null
+}{
+ const dependencyLabels=labels.map(x=>x.trim().toLowerCase())
+  .filter(x=>x.startsWith('depends-on:'));
+ const dependencies:number[]=[];
+ for(const label of dependencyLabels){
+  const match=/^depends-on:#([1-9][0-9]*)$/.exec(label);
+  if(!match)return {dependencies:[],error:'Invalid depends-on label; expected depends-on:#N'};
+  const number=Number(match[1]);
+  if(!Number.isSafeInteger(number)||number===issueNumber)
+   return {dependencies:[],error:'Invalid or self-referencing issue dependency'};
+  if(dependencies.includes(number))
+   return {dependencies:[],error:'Duplicate issue dependency'};
+  dependencies.push(number);
+ }
+ return {dependencies:dependencies.sort((a,b)=>a-b),error:null};
+}
 function priority(labels:readonly string[]):0|1|2|3{
  const l=labels.map(x=>x.toLowerCase().trim());
  if(l.some(x=>['priority:p0','priority:critical','p0'].includes(x)))return 0;
@@ -68,9 +91,30 @@ export function planIssueQueue(
   seen.add(issue.number);
   const labels=issue.labels.map(x=>x.toLowerCase().trim());
   const readiness=issueStartReadiness(labels);
+  const dependencies=inspectIssueDependencies(labels,issue.number);
+  const missing=dependencies.dependencies.find(number=>!issues.some(candidate=>
+    candidate.number===number));
+  const unresolved=dependencies.dependencies.find(number=>issues.some(candidate=>
+    candidate.number===number));
+  const dependencyReason=dependencies.error??(unresolved!==undefined
+    ?'Depends on open issue #'+unresolved+'; resolve that issue first'
+    :missing!==undefined
+      ?'Dependency #'+missing+' not in open issues: completion unverified; manual reconciliation required'
+      :null);
+  const isReady=readiness.ready&&!dependencyReason;
+  const priorityValue=priority(issue.labels);
+  const evidence=[
+    'Explicit GitHub priority: P'+priorityValue,
+    'Workflow: '+(labels.find(label=>label.startsWith('status:'))??'unknown'),
+    ...(dependencies.dependencies.length?['Dependencies: '+
+      dependencies.dependencies.map(n=>'#'+n).join(', ')]:[]),
+    'Tie-breaker: issue number (only within equal priorities)',
+  ];
   entries.push({number:issue.number,title:issue.title.slice(0,300),
-    priority:priority(issue.labels),state:readiness.ready?'candidate':'held',
-    reason:readiness.reason});
+    priority:priorityValue,state:isReady?'candidate':'held',
+    reason:dependencyReason??readiness.reason,
+    triage:{source:'github-labels',evidence,dependencyIssues:dependencies.dependencies,
+      proposalOnly:true,confidence:dependencyReason?'limited':'high'}});
  }
  entries.sort((a,b)=>(a.state==='held'?1:0)-(b.state==='held'?1:0)||
    a.priority-b.priority||a.number-b.number);

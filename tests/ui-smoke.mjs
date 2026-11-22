@@ -183,11 +183,17 @@ try {
       previewOnly:true,executionEnabled:false,readyToStart:false,
       nextIssueNumber:null,reason:'No eligible open issues',
       queue:[{number:5,title:'Core integration',priority:1,state:'held',
-        reason:'Issue status is status:blocked; manual triage or recovery required'}],
+        reason:'Issue status is status:blocked; manual triage or recovery required',
+        triage:{source:'github-labels',evidence:['Explicit GitHub priority: P1',
+          'Workflow: status:blocked'],dependencyIssues:[],proposalOnly:true,
+          confidence:'limited'}}],
     };
   });
   await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
   await page.getByText('BLOCKED – Issue gesperrt',{exact:true}).waitFor();
+  await page.getByText('Priorisierung: P1 · zurückgestellt · Begründung').click();
+  await page.getByText('Explicit GitHub priority: P1',{exact:true}).waitFor();
+  await page.getByText('Sperrgrund:',{exact:false}).first().waitFor();
   await page.getByText('Das Label enthält keinen konkreten technischen Fehlergrund',{exact:false}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Issue → Draft-PR'}).isDisabled(),true);
   await page.evaluate(()=>{

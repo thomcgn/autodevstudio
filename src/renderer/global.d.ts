@@ -27,7 +27,9 @@ export interface IssueQueuePreview {
   previewOnly:true;executionEnabled:false;readyToStart:boolean;
   nextIssueNumber:number|null;reason:string;
   queue:Array<{number:number;title:string;priority:0|1|2|3;
-    state:'candidate'|'held';reason:string}>;
+    state:'candidate'|'held';reason:string;
+    triage:{source:'github-labels';evidence:readonly string[];dependencyIssues:readonly number[];
+      proposalOnly:true;confidence:'high'|'limited'}}>;
 }
 export interface IssueAutomationOutcome {
   status:'paused'|'draft-created';
