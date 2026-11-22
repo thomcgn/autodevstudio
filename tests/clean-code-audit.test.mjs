@@ -40,3 +40,21 @@ test('oversize and unsupported source fail closed',()=>{
  assert.throws(()=>auditCodeSource('secrets.env','hello'),/Unsupported/);
  assert.throws(()=>auditCodeSource('src/huge.ts','x'.repeat(140000)),/too large/);
 });
+
+test('security audit finds dangerous dynamic code execution and unsafe HTML sink',()=>{
+ const r=auditCodeSource('src/unsafe.ts',[
+  'export const run = (input: string) => eval(input);',
+  'export const factory = new Function("return 1");',
+  'element.innerHTML = userInput;',
+ ].join('\n'));
+ assert.deepEqual(r.findings.filter(f=>f.principle==='security').map(f=>f.rule),
+  ['dynamic-eval','dynamic-function','unsafe-html-assignment']);
+});
+test('security audit warns for plausible hardcoded API credentials but not placeholders',()=>{
+ const r=auditCodeSource('src/keys.ts',[
+  'const apiKey = "real_secret_aaaaaaaaaaaaaaaa";',
+  'const password = "example-not-a-secret-value";',
+ ].join('\n'));
+ assert.ok(r.findings.some(f=>f.rule==='hardcoded-credential'));
+ assert.equal(r.findings.filter(f=>f.rule==='hardcoded-credential').length,1);
+});
