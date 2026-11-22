@@ -86,3 +86,21 @@ test('conflicting lockfiles and symlinked manifests fail closed',()=>{
   assert.throws(()=>detectTechStackProfile(f.root),/Unsafe or oversized stack manifest/);
  }finally{f.close();}
 });
+
+test('no-op typecheck and fake test scripts cannot qualify as quality gates',()=>{
+ for(const scripts of [
+  {typecheck:'echo PASS',test:'node --test'},
+  {typecheck:'tsc --noCheck',test:'node --test'},
+  {typecheck:'tsc --noEmit',test:'echo all good'},
+  {typecheck:'tsc --noEmit || true',test:'node --test'},
+  {typecheck:'tsc --noEmit',test:'vitest run --passWithNoTests'},
+ ]){
+  const f=fixture({'package.json':packageJson({}, {typescript:'^5.0.0'},scripts),
+   'tsconfig.json':strict,'package-lock.json':'{}'});
+  try{
+   const p=detectTechStackProfile(f.root);
+   assert.equal(p.canDevelop,false);
+   assert.match(p.blockers.join(' '),/Quality script is not a recognized/);
+  }finally{f.close();}
+ }
+});
