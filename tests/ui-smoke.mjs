@@ -22,6 +22,7 @@ const success={
     kiloRunCommandReady:true,agentCatalogReadable:true,agentCatalogProblem:null,
     sandboxTool:'bwrap',sandboxToolAvailable:true,ghInstalled:true,ghAuthenticated:true,
     checkedAt:'2026-01-01'},
+  branchProtection:{protected:true,evidence:{repository:'example/studio',branch:'main',rulesetId:111,requiredChecks:['typecheck'],verifiedAt:'2026-11-22T00:00:00.000Z'}},
   sandboxProbe:{available:true,isolated:true,reason:'passed',detail:null,exitCode:0},
   reviewerProbe:{supported:true,passed:true,reason:'passed',detail:null},
   qualityProbe:{supported:true,passed:true,reason:'passed',stage:null,detail:null,exitCode:null},
@@ -100,7 +101,8 @@ async function fixture(page){
       addProject:async()=>null,removeProject:async()=>true,
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
-      issues:async()=>[],workflowStages:async()=>[],simulateIssue:async()=>null,
+      issues:async()=>[],branchProtection:()=>respond('branchProtection'),
+      workflowStages:async()=>[],simulateIssue:async()=>null,
       historyLog:async()=>'',runInfo:async()=>null,start:async()=>{throw Error('not authorized');},
       stop:async()=>false,active:async()=>false,
     };

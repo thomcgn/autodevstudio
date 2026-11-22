@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 
@@ -18,6 +18,7 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [gitStatus, setGitStatus] = useState<GitPreflight | null>(null);
+  const [branchProtection, setBranchProtection] = useState<BranchProtectionStatus | null>(null);
   const [diagnostics, setDiagnostics] = useState<ProviderDiagnostics | null>(null);
   const [checkingProviders, setCheckingProviders] = useState(false);
   const [sandboxProbe, setSandboxProbe] = useState<SandboxProbeResult | null>(null);
@@ -149,6 +150,7 @@ function App(): React.JSX.Element {
     setAutomationResult(null);
     setAutomationError('');
     setGitStatus(null);
+    setBranchProtection(null);
     setGitError('');
     setDiagnostics(null);
     setDiagnosticsError('');
@@ -208,6 +210,9 @@ function App(): React.JSX.Element {
     if (!selected) return;
     setIssuesLoading(true);
     setIssuesError('');
+    setBranchProtection(null);
+    void window.studio.branchProtection(selected).then(setBranchProtection).catch(()=>
+      setBranchProtection({protected:false,reason:'GitHub-Branch-Protection konnte nicht geprüft werden'}));
     setGitError('');
     void window.studio.gitPreflight(selected).then(setGitStatus).catch(e => setGitError(String(e)));
     try {
@@ -749,6 +754,15 @@ function App(): React.JSX.Element {
         {tab === 'issues' && <div className="view issue-view">
           <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Kilo ist primärer Planner, Builder und unabhängiger Reviewer: Issue → echter Code → isolierte Tests → Draft-PR. Ollama ist ausschließlich optionaler Fallback.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
+          <div role="status" className={branchProtection?.protected===true?'git-readiness ready':'git-readiness'}>
+            <strong>{branchProtection?.protected===true?'Branch Protection verifiziert':
+              branchProtection===null?'Branch Protection wird geprüft':'Entwicklung gesperrt · Branch Protection fehlt'}</strong>
+            <span>{branchProtection?.protected===true
+              ?branchProtection.evidence.repository+' · '+branchProtection.evidence.branch+
+                ' · '+branchProtection.evidence.requiredChecks.length+' Pflichtchecks'
+              :branchProtection?.protected===false?branchProtection.reason:
+                'Keine Entwicklung, bis GitHub die Regeln bestätigt hat'}</span>
+          </div>
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
@@ -810,7 +824,7 @@ function App(): React.JSX.Element {
                   </div>
                   <div className="issue-actions">
                     <button className="issue-primary-action" type="button"
-                      disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                      disabled={branchProtection?.protected!==true||automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                       onClick={()=>void automateIssue(issue.number)}>
                       {automatingIssue===issue.number?'Automatisiere …':'Issue → Draft-PR'}
                     </button>
@@ -818,20 +832,20 @@ function App(): React.JSX.Element {
                       studioStatus.checkpoint.stage==='quality' &&
                       studioStatus.checkpoint.reviewPassed &&
                       studioStatus.checkpoint.qualityPassed && <button type="button"
-                      disabled={publishingIssue!==null||verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
+                      disabled={branchProtection?.protected!==true||publishingIssue!==null||verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
                       onClick={()=>void createDraftPr(issue.number)}>
                       {publishingIssue===issue.number?'Draft-PR wird erstellt …':'Geprüften Draft-PR erstellen'}
                     </button>}
                     {studioStatus?.checkpoint?.issueNumber===issue.number &&
                       studioStatus.checkpoint.stage==='review' && <button type="button"
-                      disabled={verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
+                      disabled={branchProtection?.protected!==true||verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
                       onClick={()=>void verifyIssueCode(issue.number)}>
                       {verifyingIssue===issue.number?'Review läuft …':'Review + Tests'}
                     </button>}
                     <details className="issue-secondary-actions">
                       <summary>Weitere Aktionen</summary>
                       <div className="issue-secondary-buttons">
-                        <button type="button" disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                        <button type="button" disabled={branchProtection?.protected!==true||automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                           onClick={()=>void convertIssueToCode(issue.number)}>
                           {codingIssue===issue.number?'Erzeuge Code …':'Nur Code erzeugen'}
                         </button>
