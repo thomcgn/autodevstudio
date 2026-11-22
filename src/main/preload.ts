@@ -18,7 +18,8 @@ contextBridge.exposeInMainWorld('studio', {
     ipcRenderer.on('learning:progress',listener);
     return ()=>ipcRenderer.removeListener('learning:progress',listener);
   },
-  loadLearningBook: (repo:string) => ipcRenderer.invoke('learning:load', repo),
+  loadLearningBook: (repo:string,provider:'ollama'|'kilo'='ollama') =>
+    ipcRenderer.invoke('learning:load', repo,provider),
   exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',
     format:'md'|'pdf',mode:'history'|'deep'|'deep-kilo'='history') =>
     ipcRenderer.invoke('learning:export',repo,kind,format,mode),
