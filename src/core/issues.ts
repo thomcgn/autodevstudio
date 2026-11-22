@@ -17,7 +17,7 @@ const defaultRunner: CommandRunner = async (bin, args, cwd) => {
 };
 
 export function parseIssues(json: string, expectedRepository?: string): StudioIssue[] {
-  if(expectedRepository && !/^[\w.-]+\/[\w.-]+$/.test(expectedRepository))
+  if(expectedRepository && !/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(expectedRepository))
     throw new Error('Invalid expected GitHub repository');
   const parsed: unknown = JSON.parse(json);
   if (!Array.isArray(parsed)) throw new Error('Unexpected GitHub issue response');
