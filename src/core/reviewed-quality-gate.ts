@@ -54,7 +54,7 @@ export async function verifyQualityForReviewedIssue(
     const report:QualityRunReport={
       schemaVersion:1,issueNumber:cp.issueNumber,runId:cp.runId,
       reviewFingerprint:proof.evidenceFingerprint,checkpointRevision:revision,
-      outcome,checks:['clean-code','solid','dry',...approvedScripts],
+      outcome,checks:['clean-code','solid','dry','security',...approvedScripts],
       findings:findings.slice(0,40),feedback:feedback.slice(0,1200),
       recordedAt:new Date().toISOString(),
     };
@@ -63,7 +63,7 @@ export async function verifyQualityForReviewedIssue(
   if(signal?.aborted)throw Error('Quality cancelled');
   const audit=await dependencies.audit(projectPath);
   if(!audit.passed){
-    const feedback='Clean Code/SOLID/DRY: '+audit.findings.slice(0,5)
+    const feedback='Clean Code/SOLID/DRY/Security: '+audit.findings.slice(0,5)
       .map(f=>f.rule+' at '+audit.changedFile+':'+f.line).join('; ');
     record('failed',feedback,audit.findings,expectedRevision);
     return {
