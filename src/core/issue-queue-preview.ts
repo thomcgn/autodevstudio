@@ -38,7 +38,7 @@ export function planIssueQueue(
   throw Error('Invalid issue queue input');
  const seen=new Set<number>();
  const entries:QueueItem[]=[];
- for(const issue of issues){
+ for(const issue of issues as readonly StudioIssue[]){
   if(!Number.isSafeInteger(issue.number)||issue.number<1||
     seen.has(issue.number)||typeof issue.title!=='string'||
     !Array.isArray(issue.labels))
