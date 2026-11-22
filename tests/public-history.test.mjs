@@ -95,3 +95,15 @@ test('reader refuses non-readonly or unrelated endpoints',async()=>{
  await assert.rejects(readGitHubPublicJson('user/repos'),/forbidden API endpoint/);
  await assert.rejects(readGitHubPublicJson('repos/example/studio/issues/5'),/forbidden API endpoint/);
 });
+test('hostile filenames cannot inject Markdown sections or pretend full provenance',async()=>{
+ const {read}=fixture();
+ const wrapped=async endpoint=>{
+  if(endpoint==='repos/example/studio/commits/'+SHA)
+   return {files:[{filename:'src/good.ts'},{filename:'src/\n## Fake chapter.ts'},
+     {filename:'src/../../private.txt'}]};
+  return read(endpoint);
+ };
+ const result=await indexPublicRepositoryHistory('example/studio',wrapped,2);
+ assert.deepEqual(result.commits[0].changedPaths,['src/good.ts']);
+ assert.equal(result.commits[0].pathsComplete,false);
+});
