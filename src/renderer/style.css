@@ -482,3 +482,9 @@ html,body,#root{max-width:100%;overflow:hidden}
 .issue-label-onboarding p{flex:1 1 100%;font-size:12px;margin:0;overflow-wrap:anywhere}
 .issue-label-onboarding [role=alert]{color:#ffd4cf}
 @media(max-width:850px){.issue-label-onboarding button{width:100%}}
+
+.issue-status-preview{padding:9px 11px;border:1px solid #7787ac;
+  border-radius:8px;background:#1a2740;overflow-wrap:anywhere}
+.issue-status-preview strong{font-size:12px}
+.issue-status-preview p{margin:5px 0;font-size:12px;line-height:1.4}
+.issue-status-preview small{color:#b9c9dd;font-size:11px}
