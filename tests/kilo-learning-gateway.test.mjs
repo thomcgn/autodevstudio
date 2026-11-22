@@ -66,3 +66,23 @@ test('Kilo reports explicit output token exhaustion without accepting a partial 
   /Kilo completion truncated at token limit/);
  assert.equal(requests,1);
 });
+
+test('Kilo completion errors identify safe finish categories without leaking model content',async()=>{
+ for(const [reason,message] of [
+  ['content_filter',/Kilo cloud filtered/],
+  ['tool_calls',/Kilo completion ended without a verified stop/],
+  ['unknown',/Kilo completion ended without a verified stop/],
+ ]){
+  const model=createKiloLearningModel({fetcher:async()=>new Response(JSON.stringify({
+   choices:[{finish_reason:reason,
+    message:{role:'assistant',content:'PRIVATE CODE DATA DO NOT SHOW'}}],
+  }))});
+  await assert.rejects(model('system','source',new AbortController().signal),message);
+ }
+ const model=createKiloLearningModel({fetcher:async()=>new Response(JSON.stringify({
+  choices:[{finish_reason:'stop',
+   message:{role:'assistant',content:'x'.repeat(16001)}}],
+ }))});
+ await assert.rejects(model('system','source',new AbortController().signal),
+  /maximum text length/);
+});
