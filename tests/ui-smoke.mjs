@@ -77,7 +77,9 @@ async function fixture(page){
         checkpoint:null,hasState:false,updatedAt:null}),
       studioStatus:async()=>({git:{root:project.path,branch:'main',head:'a'.repeat(40),
           remoteSlug:null,clean:true,canExecute:false,reasons:[]},
-        lock:{held:false,startedAt:null},checkpoint:null,executionEnabled:false}),
+        lock:{held:false,startedAt:null},checkpoint:null,
+        recovery:{state:'none',identityMatches:null,reason:'Kein gespeicherter Issue-Lauf',automaticResume:false},
+        executionEnabled:false}),
       history:async()=>[],
       diagnostics:()=>respond('diagnostics'),
       sandboxProbe:()=>respond('sandboxProbe'),
@@ -142,6 +144,9 @@ try {
   const page=await context.newPage();
   page.on('pageerror',error=>errors.push(error.message));
   await fixture(page);
+  await page.getByRole('button',{name:'Übersicht',exact:true}).click();
+  await page.getByText('Wiederaufnahme: Keine Wiederaufnahme nötig',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Agenten',exact:true}).click();
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
   // Real local inference is self-contained: its button MUST be available
