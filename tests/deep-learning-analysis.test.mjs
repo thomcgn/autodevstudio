@@ -270,8 +270,8 @@ test('two malformed Ollama JSON completions fail closed and never fabricate a ch
 
 test('Kilo cloud analyzes entire large UTF-8 sources without exceeding gateway prompt byte budget',async()=>{
  const entries=Array.from({length:24},(_,i)=>({path:'src/module'+i+'.ts',type:'blob',
-  sha:BLOB,size:Buffer.byteLength('const data = "'+'ä'.repeat(2200)+'";')}));
- const rawContent='const data = "'+'ä'.repeat(2200)+'";';
+  sha:BLOB,size:Buffer.byteLength('const data = "'+'ä'.repeat(4000)+'";')}));
+ const rawContent='const data = "'+'ä'.repeat(4000)+'";';
  const requests=[];let calls=0;
  const read=async endpoint=>{
   if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
