@@ -747,7 +747,20 @@ function App(): React.JSX.Element {
         {tab === 'issues' && <div className="view issue-view">
           <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Kilo ist primärer Planner, Builder und unabhängiger Reviewer: Issue → echter Code → isolierte Tests → Draft-PR. Ollama ist ausschließlich optionaler Fallback.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
-          {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ? 'ready' : 'needs-work'}`}><strong>{gitStatus.canExecute ? 'Git-Bereitschaft: geprüft' : 'Git: Vorbereitung erforderlich'}</strong><span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}{gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Sauberer Feature-Branch'}</span></div>}
+          {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ||
+            (gitStatus.clean && !!gitStatus.remoteSlug && !!gitStatus.branch &&
+              gitStatus.reasons.every(reason=>reason==='Protected branch – create an isolated feature branch first'))
+              ? 'ready' : 'needs-work'}`}>
+            <strong>{gitStatus.canExecute ? 'Git bereit' :
+              gitStatus.clean && !!gitStatus.remoteSlug && !!gitStatus.branch &&
+              gitStatus.reasons.every(reason=>reason==='Protected branch – create an isolated feature branch first')
+              ? 'Git bereit · Issue-Branch wird automatisch erstellt' : 'Git: Vorbereitung erforderlich'}</strong>
+            <span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}
+              {gitStatus.clean && gitStatus.reasons.length===1 &&
+                gitStatus.reasons[0]==='Protected branch – create an isolated feature branch first'
+                ? ' · main bleibt unverändert'
+                : gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Arbeitsverzeichnis sauber'}</span>
+          </div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
           {issueQueue && <div className={`git-readiness ${issueQueue.readyToStart?'ready':'needs-work'}`} role="status">
@@ -799,22 +812,26 @@ function App(): React.JSX.Element {
             <small>Kein Commit, kein Push und kein PR. Nächster Schritt: isolierter Review und Quality Gates.</small>
           </div>}
           {codingIssue!==null && <div className="git-readiness" role="status">
-            <strong>Lokales Ollama arbeitet an Issue #{codingIssue} …</strong>
+            <strong>Kilo Builder arbeitet an Issue #{codingIssue} …</strong>
             <span>Erst wird ein begrenzter Codevorschlag geprüft; anschließend wird ausschließlich auf einem neuen Issue-Branch geschrieben.</span>
             <button type="button" className="quiet" onClick={()=>void window.studio.cancelIssueCode()}>Abbrechen</button>
           </div>}
           {issuesLoading ? <div className="empty-state">Issues werden geladen …</div>
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
               : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
-                  <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
+                  <div className="issue-item-header">
+                    <div className="issue-item-copy">
+                      <div className="issue-item-heading"><span className="issue-number">#{issue.number}</span><h3>{issue.title}</h3></div>
+                      {issue.labels.length > 0 && <p className="issue-labels">{issue.labels.join(' · ')}</p>}
+                      {issue.body?.trim() && <p className="issue-description">{issue.body.trim().slice(0, 260)}{issue.body.trim().length > 260 ? ' …' : ''}</p>}
+                    </div>
+                    <a className="issue-external-link" href={issue.url} target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+                  </div>
                   <div className="issue-actions">
-                    <button type="button" disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                    <button className="issue-primary-action" type="button"
+                      disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                       onClick={()=>void automateIssue(issue.number)}>
-                      {automatingIssue===issue.number?'Automatisiere …':'Issue → Draft-PR automatisieren'}
-                    </button>
-                    <button type="button" disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
-                      onClick={()=>void convertIssueToCode(issue.number)}>
-                      {codingIssue===issue.number?'Erzeuge Code …':'Issue lokal in Code umwandeln'}
+                      {automatingIssue===issue.number?'Automatisiere …':'Issue → Draft-PR'}
                     </button>
                     {studioStatus?.checkpoint?.issueNumber===issue.number &&
                       studioStatus.checkpoint.stage==='quality' &&
@@ -828,11 +845,24 @@ function App(): React.JSX.Element {
                       studioStatus.checkpoint.stage==='review' && <button type="button"
                       disabled={verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
                       onClick={()=>void verifyIssueCode(issue.number)}>
-                      {verifyingIssue===issue.number?'Review läuft …':'Review + Quality prüfen'}
+                      {verifyingIssue===issue.number?'Review läuft …':'Review + Tests'}
                     </button>}
-                    <button disabled={simulating !== null||codingIssue!==null||verifyingIssue!==null||automatingIssue!==null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
+                    <details className="issue-secondary-actions">
+                      <summary>Weitere Aktionen</summary>
+                      <div className="issue-secondary-buttons">
+                        <button type="button" disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                          onClick={()=>void convertIssueToCode(issue.number)}>
+                          {codingIssue===issue.number?'Erzeuge Code …':'Nur Code erzeugen'}
+                        </button>
+                        <button type="button" disabled={simulating !== null||codingIssue!==null||verifyingIssue!==null||automatingIssue!==null}
+                          onClick={() => void simulate(issue.number)}>
+                          {simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}
+                        </button>
+                      </div>
+                    </details>
+                  </div>
                 </article>)}</div>}
-          <div className="agent-footnote">Der lokale Issue→Code-Lauf kann eine bestehende TS/JS-Datei in einem neuen Git-Branch tatsächlich ändern. Er ist bewusst auf genau eine Datei begrenzt, benötigt ein sauberes Repository und erzeugt weder Commit noch PR. Der vollautomatische Kilo-Builder/Review/Quality/PR-Zyklus bleibt separat gesperrt.</div>
+          <div className="agent-footnote">Kilo plant, erstellt die Änderung und übergibt sie dem unabhängigen Reviewer und den Quality-Gates. Der Hauptlauf erstellt ausschließlich einen Draft-PR; kein automatischer Merge.</div>
         </div>}
 
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}

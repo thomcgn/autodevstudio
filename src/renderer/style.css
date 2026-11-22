@@ -238,3 +238,45 @@ small{font-size:11px}
 .local-fallback-choice{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#c5d6ef;min-width:0;line-height:1.5}
 .local-fallback-choice input{flex:none;margin-top:3px;width:16px;height:16px}
 .local-fallback-choice span{overflow-wrap:anywhere}
+
+
+/* Issues: the card takes the whole available width. Never let the row of
+   long action buttons shrink the title to a single column of letters.
+   The parent .view owns vertical scrolling; no nested horizontal/vertical
+   scroll area for ordinary issue cards. */
+.issue-view{gap:14px;overflow-x:hidden;scrollbar-gutter:auto}
+.issue-view .issue-title{min-width:0;align-items:flex-start}
+.issue-view .issue-title>div{min-width:0;flex:1}
+.issue-view .issue-title>button{flex:none}
+.issue-view .git-readiness{min-width:0;overflow-wrap:break-word}
+.issue-view .git-readiness strong{white-space:normal}
+.issue-list{overflow:visible;flex:none;min-height:auto;min-width:0;width:100%;gap:12px}
+.issue-item{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:13px;min-width:0;width:100%;padding:16px 18px;overflow:hidden}
+.issue-item-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0;width:100%}
+.issue-item-copy{min-width:0;flex:1}
+.issue-item-heading{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.issue-number{flex:none;color:#9dbbff;font-size:12px;font-weight:750;padding-top:2px}
+.issue-item-heading h3{font-size:14px;line-height:1.45;font-weight:700;min-width:0;margin:0;overflow-wrap:break-word;word-break:normal}
+.issue-item .issue-labels{color:#87a7d5;font-size:11px;line-height:1.5;margin-top:7px;overflow-wrap:break-word}
+.issue-item .issue-description{color:#aebed5;font-size:12px;line-height:1.55;margin-top:8px;overflow-wrap:break-word;word-break:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.issue-item .issue-external-link{flex:none;font-size:12px;white-space:nowrap;text-decoration:none;padding-top:2px}
+.issue-item .issue-external-link:hover{text-decoration:underline}
+.issue-item .issue-actions{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:9px;width:100%;min-width:0}
+.issue-item .issue-actions button{font-size:12px;padding:9px 12px;max-width:100%;white-space:normal;text-align:center}
+.issue-item .issue-primary-action{background:#305599;border-color:#507bc9;font-weight:700}
+.issue-secondary-actions{min-width:0;max-width:100%;font-size:12px;color:#a9c0e5}
+.issue-secondary-actions summary{cursor:pointer;padding:9px 11px;border-radius:8px;border:1px solid #34435e;list-style-position:inside}
+.issue-secondary-actions summary:hover{background:#263957}
+.issue-secondary-actions[open]{width:100%}
+.issue-secondary-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.issue-secondary-buttons button{background:transparent}
+@media(max-width:760px){
+  .issue-item{align-items:stretch;padding:13px}
+  .issue-item-header{flex-wrap:wrap;gap:8px}
+  .issue-external-link{margin-left:auto}
+  .issue-item .issue-actions{align-items:stretch}
+}
+@media(max-width:560px){
+  .issue-item .issue-primary-action{flex:1 1 100%}
+  .issue-item .issue-actions button:not(.issue-primary-action){flex:1 1 auto}
+}
