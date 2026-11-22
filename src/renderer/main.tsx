@@ -25,6 +25,8 @@ function App(): React.JSX.Element {
   const [learningHistory, setLearningHistory] = useState<PublicHistoryIndex | null>(null);
   const [learningBook, setLearningBook] = useState<LearningBookPreview|null>(null);
   const [learningGenerating,setLearningGenerating] = useState(false);
+  const [learningProvider,setLearningProvider] = useState<'ollama'|'kilo'>('ollama');
+  const [learningCloudConsent,setLearningCloudConsent] = useState(false);
   const [learningProgress,setLearningProgress] = useState<DeepLearningProgress|null>(null);
   const [learningModalOpen,setLearningModalOpen] = useState(false);
   const [learningStartedAt,setLearningStartedAt] = useState(0);
@@ -283,14 +285,15 @@ function App(): React.JSX.Element {
     setLearningProgress(null);setLearningModalError('');
     setLearningStartedAt(Date.now());setLearningModalOpen(true);
     try{
-      const result=await window.studio.deepLearningBook(learningInput.trim());
+      const result=await window.studio.deepLearningBook(learningInput.trim(),learningProvider,
+        learningProvider==='kilo'&&learningCloudConsent);
       setLearningBook(result);
-      setLearningMessage('Ollama-Lehrbuch lokal gespeichert: '+
+      setLearningMessage('Code-Lehrbuch lokal gespeichert: '+
         (result.deepAnalysis?.filesAnalyzed??result.lessons)+' Quelldateien untersucht.');
     }catch(error){
       const message=error instanceof Error?error.message:'Unbekannter Analysefehler';
       setLearningModalError(message);
-      setLearningError('Lokale Ollama-Analyse fehlgeschlagen: '+message);
+      setLearningError('KI-Analyse fehlgeschlagen: '+message);
     }finally{setLearningGenerating(false);}
   };
   const quickLearning=async():Promise<void>=>{
@@ -321,7 +324,8 @@ function App(): React.JSX.Element {
     setLearningExporting(true);setLearningError('');
     try{
       const done=await window.studio.exportLearningBook(learningBook.repository,kind,format,
-        learningBook.deepAnalysis?'deep':'history');
+        learningBook.deepAnalysis?
+          (learningBook.deepAnalysis.model==='kilo-auto/free'?'deep-kilo':'deep'):'history');
       setLearningMessage(done.exported?'Export erfolgreich gespeichert.':'Export abgebrochen.');
     }catch{setLearningError('Export fehlgeschlagen. Zielverzeichnis und PDF-Drucker prüfen.');}
     finally{setLearningExporting(false);}
@@ -1098,7 +1102,7 @@ function App(): React.JSX.Element {
         {tab === 'learning' && <div className="view issue-view learning-view">
           <div className="view-intro">
             <h2>Lehrbuch – Code wirklich verstehen</h2>
-            <p>AutoDev liest den aktuellen Quellstand und erklärt mit lokalem Ollama
+            <p>AutoDev liest den aktuellen Quellstand und erklärt mit lokalem Ollama oder optional Kilo Cloud
               Funktionen, Datenflüsse, Designentscheidungen, mögliche Alternativen und Tests.
               Die Git-Schnellanalyse bleibt als getrennte, einfachere Funktion verfügbar.</p>
           </div>
@@ -1123,10 +1127,29 @@ function App(): React.JSX.Element {
               }).catch(()=>setLearningError('Projekt-Lehrbuch konnte nicht gelesen werden.'))}>
             Gespeichertes Projekt-Lehrbuch öffnen
           </button>}
+          <div className="learning-provider-options" role="group" aria-label="KI-Anbieter für das Lehrbuch">
+            <label><input type="radio" name="learning-provider" value="ollama"
+              checked={learningProvider==='ollama'} disabled={learningGenerating}
+              onChange={()=>{setLearningProvider('ollama');setLearningCloudConsent(false);}}/>
+              Ollama – lokal, offline</label>
+            <label><input type="radio" name="learning-provider" value="kilo"
+              checked={learningProvider==='kilo'} disabled={learningGenerating}
+              onChange={()=>{setLearningProvider('kilo');setLearningCloudConsent(false);}}/>
+              Kilo Cloud – kostenloses Modell (Kontingent begrenzt)</label>
+            {learningProvider==='kilo'&&<label className="learning-cloud-consent">
+              <input type="checkbox" checked={learningCloudConsent} disabled={learningGenerating}
+                onChange={event=>setLearningCloudConsent(event.target.checked)}/>
+              Ich stimme ausdrücklich zu, dass AutoDev ausgewählte Quellcodeausschnitte
+              und Git-Diffs zur Analyse an den Kilo-Cloud-Dienst überträgt.
+              Kein Git-Schreibzugriff und keine Tool-Ausführung durch das Modell.
+            </label>}
+          </div>
           <div className="learning-source-controls">
-            <button type="button" disabled={learningGenerating||!learningInput.trim()}
+            <button type="button" disabled={learningGenerating||!learningInput.trim()||
+              (learningProvider==='kilo'&&!learningCloudConsent)}
               onClick={()=>void generateLearning()}>
-              {learningGenerating?'Ollama analysiert …':'Lehrbuch mit Ollama analysieren'}
+              {learningGenerating?'Lehrbuch wird analysiert …':learningProvider==='kilo'
+                ?'Lehrbuch mit Kilo Cloud analysieren':'Lehrbuch mit Ollama analysieren'}
             </button>
             <button type="button" className="quiet" disabled={learningGenerating||!learningInput.trim()}
               onClick={()=>void quickLearning()}>Git-Schnellüberblick (ohne Modell)</button>
@@ -1138,7 +1161,7 @@ function App(): React.JSX.Element {
           {learningBook&&<section className="learning-results" aria-label="Lehrbuch lesen und exportieren">
             <h3>Dein Lehrbuch – {learningBook.repository}</h3>
             <p>{learningBook.deepAnalysis
-              ?'Lokale Codeanalyse mit '+learningBook.deepAnalysis.model+
+              ?'Codeanalyse mit '+learningBook.deepAnalysis.model+
                 '. Analysierte Dateien: '+learningBook.deepAnalysis.filesAnalyzed+
                 ', ausgelassen: '+learningBook.deepAnalysis.filesSkipped+
                 '. Hypothetische Entwicklungsgründe bleiben als Interpretation gekennzeichnet.'
@@ -1200,7 +1223,7 @@ function App(): React.JSX.Element {
       <div className="modal learning-progress-modal" role="dialog" aria-modal="true"
         aria-labelledby="learning-progress-title">
         <div className="agent-info-header">
-          <h2 id="learning-progress-title">Code-Lehrbuch mit lokalem Ollama</h2>
+          <h2 id="learning-progress-title">Code-Lehrbuch · {learningProvider==='kilo'?'Kilo Cloud':'lokales Ollama'}</h2>
           {!learningGenerating&&<button type="button" className="quiet"
             onClick={()=>setLearningModalOpen(false)}>Schließen</button>}
         </div>
@@ -1219,8 +1242,10 @@ function App(): React.JSX.Element {
           Laufzeit: {Math.max(0,Math.floor((clock-(learningProgress?.startedAt??learningStartedAt))/1000))} s ·
           ETA: {learningProgress?.etaSeconds===null||learningProgress?.etaSeconds===undefined
             ?'noch nicht messbar':learningProgress.etaSeconds+' s'}</p>
-        <p>Modell: {learningProgress?.model??'qwen2.5-coder:3b'} ·
-          lokal auf 127.0.0.1 · keine externen KI-Tokens</p>
+        <p>Modell: {learningProgress?.model??(learningProvider==='kilo'?'kilo-auto/free':'qwen2.5-coder:3b')} ·
+          {learningProvider==='kilo'
+            ?' Kilo Cloud · Quellcode wird extern verarbeitet · Freikontingent nicht garantiert'
+            :' lokal auf 127.0.0.1 · keine externen KI-Tokens'}</p>
         {learningProgress?.preview&&<section className="learning-progress-preview"
           aria-label="Live-Vorschau der letzten Lektion">
           <strong>Live-Vorschau</strong>
