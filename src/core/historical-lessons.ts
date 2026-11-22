@@ -49,6 +49,54 @@ const concepts:readonly Concept[]=[
    exercise:'Teste, ob 3*3 den Wert 9 hat.',solution:'assert.equal(3*3,9);',
    sourceTitle:'Node assert',sourceUrl:'https://nodejs.org/api/assert.html'},
 ];
+interface LearningNotes {
+  glossary:readonly string[];
+  questions:readonly {question:string;answer:string}[];
+}
+const learningNotes:Record<string,LearningNotes>={
+ 'java-generics':{
+  glossary:['Typparameter: ein Platzhalter für einen Datentyp, zum Beispiel String.',
+   'Compiler: ein Programm, das den geschriebenen Code vor dem Start prüft.'],
+  questions:[{question:'Was bedeutet String in List<String>?',
+    answer:'Die Liste darf Elemente des Typs String enthalten.'},
+   {question:'Wann findet der Compiler einen falschen Elementtyp?',
+    answer:'Bei der Übersetzung beziehungsweise Typprüfung, noch vor dem Programmstart.'}]},
+ 'java-streams':{
+  glossary:['Stream: eine Folge von Elementen, die du verarbeiten kannst.',
+   'Filter: eine Regel, die nur passende Elemente durchlässt.'],
+  questions:[{question:'Welche Zahlen bleiben bei filter(n -> n > 5) übrig?',
+    answer:'Nur Zahlen, die größer als 5 sind.'},
+   {question:'Warum endet die Beispiel-Pipeline mit toList()?',
+    answer:'toList sammelt die durchgelassenen Elemente als Liste.'}]},
+ 'react-state':{
+  glossary:['Komponente: ein wiederverwendbarer Teil der Oberfläche.',
+   'State: veränderbare Daten, die React zur Darstellung verwendet.'],
+  questions:[{question:'Wofür wird setZahl benötigt?',
+    answer:'Damit React erfährt, dass der State geändert werden soll.'},
+   {question:'Warum nicht zahl direkt verändern?',
+    answer:'React erkennt und verarbeitet State-Änderungen über die Setter-Funktion.'}]},
+ 'ts-interface':{
+  glossary:['Interface: eine Beschreibung der Form eines Objekts.',
+   'Typprüfung: Kontrolle, ob Werte zu ihrer erwarteten Datenform passen.'],
+  questions:[{question:'Was heißt alter: number?',
+    answer:'Die Eigenschaft alter soll eine Zahl sein.'},
+   {question:'Prüft ein Interface automatisch unbekannte JSON-Daten?',
+    answer:'Nein. Externe Eingaben brauchen zusätzlich eine Laufzeitprüfung.'}]},
+ 'async-await':{
+  glossary:['Promise: ein Objekt für ein später verfügbares Ergebnis.',
+   'await: ein Schlüsselwort, das auf die Erfüllung einer Promise wartet.'],
+  questions:[{question:'Was gibt eine async-Funktion zurück?',
+    answer:'Eine Promise für das spätere Ergebnis.'},
+   {question:'Hält await das gesamte Programm an?',
+    answer:'Nein. Es unterbricht die jeweilige asynchrone Funktion.'}]},
+ 'testing':{
+  glossary:['Assertion: eine Überprüfung, ob ein tatsächlicher Wert erwartet ist.',
+   'Regression: ein Fehler, bei dem vorher funktionierendes Verhalten wieder kaputtgeht.'],
+  questions:[{question:'Was passiert, wenn eine Assertion fehlschlägt?',
+    answer:'Der Test meldet einen Fehlschlag.'},
+   {question:'Warum sollten Tests nach Änderungen erneut laufen?',
+    answer:'Damit neue Änderungen keine vorhandenen Funktionen beschädigen.'}]},
+};
 function rec(x:unknown):Record<string,unknown>|null{
  return x!==null&&typeof x==='object'&&!Array.isArray(x)?x as Record<string,unknown>:null;
 }
@@ -101,6 +149,7 @@ export function renderHistoricalBook(
   '## Beleglage',
   'Die Kapitel beruhen auf erkannten Syntaxmustern in Git-Diffs. Beispiele sind eigens erstellte Übungen, keine Kopien des Projektcodes.',
   'Die ursprüngliche Absicht und die Qualität des fremden Codes sind ohne zusätzliche Belege **nicht bestätigt**.',
+  'Die Übungsbeispiele verwenden Java 21 bzw. modernes TypeScript/React. Ein historisches Projekt kann andere Sprach- und Framework-Versionen einsetzen.',
   'Commit-Stand: '+index.fixedHead+' · Lizenz: '+(index.licenseSpdx??'nicht verifiziert'),'',
   '## Inhaltsverzeichnis',...lessons.map((l,i)=>(i+1)+'. '+l.title)];
  const solutions=['# Getrennte Musterlösungen – '+safe(index.repository)];
@@ -114,12 +163,19 @@ export function renderHistoricalBook(
    '2. Verändere die Daten und untersuche die Ausgabe.',
    '3. Vergleiche die Beobachtung mit der verlinkten Dokumentation.',
    '','### Beispiel',code(l.example,l.language),
+   '','### Fachbegriffe',
+   ...(learningNotes[l.key]?.glossary??['Dieses Konzept hat noch kein geprüftes Glossar.'])
+      .map(term=>'- '+term),
+   '','### Kontrollfragen',
+   ...(learningNotes[l.key]?.questions??[]).map((q,i)=>(i+1)+'. '+q.question),
    '','### Übung',l.exercise,
    '','### Offizielle Dokumentation',
    '- ['+l.sourceTitle+']('+l.sourceUrl+')',
    ...l.commits.map(sha=>'- [Historischer Beleg '+sha.slice(0,12)+
     '](https://github.com/'+index.repository+'/commit/'+sha+')'));
-  solutions.push('','## '+l.title,'',code(l.solution,l.language));
+  solutions.push('','## '+l.title,'',code(l.solution,l.language),
+   '','### Antworten auf die Kontrollfragen',
+   ...(learningNotes[l.key]?.questions??[]).map((q,i)=>(i+1)+'. '+q.answer));
   reports.push('','## '+l.title,'Beobachtet: passendes Syntaxmuster im hinzugefügten Git-Diff.',
    'Interpretation: Das Kapitel erklärt das Konzept, **nicht** die Absicht der Entwicklung.',
    'Dateien: '+l.paths.join(', '),
