@@ -53,8 +53,8 @@ test('pins the head SHA, records files and never executes imported repository co
  assert.equal(requests.length,5);
  assert.equal(requests.every(endpoint=>endpoint.startsWith('repos/example/studio')),true);
 });
-test('private, renamed and oversized repositories fail closed',async()=>{
- for(const metadata of [{private:true},{full_name:'another/studio'},{size:100001},
+test('private, renamed and invalid-size repositories fail closed',async()=>{
+ for(const metadata of [{private:true},{full_name:'another/studio'},{size:-1},
    {default_branch:'../evil'}]){
   const {read}=fixture({metadata});
   await assert.rejects(indexPublicRepositoryHistory('example/studio',read,2),/Public history/);
