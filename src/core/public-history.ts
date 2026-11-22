@@ -4,7 +4,7 @@ import {promisify} from 'node:util';
 const execute=promisify(execFile);
 const SLUG=/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA=/^[0-9a-f]{40}$/i;
-const MAX_COMMITS=20;
+const MAX_COMMITS=100;
 const MAX_SIZE_KB=100_000;
 export interface HistoricalCommit {
   sha:string;
@@ -87,7 +87,7 @@ export async function indexPublicRepositoryHistory(
 ):Promise<PublicHistoryIndex>{
   const slug=parsePublicRepository(input);
   if(!Number.isSafeInteger(limit)||limit<1||limit>MAX_COMMITS)fail('invalid commit limit');
-  if(!Number.isSafeInteger(page)||page<1||page>100)fail('invalid commit page');
+  if(!Number.isSafeInteger(page)||page<1)fail('invalid commit page');
   if(pinnedHead!==undefined&&!SHA.test(pinnedHead))fail('invalid pinned commit SHA');
   const metadata=requiredRecord(await read('repos/'+slug),'repository metadata missing');
   if(metadata.private!==false||typeof metadata.full_name!=='string'||
