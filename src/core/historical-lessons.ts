@@ -14,6 +14,7 @@ export interface HistoricalBook {
   deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
     filesSkipped:number;model:string};
   deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
+  historyCursor?:{nextIndex:number;total:number;chapters:number;incomplete:number;model:string};
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
 const concepts:readonly Concept[]=[
