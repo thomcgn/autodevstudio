@@ -332,7 +332,7 @@ function App(): React.JSX.Element {
     setLearningError('');
     setLearningHistory(null);
     try{
-      const result=await window.studio.publicRepoHistory(learningInput.trim(),12);
+      const result=await window.studio.publicRepoHistory(learningInput.trim(),20);
       setLearningHistory(result);
     }catch(error){
       const reason=error instanceof Error?error.message:'';
@@ -1111,7 +1111,7 @@ function App(): React.JSX.Element {
                 {learningLoading?'GitHub-Historie wird geprüft …':'Historie lesen'}
               </button>
             </div>
-            <p>Nur lesen · maximal 12 Commits · keine Downloads oder Codeausführung im Fremdprojekt</p>
+            <p>Nur lesen · Historienvorschau mit 20 Commits · die Buchanalyse verarbeitet weitere Seiten automatisch · kein Fremdcode wird ausgeführt</p>
           </form>
           {studioStatus?.git.remoteSlug && <button type="button" className="quiet"
             onClick={()=>void window.studio.loadLearningBook(studioStatus.git.remoteSlug!)
@@ -1155,7 +1155,7 @@ function App(): React.JSX.Element {
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('reports','pdf')}>Entwicklungsreports als PDF</button>
               {learningBook.hasMore&&<button type="button"
                 disabled={learningGenerating||learningExporting} onClick={()=>void growLearning()}>
-                Weitere 12 Commits analysieren
+                Historienanalyse fortsetzen
               </button>}
             </div>
             <details><summary>Lehrbuch-Inhalt anzeigen</summary>
