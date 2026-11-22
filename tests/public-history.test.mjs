@@ -173,3 +173,38 @@ test('resume starts at the next pinned page without refetching earlier commits',
   read,startPage:3,
  }),/resume cursor/);
 });
+
+test('large real-shape Git history traverses 2005 commits without arbitrary end cap',async()=>{
+ const total=2005;
+ const shas=Array.from({length:total},(_,i)=>(i+1).toString(16).padStart(40,'0'));
+ let pageRequests=0,detailRequests=0;
+ const read=async endpoint=>{
+  if(endpoint==='repos/example/studio')return {private:false,
+    full_name:'example/studio',size:2000000,default_branch:'main'};
+  if(endpoint==='repos/example/studio/branches/main')return {commit:{sha:SHA}};
+  if(endpoint.startsWith('repos/example/studio/commits?')){
+   pageRequests++;
+   const url=new URL('https://api.github.com/'+endpoint);
+   assert.equal(url.searchParams.get('sha'),SHA);
+   assert.equal(url.searchParams.get('per_page'),'100');
+   const page=Number(url.searchParams.get('page')??1);
+   return shas.slice((page-1)*100,page*100).map(sha=>({
+    sha,commit:{message:'verified synthetic commit',author:{date:'2026-11-01T10:00:00Z'}},
+   }));
+  }
+  if(/^repos\/example\/studio\/commits\/[a-f0-9]{40}$/.test(endpoint)){
+   detailRequests++;
+   return {files:[{filename:'src/a.ts'}]};
+  }
+  throw Error('Unexpected '+endpoint);
+ };
+ const visited=[];
+ const index=await walkPublicRepositoryHistory('example/studio',{
+  read,pageSize:100,onPage:(page,count)=>visited.push([page.page,count]),
+ });
+ assert.equal(index.commits.length,total);
+ assert.equal(pageRequests,21);
+ assert.equal(detailRequests,total);
+ assert.equal(visited.at(-1)[1],total);
+ assert.equal(index.head,SHA);
+});
