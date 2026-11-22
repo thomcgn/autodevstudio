@@ -32,7 +32,7 @@ export function auditCodeSource(file:string,source:string):CodeQualityAudit {
   const add=(principle:QualityPrinciple,rule:string,offset:number,detail:string)=>{
     findings.push({principle,rule,line:position(offset),detail});
   };
-  for(const diagnostic of node.parseDiagnostics){
+  for(const diagnostic of (node as ts.SourceFile & {parseDiagnostics?: readonly ts.Diagnostic[]}).parseDiagnostics??[]){
     add('clean-code','syntax',diagnostic.start??0,
       'Code contains a TypeScript/JavaScript syntax error');
   }
