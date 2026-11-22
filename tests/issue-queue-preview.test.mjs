@@ -38,8 +38,9 @@ test('manual/blocked labels never become queue candidates',()=>{
    issue(2,['blocked','priority:p0']),issue(3,['manual-only']),
    issue(4,['priority:p2'])],f.git);
   assert.equal(q.nextIssueNumber,4);
-  assert.equal(q.queue[0].state,'held');
-  assert.equal(q.queue[1].state,'held');
+  assert.equal(q.queue.find(i=>i.number===2)?.state,'held');
+  assert.equal(q.queue.find(i=>i.number===3)?.state,'held');
+  assert.equal(q.queue[0].number,4);
  }finally{f.close();}
 });
 test('any checkpoint, including done, blocks next issue without cleanup',()=>{
