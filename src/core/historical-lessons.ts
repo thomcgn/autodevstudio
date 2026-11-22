@@ -12,7 +12,7 @@ export interface HistoricalBook {
   pagination?:{page:number;hasMore:boolean;pageSize?:number};
   caseStudies?:DevelopmentDecision[];
   deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
-    filesSkipped:number;model:string};
+    filesSkipped:number;model:string;chapterIndex?:number};
   deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
   historyCursor?:{nextIndex:number;total:number;chapters:number;incomplete:number;model:string};
 }
