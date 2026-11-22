@@ -54,12 +54,10 @@ test('arbitrary source paths and incomplete trees fail closed',async()=>{
  for(const tree of [
   {sha:TREE,truncated:true,tree:[]},
   {sha:TREE,truncated:false,tree:[{path:'src/../.env',type:'blob',sha:BLOB,size:10}]},
-  {sha:TREE,truncated:false,tree:Array.from({length:601},(_,i)=>({
-   path:'src/File'+i+'.ts',sha:BLOB,size:20,type:'blob'}))},
  ]){
   const r=run('example/project',{read:async endpoint=>
     endpoint.endsWith('git/commits/'+COMMIT)?{tree:{sha:TREE}}:tree});
-  await assert.rejects(r.promise,/incomplete|No suitable|more than 600/);
+  await assert.rejects(r.promise,/incomplete|No suitable/);
  }
 });
 test('preflight failure never executes model and never finishes book',async()=>{
@@ -152,4 +150,29 @@ test('unterminated Ollama streams are never silently accepted as complete',async
  const bad=async()=>new Response(JSON.stringify({done:false,message:{content:chapter}})+'\n');
  await assert.rejects(localOllamaModel('qwen2.5-coder:3b',bad)(
   'system','prompt',new AbortController().signal),/unfinished/);
+});
+
+test('source-analysis continuation covers file 601 rather than dropping it',async()=>{
+ const entries=Array.from({length:601},(_,i)=>({
+  path:'src/File'+i+'.ts',type:'blob',sha:BLOB,size:34,
+ }));
+ const source=async endpoint=>{
+  if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
+  if(endpoint.endsWith('git/trees/'+TREE+'?recursive=1'))
+   return {sha:TREE,truncated:false,tree:entries};
+  if(endpoint.endsWith('git/blobs/'+BLOB))
+   return blob('class OrderService { String key; }');
+  throw Error('Unexpected '+endpoint);
+ };
+ const first=await run('example/project',{read:source}).promise;
+ assert.equal(first.filesAnalyzed,600);
+ assert.equal(first.filesTotal,601);
+ assert.equal(first.nextOffset,600);
+ assert.equal(first.complete,false);
+ const second=await run('example/project',{read:source,offset:600}).promise;
+ assert.equal(second.filesAnalyzed,1);
+ assert.equal(second.filesTotal,601);
+ assert.equal(second.nextOffset,null);
+ assert.equal(second.complete,true);
+ await assert.rejects(run('example/project',{read:source,offset:601}).promise,/continuation cursor/);
 });
