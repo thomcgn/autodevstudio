@@ -220,7 +220,7 @@ export async function implementIssueLocally(
       cwd:root,encoding:'buffer',timeout:15000,maxBuffer:1024*1024,
       env:{...process.env,GIT_OPTIONAL_LOCKS:'0'},windowsHide:true,
     });
-    if((status.stdout as Buffer).toString('utf8')!==' M '+pick.path+'\\0')
+    if((status.stdout as Buffer).toString('utf8')!==' M '+pick.path+'\0')
       throw Error('Unexpected additional Git changes after local code edit');
     const cp=saveCoreCheckpoint(base,root,prepared.lock.record.token,{
       runId:prepared.checkpoint.runId,issueNumber:issue.number,stage:'review',
