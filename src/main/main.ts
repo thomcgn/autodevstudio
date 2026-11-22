@@ -23,7 +23,10 @@ import { inspectGitPreflight } from '../core/git-preflight';
 import { assertBranchProtection } from '../core/branch-protection';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
-import { indexPublicRepositoryHistory } from '../core/public-history';
+import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/public-history';
+import { generateHistoricalBook } from '../core/historical-lessons';
+import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
+import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
 import { probeIsolatedQualityRuntime } from '../core/isolated-quality-probe';
@@ -333,6 +336,54 @@ app.whenReady().then(() => {
     if(active||startingLegacyRun)return {busy:true,kind:'legacy-run',
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
+  });
+  ipcMain.handle('learning:generate', async (_event, input: unknown) => {
+    if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
+    const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12);
+    const book=await generateHistoricalBook(index,readGitHubPublicJson);
+    const saved=saveHistoricalBook(app.getPath('userData'),book);
+    return {repository:saved.repository,head:saved.head,
+      lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
+      solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown};
+  });
+  ipcMain.handle('learning:load', (_event, repository: unknown) => {
+    if(typeof repository!=='string')throw Error('Invalid learning repository');
+    const saved=loadHistoricalBook(app.getPath('userData'),repository);
+    return saved?{repository:saved.repository,head:saved.head,
+      lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
+      solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown}:null;
+  });
+  ipcMain.handle('learning:export',async (_event,repository:unknown,
+    kind:unknown,format:unknown) => {
+    if(typeof repository!=='string'||!['book','solutions','reports'].includes(String(kind))||
+       !['md','pdf'].includes(String(format)))throw Error('Invalid learning export');
+    const saved=loadHistoricalBook(app.getPath('userData'),repository);
+    if(!saved)throw Error('No saved learning book found');
+    const content=kind==='book'?saved.bookMarkdown:
+      kind==='solutions'?saved.solutionsMarkdown:saved.reportsMarkdown;
+    const filename=kind==='book'?'Lehrbuch':kind==='solutions'?'Musterloesungen':'Entwicklungsreports';
+    const ext=format==='pdf'?'pdf':'md';
+    const destination=await dialog.showSaveDialog(window!,{
+      title:filename+' exportieren',defaultPath:filename+'.'+ext,
+      filters:[{name:ext.toUpperCase(),extensions:[ext]}],
+    });
+    if(destination.canceled||!destination.filePath)return {exported:false} as const;
+    if(format==='md'){
+      fs.writeFileSync(destination.filePath,content,{encoding:'utf8'});
+    }else{
+      const html=markdownToPrintHtml(content,filename);
+      const printWindow=new BrowserWindow({show:false,width:1000,height:1200,
+        webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true,webSecurity:true}});
+      try{
+        await printWindow.loadURL('data:text/html;charset=utf-8,'+encodeURIComponent(html));
+        const data=await printWindow.webContents.printToPDF({pageSize:'A4',
+          printBackground:true,displayHeaderFooter:true,
+          headerTemplate:'<span></span>',
+          footerTemplate:'<div style="width:100%;font-size:8px;color:#777;text-align:center"><span class="pageNumber"></span> / <span class="totalPages"></span></div>'});
+        fs.writeFileSync(destination.filePath,data);
+      }finally{printWindow.destroy();}
+    }
+    return {exported:true} as const;
   });
   ipcMain.handle('learning:public-history', async (_event, input: unknown, limit: unknown) => {
     if(typeof input!=='string'||typeof limit!=='number')throw Error('Invalid history request');
