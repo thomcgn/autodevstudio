@@ -1,4 +1,8 @@
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
+export interface LearningBookPreview {
+  repository:string;head:string;lessons:number;bookMarkdown:string;
+  solutionsMarkdown:string;reportsMarkdown:string;
+}
 export interface PublicHistoryIndex {
   repository:string;defaultBranch:string;fixedHead:string;licenseSpdx:string|null;
   commits:readonly {sha:string;title:string;committedAt:string|null;
@@ -126,6 +130,9 @@ declare global {
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
     publicRepoHistory(input: string, limit: number): Promise<PublicHistoryIndex>;
+    generateLearningBook(input:string):Promise<LearningBookPreview>;
+    loadLearningBook(repo:string):Promise<LearningBookPreview|null>;
+    exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<{exported:boolean}>;
     studioActivity(id: string): Promise<StudioActivity>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
     sandboxProbe(id: string): Promise<SandboxProbeResult>;

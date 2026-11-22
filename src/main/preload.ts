@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('studio', {
   gitPreflight: (id: string) => ipcRenderer.invoke('core:preflight', id),
   studioStatus: (id: string) => ipcRenderer.invoke('core:status', id),
   publicRepoHistory: (input: string, limit: number) => ipcRenderer.invoke('learning:public-history', input, limit),
+  generateLearningBook: (input:string) => ipcRenderer.invoke('learning:generate', input),
+  loadLearningBook: (repo:string) => ipcRenderer.invoke('learning:load', repo),
+  exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf') =>
+    ipcRenderer.invoke('learning:export',repo,kind,format),
   studioActivity: (id: string) => ipcRenderer.invoke('core:activity', id),
   diagnostics: (id: string) => ipcRenderer.invoke('core:diagnostics', id),
   sandboxProbe: (id: string) => ipcRenderer.invoke('core:sandbox-probe', id),

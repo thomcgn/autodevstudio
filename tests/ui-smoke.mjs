@@ -31,6 +31,9 @@ const success={
     sandboxTool:'bwrap',sandboxToolAvailable:true,ghInstalled:true,ghAuthenticated:true,
     checkedAt:'2026-01-01'},
   studioActivity:{busy:false,kind:null,projectId:null,issueNumber:null},
+  learningBook:{repository:'example/studio',head:'a'.repeat(40),lessons:1,
+    bookMarkdown:'# Programmieren verstehen\n\n## Java: Generics\nEinfach erklärt',
+    solutionsMarkdown:'# Musterlösungen',reportsMarkdown:'# Quellen'},
   publicRepoHistory:{repository:'example/studio',defaultBranch:'main',
     fixedHead:'a'.repeat(40),licenseSpdx:'MIT',readOnly:true,requiresInterpretation:true,
     commits:[{sha:'b'.repeat(40),title:'feat: introduce typed list',
@@ -117,6 +120,9 @@ async function fixture(page){
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
       issues:()=>respond('issues'),issueQueue:()=>respond('issueQueue'),
       publicRepoHistory:()=>respond('publicRepoHistory'),
+      generateLearningBook:()=>respond('learningBook'),
+      loadLearningBook:()=>respond('learningBook'),
+      exportLearningBook:async()=>({exported:true}),
       branchProtection:()=>respond('branchProtection'),
       workflowStages:async()=>[],simulateIssue:async()=>null,
       historyLog:async()=>'',runInfo:async()=>null,start:async()=>{throw Error('not authorized');},
@@ -212,6 +218,10 @@ try {
   await page.getByRole('button',{name:'Historie lesen',exact:true}).click();
   await page.getByText('feat: introduce typed list',{exact:true}).waitFor();
   await page.getByText('Quellenindex, noch kein fertiges Lehrbuch',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Lehrbuch erstellen'}).click();
+  await page.getByText('Dein Lehrbuch – example/studio',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Lehrbuch als PDF'}).click();
+  await page.getByText('Export erfolgreich gespeichert.',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
