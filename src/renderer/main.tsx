@@ -880,7 +880,7 @@ function App(): React.JSX.Element {
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
               : <div className="issue-list">{issues.map(issue => {
                 const hold=explainIssueHold(issue.labels,
-                  issueQueue?.queue.find(item=>item.number===issue.number)?.reason);
+                  issueQueue?.queue.find(item=>item.number===issue.number)?.reason,issue.body);
                 const checkpointBlocked=Boolean(studioStatus?.lock.held)||
                   Boolean(studioStatus?.checkpoint &&
                     (studioStatus.checkpoint.issueNumber!==issue.number||
