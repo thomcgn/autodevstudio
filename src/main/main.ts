@@ -20,6 +20,7 @@ import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
+import { assertBranchProtection } from '../core/branch-protection';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
 import { probeBubblewrap } from '../core/bwrap-probe';
@@ -343,6 +344,7 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid automated issue request');
     const project=getProject(id);
+    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     // Reserve this process immediately, before any asynchronous gh/catalog call.
@@ -376,6 +378,7 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid issue-to-code request');
     const project=getProject(id);
+    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
     // Authoritative issue fetched by Main: never trust renderer-supplied title,
     // code, file names, paths, or model instructions.
@@ -401,6 +404,7 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid issue verification request');
     const project=getProject(id);
+    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     const issues=await listProjectIssues(project.path);
@@ -431,6 +435,7 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid draft PR request');
     const project=getProject(id);
+    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     publishingDraftPr=true;
@@ -499,7 +504,7 @@ app.whenReady().then(() => {
     persist(projects().filter(p => p.id !== id));
     return true;
   });
-  ipcMain.handle('run:start', (_event, id: string, mode: RunMode, approval?: string) => {
+  ipcMain.handle('run:start', async (_event, id: string, mode: RunMode, approval?: string) => {
     if (localCodeController||publishingDraftPr) throw new Error('A Studio issue run is active');
     if (active) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
@@ -507,6 +512,7 @@ app.whenReady().then(() => {
     if (!inspectProject(project.path).hasCore) throw new Error('AutoDev Core is not installed in this project');
     // Main-process authorization is independent of the renderer.
     assertRunApproved(mode, project.name, approval);
+    if (mode === 'execute') await assertBranchProtection(project.path);
     const bin = path.join(project.path, 'node_modules', '.bin', 'tsx');
     if (!fs.existsSync(bin)) throw new Error('Missing local tsx. Run npm install in the project.');
     const runId = randomUUID();
