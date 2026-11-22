@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview, IssueStatusPreview, TechStackProfilePreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview, IssueStatusPreview, TechStackProfilePreview, OwnedGitHubRepository } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
@@ -21,6 +21,11 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [learningInput, setLearningInput] = useState('');
+  const [ownedRepositories,setOwnedRepositories] = useState<readonly OwnedGitHubRepository[]>([]);
+  const [ownedLoading,setOwnedLoading] = useState(false);
+  const [ownedError,setOwnedError] = useState('');
+  const [ownedLoaded,setOwnedLoaded] = useState(false);
+  const [ownedFilter,setOwnedFilter] = useState('');
   const [learningHistory, setLearningHistory] = useState<PublicHistoryIndex | null>(null);
   const [learningBook, setLearningBook] = useState<LearningBookPreview|null>(null);
   const [learningGenerating,setLearningGenerating] = useState(false);
@@ -267,6 +272,24 @@ function App(): React.JSX.Element {
     }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const loadOwnedRepositories=async():Promise<void>=>{
+    if(ownedLoading)return;
+    setOwnedLoading(true);setOwnedError('');
+    try{
+      const repos=await window.studio.ownedGitHubRepositories();
+      setOwnedRepositories(repos);
+      setOwnedLoaded(true);
+    }catch(error){
+      setOwnedLoaded(false);setOwnedRepositories([]);
+      setOwnedError(error instanceof Error?error.message:
+        'Eigene Repositories konnten nicht geladen werden. GitHub-Verbindung prüfen.');
+    }finally{setOwnedLoading(false);}
+  };
+  const chooseLearningRepository=(repo:string):void=>{
+    setLearningInput(repo);setLearningHistory(null);setLearningBook(null);
+    setLearningMessage('');setLearningError('');
   };
 
   const generateLearning = async ():Promise<void>=>{
@@ -1078,8 +1101,47 @@ function App(): React.JSX.Element {
             <p>Untersuche die Commit-Historie eigener oder fremder öffentlicher GitHub-Projekte.
               Diese erste Stufe sammelt nur nachvollziehbare Quellen, keine automatisch erfundenen Erklärungen.</p>
           </div>
+          <section className="learning-owned" aria-label="Eigene GitHub-Repositories">
+            <div className="learning-owned-heading">
+              <h3>Meine GitHub-Repositories</h3>
+              <button type="button" disabled={ownedLoading}
+                onClick={()=>void loadOwnedRepositories()}>
+                {ownedLoading?'Repositories werden geladen …':
+                  ownedLoaded?'Liste aktualisieren':'Eigene Repositories laden'}
+              </button>
+            </div>
+            <p>Über deine GitHub-Anmeldung. Die Auswahl liest nur Repository-Metadaten;
+              keine Änderungen am Original.</p>
+            {ownedError&&<p role="alert">{ownedError}</p>}
+            {ownedLoaded&&<>
+              <label htmlFor="learning-owned-filter">Repository suchen</label>
+              <input id="learning-owned-filter" value={ownedFilter}
+                placeholder="Name oder Beschreibung filtern"
+                onChange={event=>setOwnedFilter(event.target.value)} />
+              <p role="status">{ownedRepositories.length} eigene Repositories gefunden,
+                davon {ownedRepositories.filter(r=>!r.isPrivate).length} öffentlich analysierbar</p>
+              <div className="learning-owned-list">
+                {ownedRepositories.filter(r=>(r.fullName+' '+(r.description??''))
+                  .toLowerCase().includes(ownedFilter.toLowerCase().trim()))
+                  .slice(0,100).map(repo=>
+                  <div className="learning-owned-item" key={repo.fullName}>
+                    <div className="learning-owned-description">
+                      <strong>{repo.fullName}</strong>
+                      <small>{repo.isPrivate?'Privat · Historienimport noch nicht unterstützt':
+                        'Öffentlich · kann analysiert werden'}</small>
+                      {repo.description&&<p>{repo.description}</p>}
+                    </div>
+                    <button type="button" disabled={repo.isPrivate}
+                      onClick={()=>chooseLearningRepository(repo.fullName)}>
+                      {repo.isPrivate?'Nicht verfügbar':
+                        learningInput===repo.fullName?'Ausgewählt':'Auswählen'}
+                    </button>
+                  </div>)}
+              </div>
+            </>}
+          </section>
           <form className="learning-source-form" onSubmit={event=>{event.preventDefault();void inspectLearningHistory();}}>
-            <label htmlFor="learning-repo">Öffentliches GitHub-Repository</label>
+            <label htmlFor="learning-repo">Repository auswählen oder GitHub-Adresse manuell eingeben</label>
             <div className="learning-source-controls">
               <input id="learning-repo" value={learningInput} onChange={event=>{
                 setLearningInput(event.target.value);setLearningHistory(null);setLearningBook(null);setLearningError('');
