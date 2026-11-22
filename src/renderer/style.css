@@ -465,3 +465,13 @@ html,body,#root{max-width:100%;overflow:hidden}
 .learning-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:480px;
   overflow:auto;font-size:12px;background:#0b1421;padding:12px;border-radius:8px}
 .learning-results details summary{cursor:pointer;font-weight:650}
+
+/* Compact, explanatory triage — text remains understandable without color. */
+.issue-triage-details{padding:8px 11px;border:1px solid #576783;border-radius:8px;
+  background:#142139;min-width:0;overflow-wrap:anywhere}
+.issue-triage-details summary{cursor:pointer;font-size:12px;font-weight:700;
+  color:#d8e7ff;line-height:1.5}
+.issue-triage-details p{font-size:12px;margin:5px 0}
+.issue-triage-details small{font-size:11px;color:#abc3dc;line-height:1.45}
+.issue-triage-details[open]{display:block}
+@media(max-width:850px){.issue-triage-details{padding:8px}}
