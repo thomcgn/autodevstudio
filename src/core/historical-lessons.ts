@@ -13,6 +13,7 @@ export interface HistoricalBook {
   caseStudies?:DevelopmentDecision[];
   deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
     filesSkipped:number;model:string};
+  deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
 const concepts:readonly Concept[]=[
