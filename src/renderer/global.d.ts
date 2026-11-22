@@ -4,6 +4,10 @@ export interface LearningBookPreview {
   solutionsMarkdown:string;reportsMarkdown:string;
   page?:number;hasMore?:boolean;
 }
+export interface OwnedGitHubRepository {
+  fullName:string;description:string|null;isPrivate:boolean;
+  defaultBranch:string;updatedAt:string|null;
+}
 export interface PublicHistoryIndex {
   repository:string;defaultBranch:string;fixedHead:string;licenseSpdx:string|null;
   commits:readonly {sha:string;title:string;committedAt:string|null;
@@ -147,6 +151,7 @@ declare global {
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
     publicRepoHistory(input: string, limit: number): Promise<PublicHistoryIndex>;
+    ownedGitHubRepositories():Promise<readonly OwnedGitHubRepository[]>;
     generateLearningBook(input:string,page?:number,pinnedHead?:string):Promise<LearningBookPreview>;
     loadLearningBook(repo:string):Promise<LearningBookPreview|null>;
     exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<{exported:boolean}>;
