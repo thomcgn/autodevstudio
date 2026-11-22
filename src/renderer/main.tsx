@@ -1142,6 +1142,10 @@ function App(): React.JSX.Element {
                 ', ausgelassen: '+learningBook.deepAnalysis.filesSkipped+
                 '. Hypothetische Entwicklungsgründe bleiben als Interpretation gekennzeichnet.'
               :'Automatische Git- und Konzeptübersicht ohne vollständige Modellanalyse.'}</p>
+            {learningBook.deepAnalysis&&!learningBook.deepAnalysis.complete&&
+              <p role="alert">Codeanalyse mit Einschränkungen: {learningBook.deepAnalysis.filesSkipped}
+                Dateien wurden aus Sicherheits-, Format- oder Größengründen ausgelassen.
+                Das Buch behauptet keine vollständige Abdeckung.</p>
             <div className="learning-export-actions">
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','pdf')}>Lehrbuch als PDF</button>
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','md')}>Markdown</button>
@@ -1227,7 +1231,9 @@ function App(): React.JSX.Element {
           Analyse abbrechen
         </button>}
         {!learningGenerating&&!learningModalError&&<p role="status">
-          Fertig. Das Markdown ist lokal gespeichert und kann im Lehrbuch-Tab als PDF exportiert werden.
+          Verarbeitung abgeschlossen. {learningBook?.deepAnalysis&&!learningBook.deepAnalysis.complete
+            ?'Einige Dateien wurden ausgeschlossen; die Abdeckung wird im Buch ausgewiesen. '
+            :''}Das Markdown ist lokal gespeichert und kann als PDF exportiert werden.
         </p>}
       </div>
     </div>}
