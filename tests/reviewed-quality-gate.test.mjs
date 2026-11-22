@@ -27,6 +27,7 @@ function fixture(){
  const scripts=[];
  const dependencies={
   capture:async()=>({...state.git}),
+  audit:async()=>({passed:true,changedFile:'src/code.ts',findings:[]}),
   runScript:async(_cwd,script)=>{scripts.push(script)},
  };
  const run=(names=['typecheck','test'],deps=dependencies,revision=cp.revision)=>
