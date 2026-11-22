@@ -1,8 +1,9 @@
-import type { StudioEvent, IssueProgressEvent } from '../main/preload';
+import type { StudioEvent, IssueProgressEvent, DeepLearningProgress } from '../main/preload';
 export interface LearningBookPreview {
   repository:string;head:string;lessons:number;bookMarkdown:string;
   solutionsMarkdown:string;reportsMarkdown:string;
   page?:number;hasMore?:boolean;
+  deepAnalysis?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean};
 }
 export interface PublicHistoryIndex {
   repository:string;defaultBranch:string;fixedHead:string;licenseSpdx:string|null;
@@ -148,6 +149,9 @@ declare global {
     studioStatus(id: string): Promise<StandaloneStatus>;
     publicRepoHistory(input: string, limit: number): Promise<PublicHistoryIndex>;
     generateLearningBook(input:string,page?:number,pinnedHead?:string):Promise<LearningBookPreview>;
+    deepLearningBook(input:string):Promise<LearningBookPreview>;
+    cancelDeepLearning():Promise<boolean>;
+    onLearningProgress(callback:(value:DeepLearningProgress)=>void):()=>void;
     loadLearningBook(repo:string):Promise<LearningBookPreview|null>;
     exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<{exported:boolean}>;
     studioActivity(id: string): Promise<StudioActivity>;
