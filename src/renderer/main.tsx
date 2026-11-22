@@ -749,29 +749,8 @@ function App(): React.JSX.Element {
         {tab === 'issues' && <div className="view issue-view">
           <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Kilo ist primärer Planner, Builder und unabhängiger Reviewer: Issue → echter Code → isolierte Tests → Draft-PR. Ollama ist ausschließlich optionaler Fallback.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
-          {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ||
-            (gitStatus.clean && !!gitStatus.remoteSlug && !!gitStatus.branch &&
-              gitStatus.reasons.every(reason=>reason==='Protected branch – create an isolated feature branch first'))
-              ? 'ready' : 'needs-work'}`}>
-            <strong>{gitStatus.canExecute ? 'Git bereit' :
-              gitStatus.clean && !!gitStatus.remoteSlug && !!gitStatus.branch &&
-              gitStatus.reasons.every(reason=>reason==='Protected branch – create an isolated feature branch first')
-              ? 'Git bereit · Issue-Branch wird automatisch erstellt' : 'Git: Vorbereitung erforderlich'}</strong>
-            <span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}
-              {gitStatus.clean && gitStatus.reasons.length===1 &&
-                gitStatus.reasons[0]==='Protected branch – create an isolated feature branch first'
-                ? ' · main bleibt unverändert'
-                : gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Arbeitsverzeichnis sauber'}</span>
-          </div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
-          {issueQueue && <div className={`git-readiness ${issueQueue.readyToStart?'ready':'needs-work'}`} role="status">
-            <strong>Issue-Warteschlange · {issueQueue.queue.filter(i=>i.state==='candidate').length} Kandidaten</strong>
-            <span>{issueQueue.readyToStart
-              ?`Vorschlag: Issue #${issueQueue.nextIssueNumber} · ${issueQueue.reason}`
-              :issueQueue.reason}</span>
-            <small>Nur Vorschau. Ein vorhandener Checkpoint, auch nach einem Draft-PR, sperrt automatisch das nächste Issue.</small>
-          </div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
           {verificationError && <div className="error" role="alert">{verificationError}</div>}
           {draftPrError && <div className="error" role="alert">{draftPrError}</div>}
