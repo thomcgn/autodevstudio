@@ -944,8 +944,8 @@ function App(): React.JSX.Element {
           {issuesLoading ? <div className="empty-state">Issues werden geladen …</div>
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
               : <div className="issue-list">{issues.map(issue => {
-                const hold=explainIssueHold(issue.labels,
-                  issueQueue?.queue.find(item=>item.number===issue.number)?.reason,issue.body);
+                const queued=issueQueue?.queue.find(item=>item.number===issue.number);
+                const hold=explainIssueHold(issue.labels,queued?.reason,issue.body);
                 const checkpointBlocked=Boolean(studioStatus?.lock.held)||
                   Boolean(studioStatus?.checkpoint &&
                     (studioStatus.checkpoint.issueNumber!==issue.number||
@@ -961,6 +961,15 @@ function App(): React.JSX.Element {
                     </div>
                     <a className="issue-external-link" href={issue.url} target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
                   </div>
+                  {queued && <details className="issue-triage-details">
+                    <summary>Priorisierung: P{queued.priority} · {queued.state==='candidate'
+                      ?'startfähig laut Labels':'zurückgestellt'} · Begründung</summary>
+                    <p><strong>Quelle:</strong> GitHub-Labels (keine KI-Freigabe)</p>
+                    {queued.triage?.evidence.map((line,i)=><p key={i}>{line}</p>)}
+                    {queued.state==='held'&&<p role="status"><strong>Sperrgrund:</strong> {queued.reason}</p>}
+                    <small>Nur eine Vorschau. Priorität und Freigabe müssen in GitHub
+                      ausdrücklich gesetzt werden; Checkpoints und Branch Protection bleiben verbindlich.</small>
+                  </details>}
                   {hold && <section className={'issue-hold-reason issue-hold-reason--'+hold.severity}
                     role={hold.severity==='blocked'?'alert':'status'}>
                     <strong>{hold.title}</strong>
@@ -969,7 +978,7 @@ function App(): React.JSX.Element {
                   </section>}
                   <div className="issue-actions">
                     <button className="issue-primary-action" type="button"
-                      disabled={Boolean(hold)||Boolean(checkpointBlocked)||branchProtection?.protected!==true||automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                      disabled={Boolean(queued?.state==='held')||Boolean(hold)||Boolean(checkpointBlocked)||branchProtection?.protected!==true||automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                       onClick={()=>void automateIssue(issue.number)}>
                       {automatingIssue===issue.number?'Automatisiere …':'Issue → Draft-PR'}
                     </button>
