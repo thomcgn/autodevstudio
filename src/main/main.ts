@@ -478,7 +478,7 @@ app.whenReady().then(() => {
       deps,reviewer.canReview);
       if(outcome.status!=='draft-created'||!outcome.draftUrl)return outcome;
       try{
-        const result=await documentFinishedIssue(base,project.path,issueNumber,outcome.draftUrl);
+        const result=await documentFinishedIssue(base,project.path,issueNumber,outcome.draftUrl,undefined,issue.title);
         return {...outcome,learningReport:result.recorded
           ?'saved' as const:'unavailable' as const};
       }catch{
