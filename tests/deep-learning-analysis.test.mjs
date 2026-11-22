@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analyzeSourceWithOllama,localOllamaModel,requireOllama} from '../src/core/deep-learning-analysis.ts';
+import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama,requestValidatedLesson,localOllamaModel,requireOllama} from '../src/core/deep-learning-analysis.ts';
 const COMMIT='a'.repeat(40),TREE='b'.repeat(40),BLOB='c'.repeat(40);
 const chapter=JSON.stringify({
  title:'Eine geprüfte Buchung zuverlässig ausführen',
@@ -54,12 +54,10 @@ test('arbitrary source paths and incomplete trees fail closed',async()=>{
  for(const tree of [
   {sha:TREE,truncated:true,tree:[]},
   {sha:TREE,truncated:false,tree:[{path:'src/../.env',type:'blob',sha:BLOB,size:10}]},
-  {sha:TREE,truncated:false,tree:Array.from({length:601},(_,i)=>({
-   path:'src/File'+i+'.ts',sha:BLOB,size:20,type:'blob'}))},
  ]){
   const r=run('example/project',{read:async endpoint=>
     endpoint.endsWith('git/commits/'+COMMIT)?{tree:{sha:TREE}}:tree});
-  await assert.rejects(r.promise,/incomplete|No suitable|more than 600/);
+  await assert.rejects(r.promise,/incomplete|No suitable/);
  }
 });
 test('preflight failure never executes model and never finishes book',async()=>{
@@ -152,4 +150,120 @@ test('unterminated Ollama streams are never silently accepted as complete',async
  const bad=async()=>new Response(JSON.stringify({done:false,message:{content:chapter}})+'\n');
  await assert.rejects(localOllamaModel('qwen2.5-coder:3b',bad)(
   'system','prompt',new AbortController().signal),/unfinished/);
+});
+
+test('source-analysis continuation covers file 601 rather than dropping it',async()=>{
+ const entries=Array.from({length:601},(_,i)=>({
+  path:'src/File'+i+'.ts',type:'blob',sha:BLOB,size:34,
+ }));
+ const source=async endpoint=>{
+  if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
+  if(endpoint.endsWith('git/trees/'+TREE+'?recursive=1'))
+   return {sha:TREE,truncated:false,tree:entries};
+  if(endpoint.endsWith('git/blobs/'+BLOB))
+   return blob('class OrderService { String key; }');
+  throw Error('Unexpected '+endpoint);
+ };
+ const first=await run('example/project',{read:source}).promise;
+ assert.equal(first.filesAnalyzed,600);
+ assert.equal(first.filesTotal,601);
+ assert.equal(first.nextOffset,600);
+ assert.equal(first.complete,false);
+ const second=await run('example/project',{read:source,offset:600}).promise;
+ assert.equal(second.filesAnalyzed,1);
+ assert.equal(second.filesTotal,601);
+ assert.equal(second.nextOffset,null);
+ assert.equal(second.complete,true);
+ await assert.rejects(run('example/project',{read:source,offset:601}).promise,/continuation cursor/);
+});
+
+test('every eligible Git patch receives evidence-grounded local model lessons',async()=>{
+ const sha='d'.repeat(40);
+ const prompts=[];
+ const files=[
+  {filename:'src/A.ts',patch:'@@ -1 +1 @@\n-old\n+const value = 10;'},
+  {filename:'src/B.ts',patch:'@@ -1 +1 @@\n-old\n+function test() { return true; }'},
+ ];
+ const result=await analyzeHistoricalCommitWithOllama('example/project',sha,30,
+  new AbortController().signal,{
+   read:async endpoint=>{
+    assert.equal(endpoint,'repos/example/project/commits/'+sha);
+    return {sha,files};
+   },
+   model:async(_system,prompt)=>{prompts.push(prompt);return chapter;},
+  });
+ assert.equal(result.complete,true);
+ assert.equal(result.chapters,2);
+ assert.equal(prompts.length,2);
+ assert.ok(prompts.some(prompt=>prompt.includes('src/A.ts')));
+ assert.ok(prompts.some(prompt=>prompt.includes('src/B.ts')));
+ assert.match(result.bookMarkdown,/Kapitel 30/);
+ assert.match(result.bookMarkdown,/Kapitel 31/);
+ assert.match(result.bookMarkdown,new RegExp('commit/'+sha));
+ assert.match(result.solutionsMarkdown,/Sende dieselbe Buchung zweimal/);
+});
+test('incomplete or dangerous historical Git patches are never silently accepted',async()=>{
+ const sha='d'.repeat(40);
+ let calls=0;
+ const result=await analyzeHistoricalCommitWithOllama('example/project',sha,1,
+  new AbortController().signal,{
+   read:async()=>({sha,files:[
+    {filename:'src/valid.ts',patch:'@@\n+const id = 1;'},
+    {filename:'src/../../.env',patch:'secret=abc'},
+    {filename:'src/graph.png'},
+   ]}),
+   model:async()=>{calls++;return chapter;},
+  });
+ assert.equal(result.complete,false);
+ assert.equal(calls,1);
+ assert.match(result.reportsMarkdown,/Unvollständige Quellenlage/);
+ await assert.rejects(analyzeHistoricalCommitWithOllama('example/project',sha,1,
+  new AbortController().signal,{
+   read:async()=>({sha,files:Array.from({length:300},()=>({filename:'A.ts',patch:'+'}))}),
+  }),/incomplete/);
+});
+test('long historical patch is split into model windows and includes final diff',async()=>{
+ const sha='d'.repeat(40);
+ const trailing='const historicalTail = 777;';
+ const patch='@@\n'+Array.from({length:500},(_,i)=>'+const line'+i+' = '+i+';').join('\n')+
+  '\n+'+trailing;
+ const prompts=[];
+ const result=await analyzeHistoricalCommitWithOllama('example/project',sha,1,
+  new AbortController().signal,{
+   read:async()=>({sha,files:[{filename:'src/long.ts',patch}]}),
+   model:async(_,prompt)=>{prompts.push(prompt);return chapter;},
+  });
+ assert.equal(result.complete,true);
+ assert.ok(prompts.length>1);
+ assert.ok(prompts.some(prompt=>prompt.includes(trailing)));
+ assert.equal(result.chapters,prompts.length);
+});
+test('history analysis rejects unverified SHA and honors cancellation before requests',async()=>{
+ let calls=0;
+ await assert.rejects(analyzeHistoricalCommitWithOllama('example/project','invalid',1,
+  new AbortController().signal,{read:async()=>{calls++;return {};}}),/identity/);
+ const controller=new AbortController();controller.abort();
+ await assert.rejects(analyzeHistoricalCommitWithOllama('example/project','d'.repeat(40),1,
+  controller.signal,{read:async()=>{calls++;return {};}}),/cancelled/);
+ assert.equal(calls,0);
+});
+
+test('recovers invalid first Ollama JSON via one evidence-grounded schema retry',async()=>{
+ let calls=0;
+ const result=await requestValidatedLesson(async(_system,prompt)=>{
+  calls++;
+  if(calls===1)return '{broken';
+  assert.match(prompt,/ANTWORTFORMAT VERBINDLICH/);
+  return chapter;
+ },'trusted system','Real code context',new AbortController().signal);
+ assert.equal(calls,2);
+ assert.match(result.title,/Buchung/);
+});
+test('two malformed Ollama JSON completions fail closed and never fabricate a chapter',async()=>{
+ let calls=0;
+ await assert.rejects(requestValidatedLesson(async()=>{
+  calls++;
+  return '{}';
+ },'system','code',new AbortController().signal),/erneuter Formatprüfung ungültig/);
+ assert.equal(calls,2);
 });

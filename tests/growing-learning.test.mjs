@@ -65,5 +65,73 @@ test('pagination remains pinned to first HEAD even if default branch advanced',a
  assert.equal(result.page,2);
  assert.equal(result.hasMore,false);
  assert.equal(requests.some(q=>q.includes('sha='+A)),true);
- await assert.rejects(indexPublicRepositoryHistory(repo,read,2,101,A),/invalid commit page/);
+ assert.equal(result.page,2);
+});
+
+test('all commits in a page contribute evidence, including commits after twelve',async()=>{
+ const commits=Array.from({length:16},(_,i)=>commit(
+  (i+1).toString(16).padStart(40,'0'),'Generic change '+i,'src/Generics.java'));
+ const result=await generateHistoricalBook({...base,commits},
+  async()=>({files:[{filename:'src/Generics.java',
+    patch:'@@\n+List<String> names = List.of("Ada");'}]}));
+ const generics=result.lessons.find(lesson=>lesson.key==='java-generics');
+ assert.equal(generics?.commits.length,16);
+});
+
+test('partial Ollama source analysis persists an exact resume cursor across restart',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-deep-resume-'));
+ try{
+  const source={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Codebook\n\n## Kapitel 1: Overview\n',
+   solutionsMarkdown:'# Solutions\n',reportsMarkdown:'# Reports\n',
+   deepCursor:{nextOffset:600,filesTotal:601,filesAnalyzed:600,
+     filesSkipped:0,model:'qwen2.5-coder:3b'},
+   deepSummary:{model:'qwen2.5-coder:3b',filesAnalyzed:600,filesTotal:601,
+     filesSkipped:0,complete:false}};
+  saveHistoricalBook(dir,source);
+  assert.deepEqual(loadHistoricalBook(dir,repo)?.deepCursor,source.deepCursor);
+  assert.deepEqual(loadHistoricalBook(dir,repo)?.deepSummary,source.deepSummary);
+  assert.match(loadHistoricalBook(dir,repo)?.bookMarkdown??'',/Kapitel 1/);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('history checkpoint advances even if an unpatchable commit produces identical text',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-history-cursor-'));
+ try{
+  const baseline={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Book',solutionsMarkdown:'# Solutions',reportsMarkdown:'# Sources',
+   deepSummary:{model:'qwen2.5-coder:3b',filesAnalyzed:1,filesTotal:1,
+     filesSkipped:0,complete:true}};
+  const first=saveHistoricalBook(dir,{...baseline,historyCursor:{
+   nextIndex:1,total:2005,chapters:1,incomplete:0,model:'qwen2.5-coder:3b'}});
+  const next=saveHistoricalBook(dir,{...baseline,historyCursor:{
+   nextIndex:2,total:2005,chapters:1,incomplete:1,model:'qwen2.5-coder:3b'}});
+  assert.notEqual(first.directory,next.directory);
+  assert.equal(loadHistoricalBook(dir,repo)?.historyCursor?.nextIndex,2);
+  assert.equal(loadHistoricalBook(dir,repo)?.historyCursor?.incomplete,1);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('quick-history and deep-Ollama snapshots are independently resumable',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-learning-modes-'));
+ try{
+  const quick={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Quick Git overview',solutionsMarkdown:'# Quick solution',
+   reportsMarkdown:'# Quick reports',pagination:{page:1,hasMore:true,pageSize:20}};
+  const deep={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Deep source analysis',solutionsMarkdown:'# Deep solution',
+   reportsMarkdown:'# Deep reports',deepSummary:{model:'qwen2.5-coder:3b',
+     filesAnalyzed:15,filesTotal:30,filesSkipped:0,complete:false},
+   deepCursor:{nextOffset:15,filesTotal:30,filesAnalyzed:15,
+     filesSkipped:0,model:'qwen2.5-coder:3b'}};
+  const savedQuick=saveHistoricalBook(dir,quick);
+  const savedDeep=saveHistoricalBook(dir,deep,'deep');
+  assert.notEqual(savedDeep.directory,savedQuick.directory);
+  assert.match(loadHistoricalBook(dir,repo)?.bookMarkdown??'',/Quick Git overview/);
+  assert.match(loadHistoricalBook(dir,repo,'deep')?.bookMarkdown??'',/Deep source analysis/);
+  const update={...quick,pagination:{page:2,hasMore:false,pageSize:20}};
+  saveHistoricalBook(dir,update);
+  assert.equal(loadHistoricalBook(dir,repo,'deep')?.deepCursor?.nextOffset,15);
+  assert.equal(loadHistoricalBook(dir,repo)?.pagination?.page,2);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

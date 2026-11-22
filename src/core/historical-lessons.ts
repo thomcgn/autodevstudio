@@ -9,8 +9,12 @@ export interface HistoricalLesson {
 export interface HistoricalBook {
   repository:string;head:string;license:string|null;lessons:HistoricalLesson[];
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
-  pagination?:{page:number;hasMore:boolean};
+  pagination?:{page:number;hasMore:boolean;pageSize?:number};
   caseStudies?:DevelopmentDecision[];
+  deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
+    filesSkipped:number;model:string};
+  deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
+  historyCursor?:{nextIndex:number;total:number;chapters:number;incomplete:number;model:string};
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
 const concepts:readonly Concept[]=[
@@ -187,7 +191,7 @@ export async function generateHistoricalBook(
  !/^[0-9a-f]{40}$/i.test(index.fixedHead))throw Error('Invalid historical source');
  const grouped=new Map<string,HistoricalLesson>();
  const studies:DevelopmentDecision[]=[];
- for(const commit of index.commits.slice(0,12)){
+ for(const commit of index.commits){
   if(!/^[0-9a-f]{40}$/i.test(commit.sha))throw Error('Invalid commit SHA');
   const detail=await read('repos/'+index.repository+'/commits/'+commit.sha);
   const added=additions(detail);

@@ -20,6 +20,8 @@ jobs:
         run: node scripts/strict-check.mjs install
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - name: Dependency audit (high and critical fail closed)
+        run: node scripts/strict-check.mjs audit
       - name: TypeScript
         run: node scripts/strict-check.mjs typecheck
       - name: Execution approval policy tests

@@ -26,11 +26,13 @@ import { assertBranchProtection } from '../core/branch-protection';
 import {installRequiredIssueLabels} from '../core/issue-label-onboarding';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
-import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/public-history';
+import { indexPublicRepositoryHistory, parsePublicRepository, readGitHubPublicJson, walkPublicRepositoryHistory } from '../core/public-history';
 import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
-import {analyzeSourceWithOllama} from '../core/deep-learning-analysis';
+import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
+import {createKiloLearningModel} from '../core/kilo-learning-gateway';
+import {readCompletePublicHistory} from '../core/history-index-cache';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
@@ -343,47 +345,137 @@ app.whenReady().then(() => {
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
   });
-  ipcMain.handle('learning:deep-generate',async (_event,input:unknown) => {
+  ipcMain.handle('learning:deep-generate',async (_event,input:unknown,provider:unknown='ollama',consent:unknown=false) => {
     if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
+    if(provider!=='ollama'&&provider!=='kilo')throw Error('Invalid learning provider');
+    if(provider==='kilo'&&consent!==true)
+      throw Error('Cloud analysis requires explicit source-upload consent');
+    const modelName=provider==='kilo'?'kilo-auto/free':'qwen2.5-coder:3b';
+    const snapshotMode=provider==='kilo'?'deep-kilo':'deep';
+    const cloudModel=provider==='kilo'?createKiloLearningModel():undefined;
     if(learningController)throw Error('Learning analysis is already active');
     const controller=new AbortController();
     learningController=controller;
     const runId=randomUUID();
     const startedAt=Date.now();
     try{
-      let observedCommits=0;
-      const trackedRead=async(endpoint:string):Promise<unknown>=>{
-        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
-        const response=await readGitHubPublicJson(endpoint);
-        if(/\/commits\/[a-f0-9]{40}$/i.test(endpoint)){
-          observedCommits++;
+      const index=await readCompletePublicHistory(app.getPath('userData'),input,{
+        read:readGitHubPublicJson,signal:controller.signal,
+        onProgress:(commitsSeen,page,finished)=>{
           send('learning:progress',{
             runId,repository:input,phase:'discovery',startedAt,
-            completed:observedCommits,total:12,
-            current:'Git-Historie: '+observedCommits+' Commits untersucht',
-            etaSeconds:null,preview:'',model:'qwen2.5-coder:3b',
+            completed:commitsSeen,total:0,
+            current:'Git-Historie: '+commitsSeen+' Commits · Seite '+page+
+              (finished?' · vollständig indexiert':' · lade weitere Seiten'),
+            etaSeconds:null,preview:'',model:modelName,
           });
-        }
-        return response;
-      };
-      const index=await indexPublicRepositoryHistory(input,trackedRead,12);
-      const result=await analyzeSourceWithOllama(index.repository,index.fixedHead,
-        runId,startedAt,event=>send('learning:progress',event),controller.signal,{
-          history:index.commits.map(commit=>({
-            sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
-          })),
-        });
-      if(controller.signal.aborted)throw Error('Learning analysis cancelled');
-      const saved=saveHistoricalBook(app.getPath('userData'),{
-        repository:result.repository,head:result.head,license:index.licenseSpdx,
-        lessons:[],bookMarkdown:result.bookMarkdown,solutionsMarkdown:result.solutionsMarkdown,
-        reportsMarkdown:result.reportsMarkdown,
+        },
       });
-      return {repository:saved.repository,head:saved.head,lessons:result.filesAnalyzed,
-        bookMarkdown:saved.bookMarkdown,solutionsMarkdown:saved.solutionsMarkdown,
-        reportsMarkdown:saved.reportsMarkdown,deepAnalysis:{
-          model:result.model,filesAnalyzed:result.filesAnalyzed,
-          filesSkipped:result.filesSkipped,complete:result.complete,
+      const prior=loadHistoricalBook(app.getPath('userData'),index.repository,snapshotMode);
+      const compatible=prior?.head===index.head&&
+        prior.deepSummary?.model===modelName;
+      let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
+      let filesAnalyzed=compatible?(prior?.deepSummary?.filesAnalyzed??0):0;
+      let bookMarkdown=compatible?(prior?.bookMarkdown??''):'';
+      let solutionsMarkdown=compatible?(prior?.solutionsMarkdown??''):'';
+      let reportsMarkdown=compatible?(prior?.reportsMarkdown??''):'';
+      let sourceComplete=compatible&&prior?.deepCursor===undefined&&
+        prior?.deepSummary?.filesAnalyzed===prior?.deepSummary?.filesTotal;
+      let summary=compatible?prior?.deepSummary:undefined;
+      const chapterNumber=():number=>{
+        let highest=0;
+        for(const match of bookMarkdown.matchAll(/^## Kapitel (\\d+)/gm))
+          highest=Math.max(highest,Number(match[1]));
+        return highest;
+      };
+      const persist=(historyCursor?:{
+        nextIndex:number;total:number;chapters:number;incomplete:number;model:string;
+      })=>saveHistoricalBook(app.getPath('userData'),{
+        repository:index.repository,head:index.head,license:index.licenseSpdx,
+        lessons:[],bookMarkdown,solutionsMarkdown,reportsMarkdown,
+        deepSummary:summary,
+        deepCursor:sourceComplete?undefined:{
+          nextOffset:offset,filesTotal:summary?.filesTotal??0,
+          filesAnalyzed,filesSkipped:summary?.filesSkipped??0,
+          model:modelName,
+        },
+        historyCursor,
+      },snapshotMode);
+      while(!sourceComplete){
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        const batchOffset=offset;
+        const result=await analyzeSourceWithOllama(index.repository,index.head,
+          runId,startedAt,event=>send('learning:progress',{
+            ...event,current:'Quelldateien ab '+(batchOffset+1)+' · '+event.current,
+          }),controller.signal,{
+            offset,chapterOffset:chapterNumber(),
+            ...(cloudModel?{model:cloudModel,preflight:async()=>{},modelName}:{}),
+            history:index.commits.map(commit=>({
+              sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
+            })),
+          });
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        filesAnalyzed+=result.filesAnalyzed;
+        bookMarkdown+=(bookMarkdown?'\n\n':'')+result.bookMarkdown;
+        solutionsMarkdown+=(solutionsMarkdown?'\n\n':'')+result.solutionsMarkdown;
+        reportsMarkdown+=(reportsMarkdown?'\n\n':'')+result.reportsMarkdown;
+        sourceComplete=result.nextOffset===null;
+        offset=result.nextOffset??0;
+        summary={model:result.model,filesAnalyzed,filesSkipped:result.filesSkipped,
+          filesTotal:result.filesTotal,complete:result.complete};
+        persist();
+      }
+      let historyNext=compatible&&prior?.historyCursor?.total===index.commits.length
+        ?prior.historyCursor.nextIndex:0;
+      let historyChapters=compatible&&prior?.historyCursor?.total===index.commits.length
+        ?prior.historyCursor.chapters:0;
+      let incomplete=compatible&&prior?.historyCursor?.total===index.commits.length
+        ?prior.historyCursor.incomplete:0;
+      const historyStartIndex=historyNext;
+      const historyStartedAt=Date.now();
+      for(let i=historyNext;i<index.commits.length;i++){
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        const commit=index.commits[i];
+        send('learning:progress',{
+          runId,repository:index.repository,phase:'history',startedAt,
+          completed:i,total:index.commits.length,
+          current:'Historische Codeänderung '+(i+1)+'/'+index.commits.length+
+            ' · '+commit.sha.slice(0,12),
+          etaSeconds:i>historyStartIndex
+            ?Math.round((Date.now()-historyStartedAt)/(i-historyStartIndex)*
+              (index.commits.length-i)/1000):null,
+          preview:reportsMarkdown.slice(-2500),
+          model:modelName,
+        });
+        const history=await analyzeHistoricalCommitWithOllama(
+          index.repository,commit.sha,chapterNumber()+1,controller.signal,
+          cloudModel?{model:cloudModel}:{});
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        if(history.bookMarkdown)
+          bookMarkdown+='\n\n'+history.bookMarkdown;
+        if(history.solutionsMarkdown)
+          solutionsMarkdown+='\n\n'+history.solutionsMarkdown;
+        reportsMarkdown+='\n\n'+history.reportsMarkdown;
+        historyChapters+=history.chapters;
+        if(!history.complete)incomplete++;
+        historyNext=i+1;
+        persist({nextIndex:historyNext,total:index.commits.length,
+          chapters:historyChapters,incomplete,model:modelName});
+      }
+      const final=loadHistoricalBook(app.getPath('userData'),index.repository,snapshotMode);
+      if(!final||final.head!==index.head)throw Error('Final learning snapshot is unavailable');
+      send('learning:progress',{
+        runId,repository:index.repository,phase:'finished',startedAt,
+        completed:index.commits.length,total:index.commits.length,
+        current:'Historie abgeschlossen · '+incomplete+' unvollständige Commit-Belege',
+        etaSeconds:0,preview:reportsMarkdown.slice(-2500),model:modelName,
+      });
+      return {repository:final.repository,head:final.head,lessons:filesAnalyzed,
+        bookMarkdown:final.bookMarkdown,solutionsMarkdown:final.solutionsMarkdown,
+        reportsMarkdown:final.reportsMarkdown,deepAnalysis:{
+          model:modelName,filesAnalyzed,
+          filesSkipped:summary?.filesSkipped??0,
+          complete:(summary?.complete??false)&&incomplete===0,
         }};
     }finally{
       if(learningController===controller)learningController=null;
@@ -399,19 +491,38 @@ app.whenReady().then(() => {
     if(typeof input!=='string'||input.length>250||typeof page!=='number'||
       (pinnedHead!==undefined&&typeof pinnedHead!=='string'))
       throw Error('Invalid learning source');
-    const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12,page,
-      pinnedHead as string|undefined);
-    const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
-    const previous=loadHistoricalBook(app.getPath('userData'),index.repository);
-    if(previous&&previous.lessons>0&&previous.lessonEntries.length===0)
-      throw Error('Previous learning snapshot lacks typed topic records: migration required');
-    const prior=previous?{repository:previous.repository,head:previous.head,
-      license:previous.license,lessons:previous.lessonEntries,
-      bookMarkdown:previous.bookMarkdown,solutionsMarkdown:previous.solutionsMarkdown,
-      reportsMarkdown:previous.reportsMarkdown,caseStudies:previous.caseStudies}:null;
-    const grown=mergeHistoricalBook(prior,candidate);
-    grown.pagination={page:index.page,hasMore:index.hasMore};
-    const saved=saveHistoricalBook(app.getPath('userData'),grown);
+    // Automatic bounded paging: persist each successful page so an API error
+    // leaves the last verified Markdown snapshot recoverable.
+    let lastSaved:ReturnType<typeof saveHistoricalBook>|null=null;
+    const current=loadHistoricalBook(app.getPath('userData'),parsePublicRepository(input));
+    const resume=current?.pagination?.hasMore===true&&
+      current.pagination.pageSize===20&&current.lessonEntries.length===current.lessons;
+    await walkPublicRepositoryHistory(input,{
+      pageSize:20,
+      startPage:resume?(current?.pagination?.page??0)+1:1,
+      pinnedHead:resume?current?.head:undefined,
+      initialCount:resume?(current?.pagination?.page??0)*20:0,
+      collect:false,
+      onPage:async index=>{
+        const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
+        const previous=loadHistoricalBook(app.getPath('userData'),index.repository);
+        if(previous&&previous.head===index.fixedHead&&previous.lessons>0&&
+          previous.lessonEntries.length===0)
+          throw Error('Previous learning snapshot lacks typed topic records: migration required');
+        const prior=previous&&previous.head===index.fixedHead
+          ?{repository:previous.repository,head:previous.head,
+            license:previous.license,lessons:previous.lessonEntries,
+            bookMarkdown:previous.bookMarkdown,
+            solutionsMarkdown:previous.solutionsMarkdown,
+            reportsMarkdown:previous.reportsMarkdown,
+            caseStudies:previous.caseStudies}:null;
+        const grown=mergeHistoricalBook(prior,candidate);
+        grown.pagination={page:index.page,hasMore:index.hasMore,pageSize:20};
+        lastSaved=saveHistoricalBook(app.getPath('userData'),grown);
+      },
+    });
+    if(!lastSaved)throw Error('No history pages were analyzed');
+    const saved=lastSaved as ReturnType<typeof saveHistoricalBook>;
     return {repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
@@ -419,17 +530,27 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('learning:load', (_event, repository: unknown) => {
     if(typeof repository!=='string')throw Error('Invalid learning repository');
-    const saved=loadHistoricalBook(app.getPath('userData'),repository);
+    const saved=loadHistoricalBook(app.getPath('userData'),repository,'deep')??
+      loadHistoricalBook(app.getPath('userData'),repository);
     return saved?{repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
-      page:saved.pagination?.page,hasMore:saved.pagination?.hasMore}:null;
+      page:saved.pagination?.page,hasMore:saved.pagination?.hasMore,
+      deepAnalysis:saved.deepSummary?{
+        model:saved.deepSummary.model,filesAnalyzed:saved.deepSummary.filesAnalyzed,
+        filesSkipped:saved.deepSummary.filesSkipped,
+        complete:saved.deepSummary.complete&&saved.historyCursor!==undefined&&
+          saved.historyCursor.nextIndex===saved.historyCursor.total&&
+          saved.historyCursor.incomplete===0,
+      }:undefined}:null;
   });
   ipcMain.handle('learning:export',async (_event,repository:unknown,
-    kind:unknown,format:unknown) => {
+    kind:unknown,format:unknown,mode:unknown='history') => {
     if(typeof repository!=='string'||!['book','solutions','reports'].includes(String(kind))||
-       !['md','pdf'].includes(String(format)))throw Error('Invalid learning export');
-    const saved=loadHistoricalBook(app.getPath('userData'),repository);
+       !['md','pdf'].includes(String(format))||
+       !['history','deep'].includes(String(mode)))throw Error('Invalid learning export');
+    const saved=loadHistoricalBook(app.getPath('userData'),repository,
+      mode as 'history'|'deep');
     if(!saved)throw Error('No saved learning book found');
     const content=kind==='book'?saved.bookMarkdown:
       kind==='solutions'?saved.solutionsMarkdown:saved.reportsMarkdown;

@@ -264,12 +264,12 @@ try {
   await page.getByText('feat: introduce typed list',{exact:true}).waitFor();
   await page.getByText('Quellenindex, noch kein fertiges Lehrbuch',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch mit Ollama analysieren'}).click();
-  await page.getByRole('dialog',{name:'Code-Lehrbuch mit lokalem Ollama'}).waitFor();
+  await page.getByRole('dialog',{name:'Code-Lehrbuch · lokales Ollama'}).waitFor();
   await page.getByText('Kapitel 1 geschrieben',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Schließen',exact:true}).click();
   await page.getByText('Dein Lehrbuch – example/studio',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Git-Schnellüberblick (ohne Modell)'}).click();
-  await page.getByRole('button',{name:'Weitere 12 Commits analysieren'}).click();
+  await page.getByRole('button',{name:'Historienanalyse fortsetzen'}).click();
   await page.getByText('Weitere Commits geprüft.',{exact:false}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch als PDF'}).click();
   await page.getByText('Export erfolgreich gespeichert.',{exact:true}).waitFor();

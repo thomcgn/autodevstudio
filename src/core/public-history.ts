@@ -4,8 +4,7 @@ import {promisify} from 'node:util';
 const execute=promisify(execFile);
 const SLUG=/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA=/^[0-9a-f]{40}$/i;
-const MAX_COMMITS=20;
-const MAX_SIZE_KB=100_000;
+const MAX_COMMITS=100;
 export interface HistoricalCommit {
   sha:string;
   title:string;
@@ -83,18 +82,18 @@ function getPaths(value:unknown):{paths:readonly string[];complete:boolean}{
 /** Source discovery only. Never infer motives, quality PASS or a lesson from a commit message. */
 export async function indexPublicRepositoryHistory(
   input:string,read:GitHubHistoryRead=readGitHubPublicJson,limit=12,
-  page=1,pinnedHead?:string,
+  page=1,pinnedHead?:string,includeChangedPaths=true,
 ):Promise<PublicHistoryIndex>{
   const slug=parsePublicRepository(input);
   if(!Number.isSafeInteger(limit)||limit<1||limit>MAX_COMMITS)fail('invalid commit limit');
-  if(!Number.isSafeInteger(page)||page<1||page>100)fail('invalid commit page');
+  if(!Number.isSafeInteger(page)||page<1)fail('invalid commit page');
   if(pinnedHead!==undefined&&!SHA.test(pinnedHead))fail('invalid pinned commit SHA');
   const metadata=requiredRecord(await read('repos/'+slug),'repository metadata missing');
   if(metadata.private!==false||typeof metadata.full_name!=='string'||
      metadata.full_name.toLowerCase()!==slug.toLowerCase())
     fail('repository is not a verified public repository');
-  if(typeof metadata.size!=='number'||metadata.size<0||metadata.size>MAX_SIZE_KB)
-    fail('repository size unavailable or exceeds safe limit');
+  if(typeof metadata.size!=='number'||!Number.isSafeInteger(metadata.size)||metadata.size<0)
+    fail('repository size metadata invalid');
   if(typeof metadata.default_branch!=='string'||
     !/^[A-Za-z0-9._/-]{1,128}$/.test(metadata.default_branch)||
     metadata.default_branch.includes('..'))fail('default branch cannot be verified');
@@ -119,8 +118,9 @@ export async function indexPublicRepositoryHistory(
     const date=author?.date;
     const committedAt=typeof date==='string'&&!Number.isNaN(Date.parse(date))
       ?new Date(date).toISOString():null;
-    const details=await read('repos/'+slug+'/commits/'+sha);
-    const paths=getPaths(details);
+    const paths=includeChangedPaths
+      ?getPaths(await read('repos/'+slug+'/commits/'+sha))
+      :{paths:[] as readonly string[],complete:false};
     commits.push({sha,title:commitTitle(info.message),committedAt,
       changedPaths:paths.paths,pathsComplete:paths.complete,
       evidenceUrl:'https://github.com/'+slug+'/commit/'+sha});
@@ -130,4 +130,55 @@ export async function indexPublicRepositoryHistory(
     /^[A-Za-z0-9-.+]{1,60}$/.test(license)?license:null;
   return {repository:slug,defaultBranch:branch,fixedHead:head,licenseSpdx,
     commits,readOnly:true,requiresInterpretation:true,page,hasMore:commits.length===limit};
+}
+/** Traverse the entire reachable commit history in bounded API pages.
+ * A HEAD pinned on the first response prevents new upstream commits from shifting the cursor.
+ * The caller receives each page immediately for progress/persistence and may abort safely.
+ */
+export async function walkPublicRepositoryHistory(
+ input:string,options:{
+  read?:GitHubHistoryRead;pageSize?:number;signal?:AbortSignal;
+  startPage?:number;pinnedHead?:string;initialCount?:number;collect?:boolean;
+  includeChangedPaths?:boolean;
+  onPage?:(page:PublicHistoryIndex,commitsSeen:number)=>Promise<void>|void;
+ }={},
+):Promise<{repository:string;head:string;licenseSpdx:string|null;commits:HistoricalCommit[]}>{
+ const read=options.read??readGitHubPublicJson;
+ const pageSize=options.pageSize??20;
+ if(!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>MAX_COMMITS)
+  fail('invalid history page size');
+ const commits:HistoricalCommit[]=[];
+ const seen=new Set<string>();
+ let page=options.startPage??1;
+ let pinnedHead=options.pinnedHead;
+ const initialCount=options.initialCount??0;
+ let processed=initialCount;
+ if(!Number.isSafeInteger(page)||page<1||
+   (page>1&&(!pinnedHead||!SHA.test(pinnedHead)))||
+   !Number.isSafeInteger(initialCount)||initialCount<0)
+  fail('invalid history resume cursor');
+ let repository='';
+ let licenseSpdx:string|null=null;
+ while(true){
+  if(options.signal?.aborted)throw Error('Learning history cancelled');
+  const index=await indexPublicRepositoryHistory(input,read,pageSize,page,pinnedHead,
+   options.includeChangedPaths??true);
+  if(pinnedHead!==undefined&&index.fixedHead!==pinnedHead)
+   fail('pinned repository HEAD changed during traversal');
+  pinnedHead=index.fixedHead;
+  repository=index.repository;
+  licenseSpdx=index.licenseSpdx;
+  for(const commit of index.commits){
+   if(seen.has(commit.sha))fail('duplicate SHA across history pages');
+   seen.add(commit.sha);
+   if(options.collect!==false)commits.push(commit);
+   processed++;
+  }
+  await options.onPage?.(index,processed);
+  if(!index.hasMore)break;
+  page++;
+  if(!Number.isSafeInteger(page))fail('commit page counter overflow');
+ }
+ if(pinnedHead===undefined)fail('history traversal produced no verified HEAD');
+ return {repository,head:pinnedHead,licenseSpdx,commits};
 }
