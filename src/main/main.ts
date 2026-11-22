@@ -324,6 +324,17 @@ app.whenReady().then(() => {
     const project = getProject(id);
     return inspectGitPreflight(project.path);
   });
+  ipcMain.handle('core:branch-protection', async (_event,id:string) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    try{
+      const evidence=await assertBranchProtection(project.path);
+      return {protected:true,evidence} as const;
+    }catch(error){
+      return {protected:false,reason:error instanceof Error?error.message:
+        'GitHub protection could not be verified'} as const;
+    }
+  });
   ipcMain.handle('core:issues', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
