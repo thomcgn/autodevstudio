@@ -2,12 +2,13 @@ import type { StudioEvent, IssueProgressEvent } from '../main/preload';
 export interface LearningBookPreview {
   repository:string;head:string;lessons:number;bookMarkdown:string;
   solutionsMarkdown:string;reportsMarkdown:string;
+  page?:number;hasMore?:boolean;
 }
 export interface PublicHistoryIndex {
   repository:string;defaultBranch:string;fixedHead:string;licenseSpdx:string|null;
   commits:readonly {sha:string;title:string;committedAt:string|null;
     changedPaths:readonly string[];pathsComplete:boolean;evidenceUrl:string}[];
-  readOnly:true;requiresInterpretation:true;
+  readOnly:true;requiresInterpretation:true;page:number;hasMore:boolean;
 }
 export interface StudioActivity {
   busy:boolean;
@@ -131,7 +132,7 @@ declare global {
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
     publicRepoHistory(input: string, limit: number): Promise<PublicHistoryIndex>;
-    generateLearningBook(input:string):Promise<LearningBookPreview>;
+    generateLearningBook(input:string,page?:number,pinnedHead?:string):Promise<LearningBookPreview>;
     loadLearningBook(repo:string):Promise<LearningBookPreview|null>;
     exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf'):Promise<{exported:boolean}>;
     studioActivity(id: string): Promise<StudioActivity>;
