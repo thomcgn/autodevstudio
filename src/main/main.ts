@@ -13,6 +13,8 @@ import { runIssueToDraftPr, defaultIssueAutomationDependencies } from '../core/i
 import { createKiloPrimaryBuilder } from '../core/kilo-primary-builder';
 import { createKiloPrimaryReviewer,selectPrimaryKiloRoles } from '../core/kilo-primary-reviewer';
 import { loadCoreCheckpoint } from '../core/checkpoint-store';
+import {captureGitIdentity} from '../core/git-identity';
+import {previewCheckpointIssueStatus} from '../core/issue-status-policy';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
@@ -440,6 +442,21 @@ app.whenReady().then(() => {
     const project = getProject(id);
     if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
     return listProjectIssues(project.path);
+  });
+  ipcMain.handle('core:issue-status-previews', async (_event,id:unknown) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    const checkpoint=loadCoreCheckpoint(app.getPath('userData'),project.path);
+    if(!checkpoint)return [];
+    const issues=await listProjectIssues(project.path);
+    const issue=issues.find(item=>item.number===checkpoint.issueNumber);
+    if(!issue)return [];
+    let git=null;
+    try{git=await captureGitIdentity(project.path);}
+    catch{/* Git identity cannot be verified; preview fails closed. */}
+    return [{issueNumber:issue.number,...previewCheckpointIssueStatus(
+      project.path,issue.number,issue.labels,checkpoint,git)}];
   });
   ipcMain.handle('core:issue-queue', async (_event,id:string) => {
     if(typeof id!=='string')throw Error('Invalid project ID');
