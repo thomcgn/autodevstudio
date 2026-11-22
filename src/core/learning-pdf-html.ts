@@ -12,6 +12,19 @@ function inline(value:string):string{
 export function markdownToPrintHtml(markdown:string,title='Programmierlehrbuch'):string{
  if(typeof markdown!=='string'||markdown.length>2_000_000)throw Error('Document exceeds print limit');
  const out:string[]=[];
+ const anchors=new Map<string,string>();
+ const used=new Set<string>();
+ for(const line of markdown.split(/\r?\n/)){
+  const match=/^## (.+)$/.exec(line);
+  if(!match)continue;
+  const slug=match[1].toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'section';
+  let id=slug,number=2;
+  while(used.has(id))id=slug+'-'+number++;
+  used.add(id);
+  if(!anchors.has(match[1]))anchors.set(match[1],id);
+ }
+ let inContents=false;
  let inCode=false;
  let codeLines:string[]=[];
  let inList=false;
@@ -29,10 +42,15 @@ export function markdownToPrintHtml(markdown:string,title='Programmierlehrbuch')
   if(!raw.trim()){closeList();continue;}
   const heading=/^(#{1,6})\s+(.+)$/.exec(raw);
   if(heading){closeList();const level=heading[1].length;
-   out.push('<h'+level+'>'+inline(heading[2])+'</h'+level+'>');continue;}
+   if(level===2)inContents=heading[2].trim()==='Inhaltsverzeichnis';
+   const anchor=level===2?anchors.get(heading[2]):undefined;
+   out.push('<h'+level+(anchor?' id="'+anchor+'"':'')+'>'+inline(heading[2])+
+    '</h'+level+'>');continue;}
   const ordered=/^\d+\.\s+(.+)$/.exec(raw);
   if(ordered){if(!inList){out.push('<ol>');inList=true;}
-   out.push('<li>'+inline(ordered[1])+'</li>');continue;}
+   const anchor=inContents?anchors.get(ordered[1].trim()):undefined;
+   out.push('<li>'+(anchor?'<a href="#'+anchor+'">':'')+inline(ordered[1])+
+    (anchor?'</a>':'')+'</li>');continue;}
   closeList();
   if(raw.startsWith('- ')){out.push('<p class="bullet">• '+inline(raw.slice(2))+'</p>');continue;}
   out.push('<p>'+inline(raw)+'</p>');
