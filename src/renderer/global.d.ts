@@ -5,6 +5,12 @@ export interface StandaloneStatus {
   checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
   executionEnabled: false;
 }
+export interface IssueCodeResult {
+  issueNumber:number;branch:string;changedFile:string;
+  runId:string;checkpointRevision:number;stage:'review';
+  git:{head:string;branch:string;worktreeHash:string};
+  published:false;
+}
 export interface SimulationResult {
   state: { issueNumber: number; stage: string; fixAttempts: number; maxFixAttempts: number };
   events: Array<{ stage: string; message: string; issueNumber: number; fixAttempts: number }>;
@@ -101,6 +107,8 @@ declare global {
     kiloReviewerCalibrate(id: string): Promise<ReviewerCalibrationResult>;
     saveKiloRoleModels(id: string, roles: KiloRoleModels): Promise<KiloRoleModels>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
+    issueToCode(id: string, issueNumber: number): Promise<IssueCodeResult>;
+    cancelIssueCode(): Promise<boolean>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
     addProject(): Promise<Project | null>;

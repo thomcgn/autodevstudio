@@ -7,6 +7,7 @@ import { assertRunApproved, type RunMode } from './run-policy';
 import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
+import { implementIssueLocally } from '../core/local-issue-to-code';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
@@ -34,6 +35,7 @@ import { loadKiloRoles, saveKiloRoles } from '../core/kilo-role-models';
 interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
+let localCodeController: AbortController | null = null;
 let activeRun: string | null = null;
 let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
@@ -303,6 +305,34 @@ app.whenReady().then(() => {
     return listIssues(project.path);
   });
   ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
+  ipcMain.handle('core:issue-to-code', async (_event, id:string, issueNumber:number) => {
+    if(active||localCodeController)throw Error('Another Studio run is active');
+    if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
+      throw Error('Invalid issue-to-code request');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    // Authoritative issue fetched by Main: never trust renderer-supplied title,
+    // code, file names, paths, or model instructions.
+    const issues=await listIssues(project.path);
+    const issue=issues.find(x=>x.number===issueNumber);
+    if(!issue)throw Error('Issue is not open or no longer available');
+    const ollama=await probeOllamaReadiness();
+    if(!ollama.ready)throw Error('Local Qwen model is not ready');
+    if(active||localCodeController)throw Error('Another Studio run is active');
+    const controller=new AbortController();
+    localCodeController=controller;
+    try{
+      return await implementIssueLocally(app.getPath('userData'),project.path,
+        {number:issue.number,title:issue.title,body:issue.body},undefined,controller.signal);
+    }finally{
+      if(localCodeController===controller)localCodeController=null;
+    }
+  });
+  ipcMain.handle('core:issue-to-code:cancel', () => {
+    if(!localCodeController)return false;
+    localCodeController.abort();
+    return true;
+  });
   ipcMain.handle('core:simulate', async (_event, projectId: string, issueNumber: number) => {
     if (typeof projectId !== 'string' || !Number.isSafeInteger(issueNumber) || issueNumber <= 0) {
       throw new Error('Invalid simulation request');
@@ -356,6 +386,7 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.handle('run:start', (_event, id: string, mode: RunMode, approval?: string) => {
+    if (localCodeController) throw new Error('A local issue-to-code run is active');
     if (active) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
@@ -409,5 +440,5 @@ app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on('before-quit', () => terminate());
+app.on('before-quit', () => {localCodeController?.abort();terminate();});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

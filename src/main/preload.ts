@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('studio', {
   kiloReviewerCalibrate: (id: string) => ipcRenderer.invoke('core:kilo-reviewer-calibrate', id),
   saveKiloRoleModels: (id: string, roles: {planner:string;builder:string;reviewer:string}) => ipcRenderer.invoke('core:kilo-role-models:save', id, roles),
   simulateIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:simulate', id, issueNumber),
+  issueToCode: (id: string, issueNumber: number) => ipcRenderer.invoke('core:issue-to-code', id, issueNumber),
+  cancelIssueCode: () => ipcRenderer.invoke('core:issue-to-code:cancel'),
   workflowStages: () => ipcRenderer.invoke('core:workflow'),
   snapshot: (id: string) => ipcRenderer.invoke('project:snapshot', id),
   addProject: () => ipcRenderer.invoke('project:add'),
