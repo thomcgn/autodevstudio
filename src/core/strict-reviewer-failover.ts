@@ -33,7 +33,8 @@ function mayUseLocal(config:StrictReviewerFailoverConfig):boolean{
     config.local.model===LOCAL_MODEL&&
     config.local.ready===true&&
     config.local.calibrationPassed===true&&
-    config.local.toolFreeTransportApproved===true;
+    config.local.toolFreeTransportApproved===true&&
+    config.local.model!==config.builderModel;
 }
 /** Builds a provider transport ONLY; cannot publish, commit, launch tools or
  * authorize the release of repository data. Production callers must hold
