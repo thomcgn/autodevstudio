@@ -411,3 +411,32 @@ html,body,#root{max-width:100%;overflow:hidden}
 @media(prefers-reduced-motion:reduce){
   .scroll-jump-controls button{transition:none}
 }
+
+/* Accessible, 10-inch-friendly safety states. Never rely on color alone. */
+.issue-safety-alert,.issue-hold-reason{
+  display:flex;flex-direction:column;gap:7px;min-width:0;
+  padding:12px 14px;border-radius:9px;overflow-wrap:anywhere;
+}
+.issue-safety-alert{
+  border:2px solid #ec8b74;background:#442527;color:#fff0ed;
+}
+.issue-safety-alert>strong{font-size:13px;letter-spacing:.035em;color:#fff5f0}
+.issue-safety-alert--waiting{
+  background:#3c3020;border-color:#e4b869;color:#fff0ce;
+}
+.issue-safety-alert--waiting>strong{color:#ffe2ac}
+.issue-safety-alert p,.issue-hold-reason p{font-size:12px;line-height:1.5;margin:0}
+.issue-safety-alert .quiet{align-self:flex-start;margin-top:4px}
+.issue-item--blocked{border:2px solid #df776d;background:#281f2d}
+.issue-hold-reason{background:#43232d;border:1px solid #d8787d;color:#ffe9eb}
+.issue-hold-reason>strong{font-size:13px;color:#ffe1df;letter-spacing:.02em}
+.issue-hold-reason--waiting{background:#3b3127;border-color:#b88d52;color:#ffe7b9}
+.issue-hold-reason--waiting>strong{color:#ffdf9b}
+.issue-item--blocked .issue-primary-action:disabled{opacity:.55;cursor:not-allowed}
+.issue-safety-alert:focus-visible,.issue-hold-reason:focus-visible{
+  outline:2px solid #fff;outline-offset:2px
+}
+@media(max-width:850px){
+  .issue-safety-alert,.issue-hold-reason{padding:10px 11px;gap:5px}
+  .issue-safety-alert>strong,.issue-hold-reason>strong{font-size:12px}
+}
