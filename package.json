@@ -36,5 +36,10 @@
   "allowScripts": {
     "electron@39.8.10": true
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "electron": {
+      "@electron/get": "^5.1.0"
+    }
+  }
 }
