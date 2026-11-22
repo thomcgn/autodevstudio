@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('studio', {
   gitPreflight: (id: string) => ipcRenderer.invoke('core:preflight', id),
   studioStatus: (id: string) => ipcRenderer.invoke('core:status', id),
   publicRepoHistory: (input: string, limit: number) => ipcRenderer.invoke('learning:public-history', input, limit),
+  ownedGitHubRepositories: () => ipcRenderer.invoke('learning:owned-repositories'),
   generateLearningBook: (input:string,page=1,pinnedHead?:string) => ipcRenderer.invoke('learning:generate', input,page,pinnedHead),
   loadLearningBook: (repo:string) => ipcRenderer.invoke('learning:load', repo),
   exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf') =>
