@@ -253,6 +253,7 @@ export async function analyzeSourceWithOllama(
  // Kilo free gateway has a strict request-byte ceiling. Keep complete source
  // coverage by reducing per-request pieces, never by dropping source files.
  const cloud=deps.modelName==='kilo-auto/free';
+ const providerLabel=cloud?'Kilo Cloud':'Ollama';
  const sourceChunkChars=cloud?1600:CHUNK_CHARS;
  const chapterGroupSize=cloud?2:GROUP_SIZE;
  const send=(phase:LearningPhase,completed:number,total:number,current:string,
@@ -313,7 +314,7 @@ export async function analyzeSourceWithOllama(
   h.sha.slice(0,12)+' '+h.title.replace(/[\r\n\t<>]/g,' ').slice(0,240)+
   ' [Dateien: '+h.changedPaths.slice(0,8).join(', ')+']')
   .join('\n').slice(0,cloud?1200:6500);
- send('architecture',0,total,'Ollama erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
+ send('architecture',0,total,providerLabel+' erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
  const architecturePrompt='Gib die Gesamtarchitektur, die wichtigsten Module, Ein-/Ausgaben,'+
   ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
   'Nutze die folgende Übersicht analysierter Quelldateien (Auszug, übrige Dateien folgen in Einzelkapiteln):\n'+overviewPaths+
@@ -322,7 +323,7 @@ export async function analyzeSourceWithOllama(
    'DATEI '+f.path+'\n'+f.content.slice(0,overviewSnippetChars)).join('\n\n');
  const architectureStarted=Date.now();
  const overview=await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
-  send('architecture',0,total,'Ollama erstellt die Architekturübersicht · '+
+  send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
    fragments+' Antwortteile empfangen','',null));
  const first=renderLesson(overview,overviewFiles,chapterOffset+1);
  chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
@@ -334,7 +335,7 @@ export async function analyzeSourceWithOllama(
   const part=chunks.slice(i,i+chapterGroupSize);
   const n=Math.floor(i/chapterGroupSize)+1;
   const avg=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
-  send('model',n,total,'Ollama analysiert '+part.map(f=>f.path).join(', '),
+  send('model',n,total,providerLabel+' analysiert '+part.map(f=>f.path).join(', '),
    chapters.slice(-1).join('\n').slice(-2600),avg?Math.round((total-n)*avg/1000):null);
   const started=Date.now();
   const prompt='Repository '+repository+' Commit '+head+'\n'+
@@ -346,7 +347,7 @@ export async function analyzeSourceWithOllama(
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
   const chapterLesson=await requestValidatedLesson(model,SYSTEM,prompt,signal,fragments=>
-   send('model',n,total,'Ollama arbeitet an Kapitel '+(n+1)+' · '+
+   send('model',n,total,providerLabel+' arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
     avg?Math.round((total-n)*avg/1000):null));
   const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1);
