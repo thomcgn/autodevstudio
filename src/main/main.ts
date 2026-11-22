@@ -27,6 +27,7 @@ import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/publ
 import { generateHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
+import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
 import { probeIsolatedQualityRuntime } from '../core/isolated-quality-probe';
@@ -455,11 +456,20 @@ app.whenReady().then(() => {
       const reviewer=createKiloPrimaryReviewer(base,id,roles,catalog.models,quota);
       const deps={...defaultIssueAutomationDependencies,
         build:kiloBuilder.build,repair:kiloBuilder.repair};
-      return await runIssueToDraftPr(base,project.path,{
+      const outcome=await runIssueToDraftPr(base,project.path,{
         number:issue.number,title:issue.title,body:issue.body,
       },reviewer.transport,scripts,controller.signal,
       stage=>send('issue:progress',{projectId:id,issueNumber,stage,time:Date.now()}),
       deps,reviewer.canReview);
+      if(outcome.status!=='draft-created'||!outcome.draftUrl)return outcome;
+      try{
+        const result=await documentFinishedIssue(base,project.path,issueNumber,outcome.draftUrl);
+        return {...outcome,learningReport:result.recorded
+          ?'saved' as const:'unavailable' as const};
+      }catch{
+        // Publishing already succeeded. A documentation error must never trigger a second push.
+        return {...outcome,learningReport:'unavailable' as const};
+      }
     }finally{
       if(localCodeController===controller){localCodeController=null;localCodeOwner=null;}
     }

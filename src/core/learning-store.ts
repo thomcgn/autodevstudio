@@ -32,11 +32,15 @@ function storeFiles(directory:string,book:HistoricalBook):void {
 /** Local application data only. Never writes into source repositories.
  * Immutable SHA snapshots prevent a partial or repeated import from corrupting a prior book.
  */
-export function saveHistoricalBook(base:string,book:HistoricalBook):SavedLearningBook{
+export function saveHistoricalBook(
+ base:string,book:HistoricalBook,variant='history',
+):SavedLearningBook{
  valid(book);
+ if(!/^(?:history|issue-[1-9][0-9]*)$/.test(variant))throw Error('Invalid learning snapshot kind');
  const root=rootFor(base,book.repository);
  fs.mkdirSync(root,{recursive:true,mode:0o700});
- const target=path.join(root,book.head);
+ const snapshot=book.head+'--'+variant;
+ const target=path.join(root,snapshot);
  if(fs.existsSync(target)){
   if(!fs.statSync(target).isDirectory())throw Error('Invalid existing learning snapshot');
   const existing=fs.readFileSync(path.join(target,'book.md'),'utf8');
@@ -52,7 +56,7 @@ export function saveHistoricalBook(base:string,book:HistoricalBook):SavedLearnin
  }
  const latest=path.join(root,'latest.json');
  const temporary=path.join(root,'.latest-'+process.pid+'.json');
- fs.writeFileSync(temporary,JSON.stringify({head:book.head,repository:book.repository}),{
+ fs.writeFileSync(temporary,JSON.stringify({head:book.head,repository:book.repository,snapshot}),{
   mode:0o600,flag:'w'});
  fs.renameSync(temporary,latest);
  return {...book,directory:target,lessons:book.lessons.length};
@@ -64,10 +68,14 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
  if(!fs.existsSync(file))return null;
  const value:unknown=JSON.parse(fs.readFileSync(file,'utf8'));
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid learning index');
- const info=value as {head?:unknown;repository?:unknown};
+ const info=value as {head?:unknown;repository?:unknown;snapshot?:unknown};
  if(info.repository!==input||typeof info.head!=='string'||!SHA.test(info.head))
   throw Error('Invalid stored learning index');
- const directory=path.join(root,info.head);
+ const snapshot=info.snapshot??info.head;
+ if(typeof snapshot!=='string'||!(SHA.test(snapshot)||
+    /^[0-9a-f]{40}--(?:history|issue-[1-9][0-9]*)$/i.test(snapshot)))
+  throw Error('Invalid stored learning snapshot');
+ const directory=path.join(root,snapshot);
  for(const filename of ['book.md','solutions.md','reports.md']){
   const filePath=path.join(directory,filename);
   if(!fs.statSync(filePath).isFile()||fs.statSync(filePath).size>MAX)
