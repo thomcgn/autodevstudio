@@ -21,9 +21,9 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: TypeScript
-        run: npm run typecheck
+        run: node scripts/strict-check.mjs typecheck
       - name: Execution approval policy tests
-        run: npm run test:policy
+        run: node scripts/strict-check.mjs policy
 
   ui-smoke:
     name: Renderer click tests (Playwright)
@@ -46,7 +46,7 @@ jobs:
       - name: Install headless Chromium
         run: npx playwright install --with-deps chromium
       - name: Click-test real React UI with mocked IPC
-        run: npm run test:ui
+        run: node scripts/strict-check.mjs ui
 
   desktop-smoke:
     name: Packaged Electron integration (Playwright)
@@ -63,6 +63,6 @@ jobs:
       - name: Install pinned Playwright test runner without lockfile changes
         run: npm install --no-save --package-lock=false @playwright/test@1.65.1
       - name: Build standalone desktop app
-        run: npm run package
+        run: node scripts/strict-check.mjs package
       - name: Native Electron desktop click and IPC smoke
-        run: xvfb-run -a npm run test:desktop
+        run: xvfb-run -a node scripts/strict-check.mjs desktop
