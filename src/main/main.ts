@@ -30,6 +30,7 @@ import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/publ
 import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
+import {analyzeSourceWithOllama} from '../core/deep-learning-analysis';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
@@ -60,6 +61,7 @@ let localCodeOwner:RunningStudioOperation|null=null;
 let publishingOwner:RunningStudioOperation|null=null;
 let publishingDraftPr=false;
 let startingLegacyRun=false;
+let learningController:AbortController|null=null;
 let activeRun: string | null = null;
 let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
@@ -340,6 +342,38 @@ app.whenReady().then(() => {
     if(active||startingLegacyRun)return {busy:true,kind:'legacy-run',
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
+  });
+  ipcMain.handle('learning:deep-generate',async (_event,input:unknown) => {
+    if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
+    if(learningController)throw Error('Learning analysis is already active');
+    const controller=new AbortController();
+    learningController=controller;
+    const runId=randomUUID();
+    const startedAt=Date.now();
+    try{
+      const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,1);
+      const result=await analyzeSourceWithOllama(index.repository,index.fixedHead,
+        runId,startedAt,event=>send('learning:progress',event),controller.signal);
+      if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+      const saved=saveHistoricalBook(app.getPath('userData'),{
+        repository:result.repository,head:result.head,license:index.licenseSpdx,
+        lessons:[],bookMarkdown:result.bookMarkdown,solutionsMarkdown:result.solutionsMarkdown,
+        reportsMarkdown:result.reportsMarkdown,
+      });
+      return {repository:saved.repository,head:saved.head,lessons:result.filesAnalyzed,
+        bookMarkdown:saved.bookMarkdown,solutionsMarkdown:saved.solutionsMarkdown,
+        reportsMarkdown:saved.reportsMarkdown,deepAnalysis:{
+          model:result.model,filesAnalyzed:result.filesAnalyzed,
+          filesSkipped:result.filesSkipped,complete:result.complete,
+        }};
+    }finally{
+      if(learningController===controller)learningController=null;
+    }
+  });
+  ipcMain.handle('learning:deep-cancel',()=>{
+    if(!learningController)return false;
+    learningController.abort();
+    return true;
   });
   ipcMain.handle('learning:generate', async (_event, input: unknown,
     page:unknown=1,pinnedHead?:unknown) => {
