@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview, IssueStatusPreview } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
@@ -79,6 +79,7 @@ function App(): React.JSX.Element {
   const [labelsResult,setLabelsResult] = useState('');
   const [labelsError,setLabelsError] = useState('');
   const [issueQueue, setIssueQueue] = useState<IssueQueuePreview | null>(null);
+  const [issueStatusPreviews,setIssueStatusPreviews]=useState<IssueStatusPreview[]>([]);
   const [simulating, setSimulating] = useState<number | null>(null);
   const [codingIssue, setCodingIssue] = useState<number | null>(null);
   const [codeResult, setCodeResult] = useState<IssueCodeResult | null>(null);
@@ -256,6 +257,7 @@ function App(): React.JSX.Element {
     try {
       setIssues(await window.studio.issues(selected));
       setIssueQueue(await window.studio.issueQueue(selected));
+      setIssueStatusPreviews(await window.studio.issueStatusPreviews(selected));
     }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
@@ -972,6 +974,7 @@ function App(): React.JSX.Element {
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
               : <div className="issue-list">{issues.map(issue => {
                 const queued=issueQueue?.queue.find(item=>item.number===issue.number);
+                const preview=issueStatusPreviews.find(item=>item.issueNumber===issue.number);
                 const hold=explainIssueHold(issue.labels,queued?.reason,issue.body);
                 const checkpointBlocked=Boolean(studioStatus?.lock.held)||
                   Boolean(studioStatus?.checkpoint &&
@@ -988,6 +991,13 @@ function App(): React.JSX.Element {
                     </div>
                     <a className="issue-external-link" href={issue.url} target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
                   </div>
+                  {preview && <section className="issue-status-preview" role="status">
+                    <strong>Checkpoint → GitHub-Status (nur Vorschau)</strong>
+                    <p>GitHub: {preview.current??'ungültig'} · aus belegtem Checkpoint:
+                      {preview.proposed??' keine zulässige Ableitung'}</p>
+                    <p>{preview.reason}</p>
+                    <small>Keine automatischen Label-Änderungen. APPROVED und DONE benötigen zusätzliche externe Nachweise.</small>
+                  </section>}
                   {queued && <details className="issue-triage-details">
                     <summary>Priorisierung: P{queued.priority} · {queued.state==='candidate'
                       ?'startfähig laut Labels':'zurückgestellt'} · Begründung</summary>

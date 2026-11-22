@@ -10,6 +10,10 @@ export interface PublicHistoryIndex {
     changedPaths:readonly string[];pathsComplete:boolean;evidenceUrl:string}[];
   readOnly:true;requiresInterpretation:true;page:number;hasMore:boolean;
 }
+export interface IssueStatusPreview {
+ issueNumber:number;current:string|null;proposed:string|null;
+ allowed:false;reason:string;provenance:'checkpoint'|'none';
+}
 export interface StudioActivity {
   busy:boolean;
   kind:'issue-auto-draft'|'issue-build'|'issue-review'|'draft-publish'|'legacy-run'|null;
@@ -129,6 +133,7 @@ declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
+    issueStatusPreviews(id:string):Promise<IssueStatusPreview[]>;
     installIssueLabels(id:string):Promise<{repository:string;protectedBranch:string;created:readonly string[];alreadyPresent:readonly string[];total:number}>;
     branchProtection(id: string): Promise<BranchProtectionStatus>;
     issueQueue(id: string): Promise<IssueQueuePreview>;

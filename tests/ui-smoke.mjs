@@ -19,6 +19,7 @@ const secondary={id:'fixture-other',name:'another-repo',path:'/tmp/another-ui-fi
   isGitRepo:true,hasCore:false};
 const success={
   issues:[],
+  issueStatusPreviews:[],
   issueQueue:{previewOnly:true,executionEnabled:false,readyToStart:false,nextIssueNumber:null,
     reason:'No eligible open issues',queue:[]},
   studioStatus:{git:{root:project.path,branch:'main',head:'a'.repeat(40),
@@ -119,6 +120,7 @@ async function fixture(page){
       gitPreflight:async()=>({root:project.path,branch:'main',head:'a'.repeat(40),
         remoteSlug:null,clean:true,canExecute:false,reasons:[]}),
       issues:()=>respond('issues'),issueQueue:()=>respond('issueQueue'),
+      issueStatusPreviews:()=>respond('issueStatusPreviews'),
       installIssueLabels:async()=>({repository:'example/studio',protectedBranch:'main',created:['status:ready'],alreadyPresent:[],total:16}),
       publicRepoHistory:()=>respond('publicRepoHistory'),
       generateLearningBook:()=>respond('learningBook'),
@@ -192,6 +194,15 @@ try {
   });
   await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
   await page.getByText('BLOCKED – Issue gesperrt',{exact:true}).waitFor();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.issueStatusPreviews=[{
+      issueNumber:5,current:'status:blocked',proposed:null,
+      allowed:false,provenance:'none',reason:'Blocked status requires an explicit recovery decision',
+    }];
+  });
+  await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
+  await page.getByText('Checkpoint → GitHub-Status (nur Vorschau)',{exact:true}).waitFor();
+  await page.getByText('Blocked status requires an explicit recovery decision',{exact:true}).waitFor();
   await page.getByText('Priorisierung: P1 · zurückgestellt · Begründung').click();
   await page.getByText('Explicit GitHub priority: P1',{exact:true}).waitFor();
   await page.getByText('Sperrgrund:',{exact:false}).first().waitFor();
@@ -219,6 +230,7 @@ try {
     delete window.__uiSmoke.overrides.studioActivity;
     delete window.__uiSmoke.overrides.issues;
     delete window.__uiSmoke.overrides.issueQueue;
+    delete window.__uiSmoke.overrides.issueStatusPreviews;
   });
   await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
   await page.getByRole('button',{name:'Fehlende GitHub-Labels einrichten'}).waitFor();
