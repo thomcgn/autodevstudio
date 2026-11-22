@@ -125,7 +125,7 @@ export async function publishVerifiedDraftPullRequest(
       '--body',`Related to #${issueNumber}.
 
 Generated code reviewed at fingerprint ${evidence.evidenceFingerprint}.
-Local Builder: qwen2.5-coder:3b.
+Primary Builder: Kilo free model via configured CLI role.
 Independent Reviewer PASS and isolated Quality PASS verified by AutoDev Studio.
 Manual PR review and merge still required.`],root);
     const url=response.trim();

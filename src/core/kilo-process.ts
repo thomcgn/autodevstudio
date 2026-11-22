@@ -8,6 +8,8 @@ export interface KiloInvocation {
   agent: string;
   model: string;
   prompt: string;
+  /** Without --auto the CLI may never automatically approve tool execution. */
+  autoApprove?: boolean;
   resumeSessionId?: string;
   inactivityTimeoutMs: number;
   heartbeatIntervalMs?: number;
@@ -37,13 +39,13 @@ const SESSION_PATTERN = /\bsession(?:[ \t]+id)?[ \t]*[:=][ \t]*([a-zA-Z0-9_-]{8,
 const OUTPUT_LIMIT = 256 * 1024;
 const PROMPT_LIMIT = 32 * 1024;
 
-export function createKiloArgs(input: Pick<KiloInvocation, 'agent' | 'model' | 'prompt' | 'resumeSessionId'>): string[] {
+export function createKiloArgs(input: Pick<KiloInvocation, 'agent' | 'model' | 'prompt' | 'resumeSessionId' | 'autoApprove'>): string[] {
   if (!/^[\w][\w.-]{0,100}$/.test(input.agent) || !/^[\w][\w./:-]{0,160}$/.test(input.model)) {
     throw new Error('Invalid agent or model');
   }
   if (!input.prompt.trim() || Buffer.byteLength(input.prompt) > PROMPT_LIMIT) throw new Error('Invalid prompt length');
   if (input.resumeSessionId && !/^[a-zA-Z0-9_-]{8,128}$/.test(input.resumeSessionId)) throw new Error('Invalid resume session ID');
-  const args = ['run', '--auto', '--model', input.model, '--agent', input.agent];
+  const args = ['run', ...(input.autoApprove===false?[]:['--auto']), '--model', input.model, '--agent', input.agent];
   if (input.resumeSessionId) args.push('--session', input.resumeSessionId);
   args.push(input.prompt);
   return args;

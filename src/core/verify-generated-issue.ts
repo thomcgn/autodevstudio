@@ -52,12 +52,12 @@ export async function verifyGeneratedIssue(
     const git=await (deps.reviewer?.capture??captureGitIdentity)(projectPath);
     if(!gitEqual(cp.git,git))throw Error('Generated issue Git tree changed before verification');
     const plan:PlanResult={
-      summary:'Single-file local issue implementation; no separately approved planning agent.',
+      summary:'Bounded one-file implementation prepared by configured primary Builder; full plan remains tracked by Builder session.',
       steps:['Inspect actual single-file code diff against issue acceptance criteria',
         'Reject missing tests, unsafe changes and incomplete requirements'],
     };
     const build:BuildResult={summary:
-      'Local Qwen2.5-Coder 3B produced one uncommitted change on this issue branch. '+
+      'Configured Builder produced one uncommitted change on this issue branch. '+
       'No unit tests or functional correctness have been established.'};
     const handoff:ReviewHandoff=await reviewAndCheckpointQuality(
       base,projectPath,lock.record.token,cp.revision,issue,plan,build,
