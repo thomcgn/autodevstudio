@@ -93,3 +93,46 @@ test('only exactly one ready status and one explicit priority permit start',()=>
   assert.equal(q.queue.find(item=>item.number===n)?.state,'held');
  }finally{f.close();}
 });
+
+test('explicit open issue dependency blocks even a P0 ready candidate',()=>{
+ const f=fixture();try{
+  const q=planIssueQueue(f.base,f.project,[
+   issue(15,['status:ready','priority:p0','depends-on:#14']),
+   issue(14,['status:ready','priority:p2']),
+  ],f.git);
+  assert.equal(q.nextIssueNumber,14);
+  assert.equal(q.queue.find(x=>x.number===15)?.state,'held');
+  assert.match(q.queue.find(x=>x.number===15)?.reason??'',/open issue #14/);
+  assert.deepEqual(q.queue.find(x=>x.number===15)?.triage.dependencyIssues,[14]);
+ }finally{f.close();}
+});
+test('missing or malformed dependency must not silently count as completed',()=>{
+ const f=fixture();try{
+  const labels=[
+   ['status:ready','priority:p1','depends-on:#999'],
+   ['status:ready','priority:p1','depends-on:latest'],
+   ['status:ready','priority:p1','depends-on:#1'],
+   ['status:ready','priority:p1','depends-on:#2','depends-on:#2'],
+  ];
+  const q=planIssueQueue(f.base,f.project,labels.map((l,i)=>issue(i+1,l)),f.git);
+  assert.equal(q.readyToStart,false);
+  assert.equal(q.nextIssueNumber,null);
+  for(const item of q.queue)assert.equal(item.state,'held');
+  assert.match(q.queue.find(x=>x.number===1)?.reason??'',/completion unverified/);
+  assert.match(q.queue.find(x=>x.number===2)?.reason??'',/Invalid depends-on/);
+  assert.match(q.queue.find(x=>x.number===3)?.reason??'',/open issue #1/);
+  assert.match(q.queue.find(x=>x.number===4)?.reason??'',/Duplicate issue dependency/);
+ }finally{f.close();}
+});
+test('triage shows authoritative label evidence but never promotes or changes labels',()=>{
+ const f=fixture();try{
+  const original=['status:ready','priority:p3'];
+  const q=planIssueQueue(f.base,f.project,[issue(17,original)],f.git);
+  const entry=q.queue[0];
+  assert.equal(entry.priority,3);
+  assert.equal(entry.triage.proposalOnly,true);
+  assert.equal(entry.triage.source,'github-labels');
+  assert.match(entry.triage.evidence.join(' '),/Explicit GitHub priority: P3/);
+  assert.deepEqual(original,['status:ready','priority:p3']);
+ }finally{f.close();}
+});
