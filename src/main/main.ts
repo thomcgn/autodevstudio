@@ -351,9 +351,13 @@ app.whenReady().then(() => {
     const runId=randomUUID();
     const startedAt=Date.now();
     try{
-      const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,1);
+      const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12);
       const result=await analyzeSourceWithOllama(index.repository,index.fixedHead,
-        runId,startedAt,event=>send('learning:progress',event),controller.signal);
+        runId,startedAt,event=>send('learning:progress',event),controller.signal,{
+          history:index.commits.map(commit=>({
+            sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
+          })),
+        });
       if(controller.signal.aborted)throw Error('Learning analysis cancelled');
       const saved=saveHistoricalBook(app.getPath('userData'),{
         repository:result.repository,head:result.head,license:index.licenseSpdx,
