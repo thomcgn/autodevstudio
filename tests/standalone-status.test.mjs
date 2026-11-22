@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { acquireProjectLock } from '../src/core/project-lock.ts';
 import { saveCoreCheckpoint } from '../src/core/checkpoint-store.ts';
 import { inspectStandaloneStatus } from '../src/core/standalone-status.ts';
+import { captureGitIdentity } from '../src/core/git-identity.ts';
 
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8'}).trim();
 function setup(t) {
@@ -31,6 +32,7 @@ test('read-only status reports Git and disabled execution without legacy core',a
   assert.equal(status.git.canExecute,false);
   assert.equal(status.lock.held,false);
   assert.equal(status.checkpoint,null);
+  assert.equal(status.recovery.state,'none');
   assert.equal(status.executionEnabled,false);
 });
 test('status includes checkpoint metadata without exposing lock tokens or agent session IDs',async t=>{
@@ -73,4 +75,40 @@ test('orphaned lock directory is shown as occupied, not free',async t=>{
   const status=await inspectStandaloneStatus(base,repo);
   assert.equal(status.lock.held,true);
   assert.equal(status.lock.startedAt,null);
+});
+
+test('matching checked identity only recommends inspected manual continuation',async t=>{
+ const {base,repo}=setup(t);
+ git(repo,'checkout','-qb','autodev/issue-6');
+ const identity=await captureGitIdentity(repo);
+ const lock=acquireProjectLock(base,repo);
+ try{
+  saveCoreCheckpoint(base,repo,lock.record.token,{
+   runId:randomUUID(),issueNumber:6,stage:'review',git:identity,
+   sessions:{},reviewPassed:false,qualityPassed:false,
+  },null);
+ }finally{lock.release();}
+ const good=await inspectStandaloneStatus(base,repo);
+ assert.equal(good.recovery.state,'inspect');
+ assert.equal(good.recovery.identityMatches,true);
+ assert.equal(good.recovery.automaticResume,false);
+ fs.writeFileSync(path.join(repo,'README.md'),'changed');
+ const drift=await inspectStandaloneStatus(base,repo);
+ assert.equal(drift.recovery.state,'manual');
+ assert.equal(drift.recovery.identityMatches,false);
+});
+test('publish checkpoint is never eligible for automatic retry',async t=>{
+ const {base,repo}=setup(t);
+ const lock=acquireProjectLock(base,repo);
+ try{
+  saveCoreCheckpoint(base,repo,lock.record.token,{
+   runId:randomUUID(),issueNumber:6,stage:'publish',
+   git:{head:git(repo,'rev-parse','HEAD'),branch:'main',worktreeHash:'b'.repeat(64)},
+   sessions:{},reviewPassed:true,qualityPassed:true,
+  },null);
+ }finally{lock.release();}
+ const status=await inspectStandaloneStatus(base,repo);
+ assert.equal(status.recovery.state,'manual');
+ assert.equal(status.recovery.automaticResume,false);
+ assert.match(status.recovery.reason,/GitHub-PR/);
 });
