@@ -291,7 +291,8 @@ function App(): React.JSX.Element {
       setLearningMessage('Code-Lehrbuch lokal gespeichert: '+
         (result.deepAnalysis?.filesAnalyzed??result.lessons)+' Quelldateien untersucht.');
     }catch(error){
-      const message=error instanceof Error?error.message:'Unbekannter Analysefehler';
+      const raw=error instanceof Error?error.message:'Unbekannter Analysefehler';
+      const message=raw.replace(/^Error invoking remote method '[^']+':\\s*(?:Error:\\s*)?/,'');
       setLearningModalError(message);
       setLearningError('KI-Analyse fehlgeschlagen: '+message);
     }finally{setLearningGenerating(false);}
