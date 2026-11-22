@@ -320,7 +320,8 @@ function App(): React.JSX.Element {
     if(!learningBook||learningExporting)return;
     setLearningExporting(true);setLearningError('');
     try{
-      const done=await window.studio.exportLearningBook(learningBook.repository,kind,format);
+      const done=await window.studio.exportLearningBook(learningBook.repository,kind,format,
+        learningBook.deepAnalysis?'deep':'history');
       setLearningMessage(done.exported?'Export erfolgreich gespeichert.':'Export abgebrochen.');
     }catch{setLearningError('Export fehlgeschlagen. Zielverzeichnis und PDF-Drucker prüfen.');}
     finally{setLearningExporting(false);}
