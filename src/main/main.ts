@@ -352,7 +352,7 @@ app.whenReady().then(() => {
     const startedAt=Date.now();
     try{
       const index=await walkPublicRepositoryHistory(input,{
-        signal:controller.signal,pageSize:20,
+        signal:controller.signal,pageSize:100,includeChangedPaths:false,
         onPage:(page,commitsSeen)=>{
           send('learning:progress',{
             runId,repository:page.repository,phase:'discovery',startedAt,
