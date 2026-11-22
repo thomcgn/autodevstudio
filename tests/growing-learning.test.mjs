@@ -94,3 +94,20 @@ test('partial Ollama source analysis persists an exact resume cursor across rest
   assert.match(loadHistoricalBook(dir,repo)?.bookMarkdown??'',/Kapitel 1/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('history checkpoint advances even if an unpatchable commit produces identical text',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-history-cursor-'));
+ try{
+  const baseline={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Book',solutionsMarkdown:'# Solutions',reportsMarkdown:'# Sources',
+   deepSummary:{model:'qwen2.5-coder:3b',filesAnalyzed:1,filesTotal:1,
+     filesSkipped:0,complete:true}};
+  const first=saveHistoricalBook(dir,{...baseline,historyCursor:{
+   nextIndex:1,total:2005,chapters:1,incomplete:0,model:'qwen2.5-coder:3b'}});
+  const next=saveHistoricalBook(dir,{...baseline,historyCursor:{
+   nextIndex:2,total:2005,chapters:1,incomplete:1,model:'qwen2.5-coder:3b'}});
+  assert.notEqual(first.directory,next.directory);
+  assert.equal(loadHistoricalBook(dir,repo)?.historyCursor?.nextIndex,2);
+  assert.equal(loadHistoricalBook(dir,repo)?.historyCursor?.incomplete,1);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
