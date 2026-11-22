@@ -48,6 +48,27 @@ function version(source:Record<string,unknown>,name:string):string|null{
 /** Project evidence only. Never runs project scripts or scans unbounded source trees.
  * A profile is a fail-closed preflight, not an AI-derived guess from the README.
  */
+function safeQualityCommand(name:string,command:unknown):boolean{
+ if(typeof command!=='string'||command.length>500||!/^[A-Za-z0-9_./@\s:=-]+$/.test(command))
+  return false;
+ if(/--noCheck\b|--transpile-only\b|--passWithNoTests\b/i.test(command))return false;
+ const words=command.trim().split(/\s+/);
+ if(name==='typecheck'){
+  if(words[0]==='tsc'||words[0]==='vue-tsc')return true;
+  if(words[0]==='node'&&words[1]==='scripts/strict-check.mjs'&&words[2]==='typecheck'
+    &&words.length===3)return true;
+  return false;
+ }
+ if(words[0]==='vitest'&&words[1]==='run')return true;
+ if(words[0]==='jest'&&words.includes('--ci'))return true;
+ if(words[0]==='node'&&words.includes('--test'))return true;
+ if(words[0]==='node'&&words[1]==='scripts/strict-check.mjs'
+   &&(words[2]==='policy'||words[2]==='unit')&&words.length===3)return true;
+ return false;
+}
+/** CLI recognition is only one layer: isolated execution and exit-code evidence
+ * remain mandatory. Never take a script name or a model claim as PASS.
+ */
 export function detectTechStackProfile(projectPath:string):TechStackProfile{
  const root=fs.realpathSync(projectPath);
  if(!fs.statSync(root).isDirectory())throw Error('Invalid project directory');
@@ -101,8 +122,13 @@ export function detectTechStackProfile(projectPath:string):TechStackProfile{
  }
  let scripts:string[]=[];
  if(js&&strict&&manager==='npm'){
-  try{scripts=selectSafeQualityScripts(root);}
-  catch(error){blockers.push(error instanceof Error?error.message:'Quality checks unavailable');}
+  try{
+   scripts=selectSafeQualityScripts(root);
+   const defined=record(manifest?.scripts);
+   for(const name of scripts)
+    if(!safeQualityCommand(name,defined?.[name]))
+     blockers.push('Quality script is not a recognized compiler or test invocation: '+name);
+  }catch(error){blockers.push(error instanceof Error?error.message:'Quality checks unavailable');}
  }
  const canDevelop=blockers.length===0&&kind.startsWith('typescript');
  return {schemaVersion:1,kind,languages,frameworks,packageManager:manager,
