@@ -116,7 +116,9 @@ export class FreeQuotaGate {
 }
 export class QuotaPauseError extends Error {
   readonly name='QuotaPauseError';
-  constructor(readonly snapshot:FreeQuotaSnapshot){
+  readonly snapshot:FreeQuotaSnapshot;
+  constructor(snapshot:FreeQuotaSnapshot){
     super('Free-provider quota not confirmed; checkpoint and suspend safely');
+    this.snapshot=snapshot;
   }
 }
