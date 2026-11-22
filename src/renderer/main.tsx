@@ -4,6 +4,7 @@ import type { StudioEvent } from '../main/preload';
 import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus } from './global';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
+import {formatIssueFailure} from './issue-error-diagnostics';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
 type RunMode = 'status' | 'dry-run' | 'execute';
@@ -234,8 +235,8 @@ function App(): React.JSX.Element {
       setAutomationResult(result);
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
       void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
-    }catch{
-      setAutomationError('Automatischer Issue-Lauf angehalten. Der bestehende Git-Branch und Checkpoint bleiben für sichere Inspektion erhalten. Bei Netzwerkfehlern nach Commit nicht blind erneut starten.');
+    }catch(error){
+      setAutomationError(formatIssueFailure(error));
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }finally{setAutomatingIssue(null);}
   };
@@ -250,8 +251,8 @@ function App(): React.JSX.Element {
       setDraftPr(result);
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
       void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
-    }catch{
-      setDraftPrError('Draft-PR konnte nicht sicher erstellt werden. Nach einem Commit kann ein publish-Checkpoint zur manuellen Wiederaufnahme nötig sein. Bitte nicht erneut starten, bevor der Status geprüft ist.');
+    }catch(error){
+      setDraftPrError(formatIssueFailure(error));
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }finally{setPublishingIssue(null);}
   };
@@ -265,8 +266,8 @@ function App(): React.JSX.Element {
       const result=await window.studio.verifyIssue(selected,issueNumber);
       setVerificationResult(result);
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
-    }catch{
-      setVerificationError('Unabhängiger Kilo-Review oder Quality-Gate fehlgeschlagen. Bei einer echten 429 wird angehalten; der Checkpoint bleibt erhalten.');
+    }catch(error){
+      setVerificationError(formatIssueFailure(error));
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }finally{setVerifyingIssue(null);}
   };
@@ -281,8 +282,8 @@ function App(): React.JSX.Element {
       setCodeResult(result);
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
       void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
-    }catch{
-      setCodeError('Kilo-Generierung fehlgeschlagen oder abgebrochen. Git-Zustand und Checkpoint vor erneutem Start prüfen.');
+    }catch(error){
+      setCodeError(formatIssueFailure(error));
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }finally{setCodingIssue(null);}
   };
