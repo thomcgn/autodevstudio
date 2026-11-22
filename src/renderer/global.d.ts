@@ -3,6 +3,7 @@ export interface StandaloneStatus {
   git: GitPreflight;
   lock: { held: boolean; startedAt: string | null };
   checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
+  recovery:{state:'none'|'locked'|'inspect'|'manual';identityMatches:boolean|null;reason:string;automaticResume:false};
   executionEnabled: false;
 }
 export interface IssueQueuePreview {
