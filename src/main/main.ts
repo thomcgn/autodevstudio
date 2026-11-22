@@ -542,9 +542,11 @@ app.whenReady().then(() => {
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
       page:saved.pagination?.page,hasMore:saved.pagination?.hasMore};
   });
-  ipcMain.handle('learning:load', (_event, repository: unknown) => {
+  ipcMain.handle('learning:load', (_event, repository: unknown, provider: unknown='ollama') => {
     if(typeof repository!=='string')throw Error('Invalid learning repository');
-    const saved=loadHistoricalBook(app.getPath('userData'),repository,'deep')??
+    if(provider!=='ollama'&&provider!=='kilo')throw Error('Invalid learning provider');
+    const mode=provider==='kilo'?'deep-kilo':'deep';
+    const saved=loadHistoricalBook(app.getPath('userData'),repository,mode)??
       loadHistoricalBook(app.getPath('userData'),repository);
     return saved?{repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
