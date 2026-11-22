@@ -10,6 +10,13 @@ contextBridge.exposeInMainWorld('studio', {
   studioStatus: (id: string) => ipcRenderer.invoke('core:status', id),
   publicRepoHistory: (input: string, limit: number) => ipcRenderer.invoke('learning:public-history', input, limit),
   generateLearningBook: (input:string,page=1,pinnedHead?:string) => ipcRenderer.invoke('learning:generate', input,page,pinnedHead),
+  deepLearningBook: (input:string) => ipcRenderer.invoke('learning:deep-generate',input),
+  cancelDeepLearning: () => ipcRenderer.invoke('learning:deep-cancel'),
+  onLearningProgress: (callback:(value:DeepLearningProgress)=>void) => {
+    const listener=(_event:Electron.IpcRendererEvent,value:DeepLearningProgress):void=>callback(value);
+    ipcRenderer.on('learning:progress',listener);
+    return ()=>ipcRenderer.removeListener('learning:progress',listener);
+  },
   loadLearningBook: (repo:string) => ipcRenderer.invoke('learning:load', repo),
   exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf') =>
     ipcRenderer.invoke('learning:export',repo,kind,format),
@@ -62,6 +69,11 @@ contextBridge.exposeInMainWorld('studio', {
     return () => ipcRenderer.removeListener('run:event', listener);
   },
 });
+export interface DeepLearningProgress {
+ runId:string;repository:string;phase:'discovery'|'loading'|'model'|'writing'|'finished';
+ startedAt:number;completed:number;total:number;current:string;
+ etaSeconds:number|null;preview:string;model:string;
+}
 export interface StudioEvent {
   runId: string; type: 'start' | 'stdout' | 'stderr' | 'exit';
   message?: string; code?: number | null; signal?: string | null; mode?: string; project?: string; projectId?: string; time: number;
