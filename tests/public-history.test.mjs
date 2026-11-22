@@ -168,7 +168,7 @@ test('resume starts at the next pinned page without refetching earlier commits',
  assert.deepEqual(counts,[[3,41]]);
  assert.deepEqual(result.commits,[]);
  assert.equal(result.head,SHA);
- assert.equal(observed.some(endpoint=>endpoint.includes('page=1')||endpoint.includes('page=2')),false);
+ assert.equal(observed.some(endpoint=>/[&?]page=[12](?:&|$)/.test(endpoint)),false);
  await assert.rejects(walkPublicRepositoryHistory('example/studio',{
   read,startPage:3,
  }),/resume cursor/);
