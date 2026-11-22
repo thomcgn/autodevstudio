@@ -5,6 +5,12 @@ export interface StandaloneStatus {
   checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
   executionEnabled: false;
 }
+export interface IssueQueuePreview {
+  previewOnly:true;executionEnabled:false;readyToStart:boolean;
+  nextIssueNumber:number|null;reason:string;
+  queue:Array<{number:number;title:string;priority:0|1|2|3;
+    state:'candidate'|'held';reason:string}>;
+}
 export interface IssueAutomationOutcome {
   status:'paused'|'draft-created';
   stage:'build'|'review'|'quality'|'publish'|'done';
@@ -99,6 +105,7 @@ declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
+    issueQueue(id: string): Promise<IssueQueuePreview>;
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;
     diagnostics(id: string): Promise<ProviderDiagnostics>;
