@@ -179,6 +179,28 @@ function parseLesson(json:string):Lesson{
  }
  return output as unknown as Lesson;
 }
+/** Retry only structurally invalid model output. Never pretend missing fields are proven.
+ * The first response is untrusted; the second model call receives the same grounded
+ * evidence with a stricter schema reminder, not an invented partial lesson.
+ */
+export async function requestValidatedLesson(
+ model:LocalModel,system:string,prompt:string,signal:AbortSignal,
+ onPulse?:(fragments:number)=>void,
+):Promise<Lesson>{
+ const reminder='\\n\\nANTWORTFORMAT VERBINDLICH: Genau ein valides JSON-Objekt, keine Markdown-Fences. '+
+  'Jedes der elf String-Felder muss mindestens zwölf Zeichen besitzen: '+
+  fields.join(', ')+'. Auch bei Unsicherheit jeden Abschnitt mit Quellenlage füllen.';
+ for(let attempt=0;attempt<2;attempt++){
+  if(signal.aborted)throw Error('Learning analysis cancelled');
+  const answer=await model(system,prompt+(attempt?reminder:''),signal,onPulse);
+  try{return parseLesson(answer)}
+  catch(error){
+   if(attempt===1)throw Error('KI-Antwort nach erneuter Formatprüfung ungültig: '+
+    (error instanceof Error?error.message:'unbekannter Formatfehler'));
+  }
+ }
+ throw Error('Model failed to produce a verified learning chapter');
+}
 function escape(text:string):string{
  return text.replace(/[\r\n]+/g,' ').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/[*_\[\]]/g,' ').slice(0,3500);
@@ -290,9 +312,9 @@ export async function analyzeSourceWithOllama(
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
    'DATEI '+f.path+'\n'+f.content.slice(0,2800)).join('\n\n');
  const architectureStarted=Date.now();
- const overview=parseLesson(await model(SYSTEM,architecturePrompt,signal,fragments=>
+ const overview=await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
   send('architecture',0,total,'Ollama erstellt die Architekturübersicht · '+
-   fragments+' Antwortteile empfangen','',null)));
+   fragments+' Antwortteile empfangen','',null));
  const first=renderLesson(overview,overviewFiles,chapterOffset+1);
  chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
  durations.push(Date.now()-architectureStarted);
@@ -314,11 +336,11 @@ export async function analyzeSourceWithOllama(
     .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
-  const response=await model(SYSTEM,prompt,signal,fragments=>
+  const chapterLesson=await requestValidatedLesson(model,SYSTEM,prompt,signal,fragments=>
    send('model',n,total,'Ollama arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
     avg?Math.round((total-n)*avg/1000):null));
-  const chapter=renderLesson(parseLesson(response),part,chapterOffset+n+1);
+  const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1);
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
   reports.push(chapter.report);
@@ -415,7 +437,7 @@ export async function analyzeHistoricalCommitWithOllama(
    'Erkläre konkreten Code, plausible Gründe, Handimplementierung und Alternativen.',
    'Behaupte keine nicht belegten Tests oder Gedanken der Entwickler.',
   ].join('\n');
-  const lesson=parseLesson(await model(SYSTEM,prompt,signal));
+  const lesson=await requestValidatedLesson(model,SYSTEM,prompt,signal);
   const n=numberStart+i;
   const evidence='https://github.com/'+repository+'/commit/'+sha;
   const title=escape(lesson.title);
