@@ -212,6 +212,16 @@ export async function implementIssueLocally(
     if(git.head!==initial.head||git.branch!==prepared.branch||
       git.worktreeHash===initial.worktreeHash)
       throw Error('Git state not as expected after local code edit');
+    if(fs.readFileSync(file,'utf8')!==replacement)
+      throw Error('Generated file differs from the approved local edit');
+    // No concurrent external changes, extra model files, staged writes, or
+    // untracked artifacts may slip into the Review checkpoint.
+    const status=await exec('git',['status','--porcelain=v1','--untracked-files=all','-z'],{
+      cwd:root,encoding:'buffer',timeout:15000,maxBuffer:1024*1024,
+      env:{...process.env,GIT_OPTIONAL_LOCKS:'0'},windowsHide:true,
+    });
+    if((status.stdout as Buffer).toString('utf8')!==' M '+pick.path+'\\0')
+      throw Error('Unexpected additional Git changes after local code edit');
     const cp=saveCoreCheckpoint(base,root,prepared.lock.record.token,{
       runId:prepared.checkpoint.runId,issueNumber:issue.number,stage:'review',
       git,sessions:{},reviewPassed:false,qualityPassed:false,
