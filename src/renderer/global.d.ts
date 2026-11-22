@@ -1,4 +1,4 @@
-import type { StudioEvent } from '../main/preload';
+import type { StudioEvent, IssueProgressEvent } from '../main/preload';
 export interface StandaloneStatus {
   git: GitPreflight;
   lock: { held: boolean; startedAt: string | null };
@@ -149,5 +149,6 @@ declare global {
     stop(): Promise<boolean>;
     active(): Promise<boolean>;
     onEvent(fn: (event: StudioEvent) => void): () => void;
+    onIssueProgress(fn: (event: IssueProgressEvent) => void): () => void;
   } }
 }

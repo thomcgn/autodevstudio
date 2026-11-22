@@ -386,7 +386,9 @@ app.whenReady().then(() => {
         build:kiloBuilder.build,repair:kiloBuilder.repair};
       return await runIssueToDraftPr(base,project.path,{
         number:issue.number,title:issue.title,body:issue.body,
-      },reviewer.transport,scripts,controller.signal,undefined,deps,reviewer.canReview);
+      },reviewer.transport,scripts,controller.signal,
+      stage=>send('issue:progress',{projectId:id,issueNumber,stage,time:Date.now()}),
+      deps,reviewer.canReview);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
