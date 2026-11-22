@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, screen } from 'electron';
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -133,7 +133,13 @@ function terminate(): void {
   pendingStop.unref();
 }
 function createWindow(): void {
-  window = new BrowserWindow({ width: 1160, height: 780, minWidth: 820, minHeight: 560,
+  // Fit within the usable display area including panels/taskbars. In
+  // particular, 10-inch 1024x600 and 800x480 displays must not get an
+  // oversized default window or an unshrinkable 820x560 minimum.
+  const workArea=screen.getPrimaryDisplay().workAreaSize;
+  const width=Math.max(640,Math.min(1160,workArea.width-24));
+  const height=Math.max(400,Math.min(780,workArea.height-24));
+  window = new BrowserWindow({ width, height, minWidth: 640, minHeight: 400,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     backgroundColor: '#111827', title: 'AutoDev Studio' });
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
