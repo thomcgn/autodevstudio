@@ -68,7 +68,7 @@ export async function createVerifiedIssueLearning(
   '- Verifizierter Commit: '+evidence.commitSha+'\n'+
   '- Reviewer-Checkpoint: PASS\n- Quality-Checkpoint: PASS\n'+
   '- Die ursprüngliche Motivation lässt sich ohne Review- oder Issue-Dokumentation nicht sicher ableiten.\n';
- saveHistoricalBook(base,book);
+ saveHistoricalBook(base,book,'issue-'+evidence.issueNumber);
  return {recorded:true,topicCount:book.lessons.length,
   commitSha:evidence.commitSha,reason:'saved'};
 }
