@@ -363,24 +363,49 @@ app.whenReady().then(() => {
           });
         },
       });
-      const result=await analyzeSourceWithOllama(index.repository,index.head,
-        runId,startedAt,event=>send('learning:progress',event),controller.signal,{
-          history:index.commits.map(commit=>({
-            sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
-          })),
+      const prior=loadHistoricalBook(app.getPath('userData'),index.repository);
+      const resume=prior?.head===index.head&&
+        prior.deepCursor?.model==='qwen2.5-coder:3b';
+      let offset=resume?prior.deepCursor!.nextOffset:0;
+      let filesAnalyzed=resume?prior.deepCursor!.filesAnalyzed:0;
+      let bookMarkdown=resume?prior.bookMarkdown:'';
+      let solutionsMarkdown=resume?prior.solutionsMarkdown:'';
+      let reportsMarkdown=resume?prior.reportsMarkdown:'';
+      while(true){
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        const batchOffset=offset;
+        const result=await analyzeSourceWithOllama(index.repository,index.head,
+          runId,startedAt,event=>send('learning:progress',{
+            ...event,current:'Quelldateien ab '+(batchOffset+1)+' · '+event.current,
+          }),controller.signal,{
+            offset,
+            history:index.commits.map(commit=>({
+              sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
+            })),
+          });
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        filesAnalyzed+=result.filesAnalyzed;
+        bookMarkdown+=(bookMarkdown?'\n\n':'')+result.bookMarkdown;
+        solutionsMarkdown+=(solutionsMarkdown?'\n\n':'')+result.solutionsMarkdown;
+        reportsMarkdown+=(reportsMarkdown?'\n\n':'')+result.reportsMarkdown;
+        const saved=saveHistoricalBook(app.getPath('userData'),{
+          repository:result.repository,head:result.head,license:index.licenseSpdx,
+          lessons:[],bookMarkdown,solutionsMarkdown,reportsMarkdown,
+          deepCursor:result.nextOffset===null?undefined:{
+            nextOffset:result.nextOffset,filesTotal:result.filesTotal,
+            filesAnalyzed,filesSkipped:result.filesSkipped,model:result.model,
+          },
         });
-      if(controller.signal.aborted)throw Error('Learning analysis cancelled');
-      const saved=saveHistoricalBook(app.getPath('userData'),{
-        repository:result.repository,head:result.head,license:index.licenseSpdx,
-        lessons:[],bookMarkdown:result.bookMarkdown,solutionsMarkdown:result.solutionsMarkdown,
-        reportsMarkdown:result.reportsMarkdown,
-      });
-      return {repository:saved.repository,head:saved.head,lessons:result.filesAnalyzed,
-        bookMarkdown:saved.bookMarkdown,solutionsMarkdown:saved.solutionsMarkdown,
-        reportsMarkdown:saved.reportsMarkdown,deepAnalysis:{
-          model:result.model,filesAnalyzed:result.filesAnalyzed,
-          filesSkipped:result.filesSkipped,complete:result.complete,
-        }};
+        if(result.nextOffset===null){
+          return {repository:saved.repository,head:saved.head,lessons:filesAnalyzed,
+            bookMarkdown:saved.bookMarkdown,solutionsMarkdown:saved.solutionsMarkdown,
+            reportsMarkdown:saved.reportsMarkdown,deepAnalysis:{
+              model:result.model,filesAnalyzed,filesSkipped:result.filesSkipped,
+              complete:result.complete,
+            }};
+        }
+        offset=result.nextOffset;
+      }
     }finally{
       if(learningController===controller)learningController=null;
     }
