@@ -7,6 +7,7 @@ import { assertRunApproved, type RunMode } from './run-policy';
 import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
+import { previewIssueQueue } from '../core/issue-queue-preview';
 import { implementIssueLocally } from '../core/local-issue-to-code';
 import { runIssueToDraftPr } from '../core/issue-draft-orchestrator';
 import { loadCoreCheckpoint } from '../core/checkpoint-store';
@@ -310,6 +311,13 @@ app.whenReady().then(() => {
     const project = getProject(id);
     if (!inspectProject(project.path).isGitRepo) throw new Error('Not a Git repository');
     return listIssues(project.path);
+  });
+  ipcMain.handle('core:issue-queue', async (_event,id:string) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    const issues=await listIssues(project.path);
+    return previewIssueQueue(app.getPath('userData'),project.path,issues);
   });
   ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
   ipcMain.handle('core:issue-auto-draft', async (_event,id:string,issueNumber:number) => {

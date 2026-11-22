@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -61,6 +61,7 @@ function App(): React.JSX.Element {
   const [diagnosticsError, setDiagnosticsError] = useState('');
   const [gitError, setGitError] = useState('');
   const [issuesLoading, setIssuesLoading] = useState(false);
+  const [issueQueue, setIssueQueue] = useState<IssueQueuePreview | null>(null);
   const [simulating, setSimulating] = useState<number | null>(null);
   const [codingIssue, setCodingIssue] = useState<number | null>(null);
   const [codeResult, setCodeResult] = useState<IssueCodeResult | null>(null);
@@ -207,7 +208,10 @@ function App(): React.JSX.Element {
     setIssuesError('');
     setGitError('');
     void window.studio.gitPreflight(selected).then(setGitStatus).catch(e => setGitError(String(e)));
-    try { setIssues(await window.studio.issues(selected)); }
+    try {
+      setIssues(await window.studio.issues(selected));
+      setIssueQueue(await window.studio.issueQueue(selected));
+    }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
   };
@@ -746,6 +750,13 @@ function App(): React.JSX.Element {
           {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ? 'ready' : 'needs-work'}`}><strong>{gitStatus.canExecute ? 'Git-Bereitschaft: geprüft' : 'Git: Vorbereitung erforderlich'}</strong><span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}{gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Sauberer Feature-Branch'}</span></div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
+          {issueQueue && <div className={`git-readiness ${issueQueue.readyToStart?'ready':'needs-work'}`} role="status">
+            <strong>Issue-Warteschlange · {issueQueue.queue.filter(i=>i.state==='candidate').length} Kandidaten</strong>
+            <span>{issueQueue.readyToStart
+              ?`Vorschlag: Issue #${issueQueue.nextIssueNumber} · ${issueQueue.reason}`
+              :issueQueue.reason}</span>
+            <small>Nur Vorschau. Ein vorhandener Checkpoint, auch nach einem Draft-PR, sperrt automatisch das nächste Issue.</small>
+          </div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
           {verificationError && <div className="error" role="alert">{verificationError}</div>}
           {draftPrError && <div className="error" role="alert">{draftPrError}</div>}
