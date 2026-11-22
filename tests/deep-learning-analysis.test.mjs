@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama,localOllamaModel,requireOllama} from '../src/core/deep-learning-analysis.ts';
+import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama,requestValidatedLesson,localOllamaModel,requireOllama} from '../src/core/deep-learning-analysis.ts';
 const COMMIT='a'.repeat(40),TREE='b'.repeat(40),BLOB='c'.repeat(40);
 const chapter=JSON.stringify({
  title:'Eine geprüfte Buchung zuverlässig ausführen',
@@ -246,4 +246,24 @@ test('history analysis rejects unverified SHA and honors cancellation before req
  await assert.rejects(analyzeHistoricalCommitWithOllama('example/project','d'.repeat(40),1,
   controller.signal,{read:async()=>{calls++;return {};}}),/cancelled/);
  assert.equal(calls,0);
+});
+
+test('recovers invalid first Ollama JSON via one evidence-grounded schema retry',async()=>{
+ let calls=0;
+ const result=await requestValidatedLesson(async(_system,prompt)=>{
+  calls++;
+  if(calls===1)return '{broken';
+  assert.match(prompt,/ANTWORTFORMAT VERBINDLICH/);
+  return chapter;
+ },'trusted system','Real code context',new AbortController().signal);
+ assert.equal(calls,2);
+ assert.match(result.title,/Buchung/);
+});
+test('two malformed Ollama JSON completions fail closed and never fabricate a chapter',async()=>{
+ let calls=0;
+ await assert.rejects(requestValidatedLesson(async()=>{
+  calls++;
+  return '{}';
+ },'system','code',new AbortController().signal),/erneuter Formatprüfung ungültig/);
+ assert.equal(calls,2);
 });
