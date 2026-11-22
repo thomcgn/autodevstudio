@@ -460,3 +460,8 @@ html,body,#root{max-width:100%;overflow:hidden}
 .learning-commit small{font-size:11px;color:#abc1df}
 @media(max-width:850px){.learning-source-form,.learning-results{padding:10px}
   .learning-source-controls button{width:100%}}
+
+.learning-export-actions{display:flex;gap:8px;flex-wrap:wrap}
+.learning-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:480px;
+  overflow:auto;font-size:12px;background:#0b1421;padding:12px;border-radius:8px}
+.learning-results details summary{cursor:pointer;font-weight:650}
