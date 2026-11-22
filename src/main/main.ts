@@ -47,6 +47,7 @@ let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
 let localCodeController: AbortController | null = null;
 let publishingDraftPr=false;
+let startingLegacyRun=false;
 let activeRun: string | null = null;
 let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
@@ -517,8 +518,10 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('run:start', async (_event, id: string, mode: RunMode, approval?: string) => {
     if (localCodeController||publishingDraftPr) throw new Error('A Studio issue run is active');
-    if (active) throw new Error('A run is already active');
+    if (active || startingLegacyRun) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
+    startingLegacyRun=true;
+    try {
     const project = getProject(id);
     if (!inspectProject(project.path).hasCore) throw new Error('AutoDev Core is not installed in this project');
     // Main-process authorization is independent of the renderer.
@@ -564,6 +567,9 @@ app.whenReady().then(() => {
       send('run:event', { runId, type: 'exit', code, signal, time: Date.now() });
     });
     return { runId };
+    } finally {
+      startingLegacyRun=false;
+    }
   });
   ipcMain.handle('run:stop', () => { if (!active) return false; terminate(); return true; });
   ipcMain.handle('run:active', () => Boolean(active));
