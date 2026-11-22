@@ -11,7 +11,7 @@ export interface SavedLearningBook {
   lessonEntries:HistoricalLesson[];license:string|null;
   caseStudies:DevelopmentDecision[];
   deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
-    filesSkipped:number;model:string};
+    filesSkipped:number;model:string;chapterIndex?:number};
   deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
   historyCursor?:{nextIndex:number;total:number;chapters:number;incomplete:number;model:string};
   pagination?:{page:number;hasMore:boolean;pageSize?:number};
@@ -121,14 +121,17 @@ export function loadHistoricalBook(
  const cursor=rawCursor!==null&&typeof rawCursor==='object'&&!Array.isArray(rawCursor)
   ?rawCursor as Record<string,unknown>:null;
  const deepCursor=cursor&&
-   Number.isSafeInteger(cursor.nextOffset)&&Number(cursor.nextOffset)>0&&
+   Number.isSafeInteger(cursor.nextOffset)&&Number(cursor.nextOffset)>=0&&
    Number.isSafeInteger(cursor.filesTotal)&&Number(cursor.filesTotal)>=Number(cursor.nextOffset)&&
    Number.isSafeInteger(cursor.filesAnalyzed)&&Number(cursor.filesAnalyzed)>=0&&
    Number.isSafeInteger(cursor.filesSkipped)&&Number(cursor.filesSkipped)>=0&&
-   typeof cursor.model==='string'&&cursor.model.length<100
+   typeof cursor.model==='string'&&cursor.model.length<100&&
+   (cursor.chapterIndex===undefined||
+     (Number.isSafeInteger(cursor.chapterIndex)&&Number(cursor.chapterIndex)>=0))
    ?{nextOffset:Number(cursor.nextOffset),filesTotal:Number(cursor.filesTotal),
      filesAnalyzed:Number(cursor.filesAnalyzed),filesSkipped:Number(cursor.filesSkipped),
-     model:cursor.model}:undefined;
+     model:cursor.model,
+     ...(cursor.chapterIndex===undefined?{}:{chapterIndex:Number(cursor.chapterIndex)})}:undefined;
  const rawSummary=metadata?.deepSummary;
  const summary=rawSummary!==null&&typeof rawSummary==='object'&&!Array.isArray(rawSummary)
   ?rawSummary as Record<string,unknown>:null;
