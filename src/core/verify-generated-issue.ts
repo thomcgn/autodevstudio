@@ -52,7 +52,7 @@ export async function verifyGeneratedIssue(
     const git=await (deps.reviewer?.capture??captureGitIdentity)(projectPath);
     if(!gitEqual(cp.git,git))throw Error('Generated issue Git tree changed before verification');
     const plan:PlanResult={
-      summary:'Single-file local issue implementation; no separately approved planning agent.',
+      summary:'Bounded one-file implementation prepared by configured primary Builder; full plan remains tracked by Builder session.',
       steps:['Inspect actual single-file code diff against issue acceptance criteria',
         'Reject missing tests, unsafe changes and incomplete requirements'],
     };
