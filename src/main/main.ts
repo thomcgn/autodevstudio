@@ -8,6 +8,9 @@ import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
 import { implementIssueLocally } from '../core/local-issue-to-code';
+import { verifyGeneratedIssue } from '../core/verify-generated-issue';
+import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
+import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
@@ -324,6 +327,46 @@ app.whenReady().then(() => {
     try{
       return await implementIssueLocally(app.getPath('userData'),project.path,
         {number:issue.number,title:issue.title,body:issue.body},undefined,controller.signal);
+    }finally{
+      if(localCodeController===controller)localCodeController=null;
+    }
+  });
+  ipcMain.handle('core:issue-verify', async (_event,id:string,issueNumber:number) => {
+    if(active||localCodeController)throw Error('Another Studio run is active');
+    if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
+      throw Error('Invalid issue verification request');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)
+      throw Error('Not a Git repository');
+    const issues=await listIssues(project.path);
+    const issue=issues.find(item=>item.number===issueNumber);
+    if(!issue)throw Error('Issue not found among open issues');
+    // Verify scripts and provider eligibility BEFORE any real model inference.
+    // This first local Qwen Builder cannot review its OWN output with Qwen.
+    const scripts=selectSafeQualityScripts(project.path);
+    const roles=loadKiloRoles(app.getPath('userData'),id);
+    if(!roles)throw Error('Reviewer model selection missing');
+    const catalog=await fetchKiloFreeModels();
+    if(!catalog.models.some(model=>model.id===roles.reviewer))
+      throw Error('Reviewer no longer verified free');
+    const quota=new FreeQuotaGuard(app.getPath('userData'));
+    if(!quota.decide('normal',true).allowed)
+      throw Error('Verified Kilo remaining quota unavailable; independent review paused safely');
+    const ollama=await probeOllamaReadiness();
+    if(active||localCodeController)throw Error('Another Studio run is active');
+    const controller=new AbortController();
+    localCodeController=controller;
+    try{
+      const transport=createAttestedProjectReviewerTransport({
+        userData:app.getPath('userData'),projectId:id,
+        // Source of truth: the current issue branch was written by local Qwen,
+        // not by the model selected under the unrelated Kilo Builder role.
+        roles:{...roles,builder:'qwen2.5-coder:3b'},
+        freeCatalog:catalog.models,quota,ollamaReadiness:ollama,
+      });
+      return await verifyGeneratedIssue(app.getPath('userData'),project.path,
+        {number:issue.number,title:issue.title,body:issue.body},
+        transport,scripts,controller.signal);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
