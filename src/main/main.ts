@@ -31,6 +31,7 @@ import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
+import {readCompletePublicHistory} from '../core/history-index-cache';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
 import { probeReadonlyReviewerTool } from '../core/reviewer-tool-probe';
@@ -351,14 +352,14 @@ app.whenReady().then(() => {
     const runId=randomUUID();
     const startedAt=Date.now();
     try{
-      const index=await walkPublicRepositoryHistory(input,{
-        signal:controller.signal,pageSize:100,includeChangedPaths:false,
-        onPage:(page,commitsSeen)=>{
+      const index=await readCompletePublicHistory(app.getPath('userData'),input,{
+        read:readGitHubPublicJson,signal:controller.signal,
+        onProgress:(commitsSeen,page,finished)=>{
           send('learning:progress',{
-            runId,repository:page.repository,phase:'discovery',startedAt,
+            runId,repository:input,phase:'discovery',startedAt,
             completed:commitsSeen,total:0,
-            current:'Git-Historie: '+commitsSeen+' Commits untersucht · Seite '+page.page+
-              (page.hasMore?' · weitere Seiten werden geladen':' · Historie vollständig eingelesen'),
+            current:'Git-Historie: '+commitsSeen+' Commits · Seite '+page+
+              (finished?' · vollständig indexiert':' · lade weitere Seiten'),
             etaSeconds:null,preview:'',model:'qwen2.5-coder:3b',
           });
         },
