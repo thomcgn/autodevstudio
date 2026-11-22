@@ -90,6 +90,12 @@ export async function publishVerifiedDraftPullRequest(
     if(staged!==file+'\0')throw Error('Unexpected staged files; manual recovery required');
     if((await runner('git',['diff','--cached','--check','--'],root)).trim())
       throw Error('Staged change rejected');
+    // Git attributes and clean filters must not alter what was actually
+    // reviewed. The exact staged blob must equal current source bytes.
+    const blob=await runner('git',['rev-parse',':'+file],root);
+    const rawBlob=await runner('git',['hash-object','--no-filters','--',file],root);
+    if(!/^[a-f0-9]{40,64}$/.test(blob.trim())||blob.trim()!==rawBlob.trim())
+      throw Error('Git filters changed reviewed content during staging');
     assertOwner();
     await runner('git',['-c','core.hooksPath=/dev/null','-c','commit.gpgsign=false',
       'commit','-m',`autodev: implement issue #${issueNumber}`],root);
