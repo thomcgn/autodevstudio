@@ -220,7 +220,7 @@ export async function analyzeSourceWithOllama(
  emit:(event:DeepLearningProgress)=>void,signal:AbortSignal,
  deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
   history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[];
-  offset?:number;}={},
+  offset?:number;chapterOffset?:number;}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
@@ -246,6 +246,9 @@ export async function analyzeSourceWithOllama(
  const offset=deps.offset??0;
  if(!Number.isSafeInteger(offset)||offset<0||offset>=eligibleFiles.length)
   throw Error('Invalid source-analysis continuation cursor');
+ const chapterOffset=deps.chapterOffset??0;
+ if(!Number.isSafeInteger(chapterOffset)||chapterOffset<0)
+  throw Error('Invalid source-analysis chapter cursor');
  const selectedFiles=eligibleFiles.slice(offset,offset+FILE_LIMIT);
  const nextOffset=offset+selectedFiles.length<eligibleFiles.length
   ?offset+selectedFiles.length:null;
@@ -289,7 +292,7 @@ export async function analyzeSourceWithOllama(
  const overview=parseLesson(await model(SYSTEM,architecturePrompt,signal,fragments=>
   send('architecture',0,total,'Ollama erstellt die Architekturübersicht · '+
    fragments+' Antwortteile empfangen','',null)));
- const first=renderLesson(overview,overviewFiles,1);
+ const first=renderLesson(overview,overviewFiles,chapterOffset+1);
  chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
  durations.push(Date.now()-architectureStarted);
  send('writing',1,total,'Systemübersicht erstellt',first.book.slice(0,3400),
@@ -314,7 +317,7 @@ export async function analyzeSourceWithOllama(
    send('model',n,total,'Ollama arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
     avg?Math.round((total-n)*avg/1000):null));
-  const chapter=renderLesson(parseLesson(response),part,n+1);
+  const chapter=renderLesson(parseLesson(response),part,chapterOffset+n+1);
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
   reports.push(chapter.report);
@@ -330,7 +333,7 @@ export async function analyzeSourceWithOllama(
   'Architekturgründe sind technische Einordnungen, nicht nachgewiesene Entwicklergedanken.',
   'Dokumentierte Änderungsschritte als ergänzende Quellen: '+sourceHistory.length,
   '','## Inhaltsverzeichnis',
-  ...chapters.map((_,i)=>(i+1)+'. Kapitel '+(i+1)),''];
+  ...chapters.map((_,i)=>(chapterOffset+i+1)+'. Kapitel '+(chapterOffset+i+1)),''];
  const result:DeepLearningResult={
   repository,head,model:MODEL,filesAnalyzed:sources.length,
   filesTotal:eligibleFiles.length,nextOffset,
