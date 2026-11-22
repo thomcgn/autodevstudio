@@ -19,6 +19,7 @@ import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
 import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
+import {assertSeniorStackPreflight} from '../core/tech-stack-profile';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
@@ -488,7 +489,7 @@ app.whenReady().then(() => {
       if(cp && cp.issueNumber!==issue.number)
         throw Error('Another issue has a pending checkpoint');
       if(!cp)assertIssueStartReady(issue.labels);
-      const scripts=selectSafeQualityScripts(project.path);
+      const scripts=assertSeniorStackPreflight(project.path).qualityScripts;
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
       const quota=new FreeQuotaGuard(base);
@@ -533,6 +534,7 @@ app.whenReady().then(() => {
     localCodeOwner={projectId:id,issueNumber,kind:'issue-build'};
     try{
       await assertBranchProtection(project.path);
+      assertSeniorStackPreflight(project.path);
       const base=app.getPath('userData');
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -553,7 +555,7 @@ app.whenReady().then(() => {
     const issues=await listProjectIssues(project.path);
     const issue=issues.find(item=>item.number===issueNumber);
     if(!issue)throw Error('Issue not found among open issues');
-    const scripts=selectSafeQualityScripts(project.path);
+    const scripts=assertSeniorStackPreflight(project.path).qualityScripts;
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
