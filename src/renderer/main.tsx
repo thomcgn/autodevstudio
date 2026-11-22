@@ -295,6 +295,16 @@ function App(): React.JSX.Element {
       const message=raw.replace(/^Error invoking remote method '[^']+':\\s*(?:Error:\\s*)?/,'');
       setLearningModalError(message);
       setLearningError('KI-Analyse fehlgeschlagen: '+message);
+      // Never hide already verified, locally saved partial chapters on failure.
+      try{
+        const repo=learningInput.trim().replace(/^https:\/\/github\.com\//,'').replace(/\/$/,'');
+        const saved=await window.studio.loadLearningBook(repo,learningProvider);
+        if(saved?.deepAnalysis){
+          setLearningBook(saved);
+          setLearningMessage('Gesicherter Zwischenstand verfügbar: '+
+            'Fertige Kapitel sind lokal gespeichert. Ein erneuter Start setzt fort.');
+        }
+      }catch{ /* the original model error remains visible */ }
     }finally{setLearningGenerating(false);}
   };
   const quickLearning=async():Promise<void>=>{
@@ -1128,6 +1138,19 @@ function App(): React.JSX.Element {
               }).catch(()=>setLearningError('Projekt-Lehrbuch konnte nicht gelesen werden.'))}>
             Gespeichertes Projekt-Lehrbuch öffnen
           </button>}
+          <button type="button" className="quiet"
+            disabled={learningGenerating||!learningInput.trim()}
+            onClick={()=>void window.studio.loadLearningBook(
+              learningInput.trim().replace(/^https:\/\/github\.com\//,'').replace(/\/$/,''),
+              learningProvider).then(saved=>{
+                if(saved){
+                  setLearningBook(saved);
+                  setLearningMessage('Gesicherter Zwischenstand geöffnet; '+
+                    'erneuter Analysestart setzt am letzten geprüften Kapitel fort.');
+                }else setLearningMessage('Für diesen Anbieter noch kein Zwischenstand vorhanden.');
+              }).catch(()=>setLearningError('Zwischenstand konnte nicht geladen werden.'))}>
+            Gespeicherten Zwischenstand für dieses Repository öffnen
+          </button>
           <div className="learning-provider-options" role="group" aria-label="KI-Anbieter für das Lehrbuch">
             <label><input type="radio" name="learning-provider" value="ollama"
               checked={learningProvider==='ollama'} disabled={learningGenerating}
