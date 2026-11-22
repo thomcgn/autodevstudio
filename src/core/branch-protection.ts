@@ -28,7 +28,7 @@ export function verifyStrictRuleset(
   if(!object(input)||input.enforcement!=='active'||input.target!=='branch'||
     input.source!==repository||input.source_type!=='Repository'||
     input.current_user_can_bypass!=='never'||!Array.isArray(input.bypass_actors)||
-    input.bypass_actors.length!==0||!Number.isSafeInteger(input.id))return null;
+    input.bypass_actors.length!==0||typeof input.id!=='number'||!Number.isSafeInteger(input.id))return null;
   const conditions=input.conditions;
   if(!object(conditions)||!object(conditions.ref_name))return null;
   const refs=conditions.ref_name;
@@ -77,7 +77,7 @@ export async function assertBranchProtection(
       `repos/${slug}/rulesets?includes_parents=true&per_page=100`],projectPath));
     if(!Array.isArray(pages)||!pages.every(Array.isArray))fail('ruleset listing unavailable');
     for(const entry of pages.flat()){
-      if(!object(entry)||!Number.isSafeInteger(entry.id)||entry.enforcement!=='active')
+      if(!object(entry)||typeof entry.id!=='number'||!Number.isSafeInteger(entry.id)||entry.enforcement!=='active')
         continue;
       const detail=parse(await command('gh',['api',
         `repos/${slug}/rulesets/${entry.id}`],projectPath));
