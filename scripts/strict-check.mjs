@@ -28,13 +28,14 @@ const which={
   ui:[process.execPath,['tests/ui-smoke.mjs']],
   desktop:[process.execPath,['tests/electron-native-smoke.mjs']],
   install:['npm',['ci']],
+  audit:['npm',['audit','--audit-level=high']],
   playwrightDependency:['npm',['install','--no-save','--package-lock=false','@playwright/test@1.65.1']],
   playwrightBrowser:[process.execPath,['node_modules/.bin/playwright','install','--with-deps','chromium']],
 };
 async function main(){
  const command=process.argv[2];
  if(!Object.hasOwn(which,command)){
-   process.stderr.write('Usage: node scripts/strict-check.mjs typecheck|policy|package|ui|desktop|install|playwrightDependency|playwrightBrowser\n');
+   process.stderr.write('Usage: node scripts/strict-check.mjs typecheck|policy|package|ui|desktop|install|playwrightDependency|playwrightBrowser|audit\n');
    process.exitCode=2;return;
  }
  const [binary,args]=which[command];
