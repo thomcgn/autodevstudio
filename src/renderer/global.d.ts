@@ -5,6 +5,12 @@ export interface StandaloneStatus {
   checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
   executionEnabled: false;
 }
+export interface IssueAutomationOutcome {
+  status:'paused'|'draft-created';
+  stage:'build'|'review'|'quality'|'publish'|'done';
+  issueNumber:number;checkpointRevision:number|null;
+  reason:string;draftUrl?:string;autoMerge:false;
+}
 export interface DraftIssuePrResult {
   issueNumber:number;branch:string;url:string;checkpointRevision:number;
   draft:true;autoMerge:false;
@@ -117,6 +123,7 @@ declare global {
     saveKiloRoleModels(id: string, roles: KiloRoleModels): Promise<KiloRoleModels>;
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     issueToCode(id: string, issueNumber: number): Promise<IssueCodeResult>;
+    automateDraftIssue(id: string, issueNumber: number): Promise<IssueAutomationOutcome>;
     verifyIssue(id: string, issueNumber: number): Promise<IssueVerificationResult>;
     publishDraftIssuePr(id: string, issueNumber: number): Promise<DraftIssuePrResult>;
     cancelIssueCode(): Promise<boolean>;
