@@ -267,3 +267,40 @@ test('two malformed Ollama JSON completions fail closed and never fabricate a ch
  },'system','code',new AbortController().signal),/erneuter Formatprüfung ungültig/);
  assert.equal(calls,2);
 });
+
+test('Kilo cloud analyzes entire large UTF-8 sources without exceeding gateway prompt byte budget',async()=>{
+ const entries=Array.from({length:24},(_,i)=>({path:'src/module'+i+'.ts',type:'blob',
+  sha:BLOB,size:Buffer.byteLength('const data = "'+'ä'.repeat(4000)+'";')}));
+ const rawContent='const data = "'+'ä'.repeat(4000)+'";';
+ const requests=[];let calls=0;
+ const read=async endpoint=>{
+  if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
+  if(endpoint.endsWith('git/trees/'+TREE+'?recursive=1'))
+   return {truncated:false,sha:TREE,tree:entries};
+  if(endpoint.endsWith('git/blobs/'+BLOB))
+   return blob(rawContent);
+  throw Error('unexpected read '+endpoint);
+ };
+ const history=Array.from({length:40},(_,i)=>({sha:(i+1).toString(16).padStart(40,'0'),
+  title:'Changed APIs '+ 'ä'.repeat(200),changedPaths:['src/module0.ts']}));
+ const model=async(system,prompt)=>{
+  calls++;
+  const bytes=Buffer.byteLength(system+'\n'+prompt,'utf8');
+  requests.push({bytes,prompt});
+  assert.ok(bytes<=28_000,'Gateway prompt too large: '+bytes+' bytes');
+  return chapter;
+ };
+ const run=analyzeSourceWithOllama('example/project',COMMIT,'run-12345678',Date.now(),
+  ()=>{},new AbortController().signal,{
+   read,model,preflight:async()=>{},modelName:'kilo-auto/free',history,
+  });
+ const result=await run;
+ assert.equal(result.filesAnalyzed,entries.length);
+ assert.equal(result.filesSkipped,0);
+ assert.equal(result.complete,true);
+ assert.ok(calls>24);
+ assert.ok(requests.some(x=>x.prompt.includes('Systemarchitektur')||
+   x.prompt.includes('Gesamtarchitektur')));
+ assert.ok(requests.some(x=>x.prompt.includes('Abschnitt 3')));
+ assert.ok(result.bookMarkdown.includes('src/module23.ts'));
+});

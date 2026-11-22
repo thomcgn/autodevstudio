@@ -250,6 +250,12 @@ export async function analyzeSourceWithOllama(
  const read=deps.read??readSourceGitHub;
  const model=deps.model??localOllamaModel();
  const modelName=deps.modelName??MODEL;
+ // Kilo free gateway has a strict request-byte ceiling. Keep complete source
+ // coverage by reducing per-request pieces, never by dropping source files.
+ const cloud=deps.modelName==='kilo-auto/free';
+ const providerLabel=cloud?'Kilo Cloud':'Ollama';
+ const sourceChunkChars=cloud?1600:CHUNK_CHARS;
+ const chapterGroupSize=cloud?2:GROUP_SIZE;
  const send=(phase:LearningPhase,completed:number,total:number,current:string,
   preview:string,etaSeconds:number|null)=>emit({
    runId,repository,phase,startedAt,completed,total,current,etaSeconds,
@@ -283,61 +289,65 @@ export async function analyzeSourceWithOllama(
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const content=decodeBlob(await read('repos/'+repository+'/git/blobs/'+item.sha),item.sha);
   sources.push({path:item.path,sha:item.sha,content});
-  for(let start=0,n=1;start<content.length;start+=CHUNK_CHARS,n++)
+  for(let start=0,n=1;start<content.length;start+=sourceChunkChars,n++)
    chunks.push({path:item.path+' (Abschnitt '+n+')',sha:item.sha,
-     content:content.slice(start,start+CHUNK_CHARS)});
+     content:content.slice(start,start+sourceChunkChars)});
   send('loading',sources.length,selectedFiles.length,
    'Quelldatei '+sources.length+'/'+eligibleFiles.length+': '+item.path,'',null);
  }
- const total=Math.ceil(chunks.length/GROUP_SIZE)+1;
+ const total=Math.ceil(chunks.length/chapterGroupSize)+1;
  const chapters:string[]=[];
  const solutions:string[]=[];
  const reports:string[]=[];
  const durations:number[]=[];
  if(signal.aborted)throw Error('Learning analysis cancelled');
- const overviewFiles=sources.slice(0,8);
+ const overviewFiles=sources.slice(0,cloud?6:8);
  const allPaths=sources.map(f=>f.path).join('\n');
+ // The architecture is a documented sample; later chapters still inspect
+ // every selected source chunk. Avoid pretending this sample is the whole tree.
+ const overviewPaths=cloud?allPaths.slice(0,2500):allPaths;
+ const overviewSnippetChars=cloud?500:2800;
  const sourceHistory=(deps.history??[]).filter(h=>SHA.test(h.sha)&&
    typeof h.title==='string'&&Array.isArray(h.changedPaths))
    .slice(0,40);
  const historyText=sourceHistory.map(h=>
   h.sha.slice(0,12)+' '+h.title.replace(/[\r\n\t<>]/g,' ').slice(0,240)+
   ' [Dateien: '+h.changedPaths.slice(0,8).join(', ')+']')
-  .join('\n').slice(0,6500);
- send('architecture',0,total,'Ollama erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
+  .join('\n').slice(0,cloud?1200:6500);
+ send('architecture',0,total,providerLabel+' erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
  const architecturePrompt='Gib die Gesamtarchitektur, die wichtigsten Module, Ein-/Ausgaben,'+
   ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
-  'Nutze das folgende vollständige Verzeichnis analysierter Quelldateien:\n'+allPaths+
+  'Nutze die folgende Übersicht analysierter Quelldateien (Auszug, übrige Dateien folgen in Einzelkapiteln):\n'+overviewPaths+
   '\nDokumentierte Änderungsschritte aus Git (keine Gedanken der Entwickler):\n'+historyText+
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
-   'DATEI '+f.path+'\n'+f.content.slice(0,2800)).join('\n\n');
+   'DATEI '+f.path+'\n'+f.content.slice(0,overviewSnippetChars)).join('\n\n');
  const architectureStarted=Date.now();
  const overview=await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
-  send('architecture',0,total,'Ollama erstellt die Architekturübersicht · '+
+  send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
    fragments+' Antwortteile empfangen','',null));
  const first=renderLesson(overview,overviewFiles,chapterOffset+1);
  chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
  durations.push(Date.now()-architectureStarted);
  send('writing',1,total,'Systemübersicht erstellt',first.book.slice(0,3400),
   Math.round((total-1)*durations[0]/1000));
- for(let i=0;i<chunks.length;i+=GROUP_SIZE){
+ for(let i=0;i<chunks.length;i+=chapterGroupSize){
   if(signal.aborted)throw Error('Learning analysis cancelled');
-  const part=chunks.slice(i,i+GROUP_SIZE);
-  const n=Math.floor(i/GROUP_SIZE)+1;
+  const part=chunks.slice(i,i+chapterGroupSize);
+  const n=Math.floor(i/chapterGroupSize)+1;
   const avg=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
-  send('model',n,total,'Ollama analysiert '+part.map(f=>f.path).join(', '),
+  send('model',n,total,providerLabel+' analysiert '+part.map(f=>f.path).join(', '),
    chapters.slice(-1).join('\n').slice(-2600),avg?Math.round((total-n)*avg/1000):null);
   const started=Date.now();
   const prompt='Repository '+repository+' Commit '+head+'\n'+
    'ARCHITEKTURKONTEXT AUS DER VORHERIGEN ANALYSE:\n'+
    overview.implementation.slice(0,1300)+'\n'+overview.reasoning.slice(0,1000)+
-   '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,4500)+
+   '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,cloud?3000:4500)+
    '\nGit-Nachweise mit Bezug zu dieser Codegruppe:\n'+sourceHistory
     .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
   const chapterLesson=await requestValidatedLesson(model,SYSTEM,prompt,signal,fragments=>
-   send('model',n,total,'Ollama arbeitet an Kapitel '+(n+1)+' · '+
+   send('model',n,total,providerLabel+' arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
     avg?Math.round((total-n)*avg/1000):null));
   const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1);
