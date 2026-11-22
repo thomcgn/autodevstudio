@@ -18,3 +18,10 @@ test('ambiguous labels never imply readiness',()=>{
    'Exactly one recognized workflow status is required');
  assert.equal(x?.severity,'waiting');
 });
+
+test('documented dependencies from GitHub issue body are shown as evidence',()=>{
+ const body='## Ziel\nEine Funktion\n\n## Abhängigkeit\nEchte Adapter und Live-Events; erst nach Sicherheitsprüfung.\n\n## Tests\nKeine';
+ const reason=explainIssueHold(['status:blocked','priority:p1'],'',body);
+ assert.match(reason?.why??'',/Echte Adapter und Live-Events/);
+ assert.doesNotMatch(reason?.why??'',/## Tests/);
+});
