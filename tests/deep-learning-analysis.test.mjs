@@ -54,12 +54,12 @@ test('arbitrary source paths and incomplete trees fail closed',async()=>{
  for(const tree of [
   {sha:TREE,truncated:true,tree:[]},
   {sha:TREE,truncated:false,tree:[{path:'src/../.env',type:'blob',sha:BLOB,size:10}]},
-  {sha:TREE,truncated:false,tree:Array.from({length:121},(_,i)=>({
+  {sha:TREE,truncated:false,tree:Array.from({length:601},(_,i)=>({
    path:'src/File'+i+'.ts',sha:BLOB,size:20,type:'blob'}))},
  ]){
   const r=run('example/project',{read:async endpoint=>
     endpoint.endsWith('git/commits/'+COMMIT)?{tree:{sha:TREE}}:tree});
-  await assert.rejects(r.promise,/incomplete|No suitable|more than 120/);
+  await assert.rejects(r.promise,/incomplete|No suitable|more than 600/);
  }
 });
 test('preflight failure never executes model and never finishes book',async()=>{
@@ -114,4 +114,22 @@ test('sensitive files are not sent to Ollama',async()=>{
  assert.equal(result.complete,false);
  assert.equal(result.filesSkipped,1);
  assert.doesNotMatch(prompt,/\.env/);
+});
+
+test('large source file is analyzed in multiple distinct Ollama contexts without truncating its ending',async()=>{
+ const long='function start() {}\n'+ 'export const result = 1;\n'.repeat(330)+
+  'function importantAtEnd() { return 42; }\n';
+ const prompts=[];
+ const r=run('example/project',{read:async endpoint=>{
+  if(endpoint.endsWith('git/commits/'+COMMIT))return {tree:{sha:TREE}};
+  if(endpoint.endsWith('git/trees/'+TREE+'?recursive=1'))return {
+   sha:TREE,truncated:false,tree:[{path:'src/Long.ts',type:'blob',sha:BLOB,size:Buffer.byteLength(long)}]};
+  return blob(long);
+ },model:async(_,prompt)=>{prompts.push(prompt);return chapter;}});
+ const book=await r.promise;
+ assert.equal(book.filesAnalyzed,1);
+ assert.equal(book.complete,true);
+ assert.ok(prompts.length>2);
+ assert.ok(prompts.some(prompt=>prompt.includes('importantAtEnd()')));
+ assert.match(book.bookMarkdown,/Abschnitt 2/);
 });
