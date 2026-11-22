@@ -46,6 +46,21 @@ function rec(value:unknown):Record<string,unknown>|null {
  return value!==null&&typeof value==='object'&&!Array.isArray(value)
   ?value as Record<string,unknown>:null;
 }
+function codeEvidence(detail:unknown):string[]{
+ const code=patches(detail);
+ const fingerprints:[
+  ['Idempotency-Key',/Idempotency-Key|idempotencyKey/i],
+  ['Persistierter Operationsnachweis',/operation_key|operationRepository|existingOperation|replay\(/i],
+  ['Erwartete Revision',/expectedRevision/i],
+  ['JPA-Versionskontrolle',/@Version/i],
+  ['Konfliktbehandlung',/ConflictException|OptimisticLockingFailureException|HttpStatus\.CONFLICT/i],
+  ['Datenbankmigration',/create table|alter table|business_day_close_operations/i],
+  ['Transaktionsgrenze',/@Transactional/i],
+  ['Serialisierte Buchungsoperation',/bookingLock\.acquire/i],
+ ];
+ return fingerprints.filter(([,regex])=>(regex as RegExp).test(code))
+  .slice(0,6).map(([label])=>label as string);
+}
 function compact(value:string,max=600):string{
  return value.replace(/[\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,max);
 }
@@ -77,7 +92,12 @@ export function analyzeDevelopmentDecision(source:{
   title:compact(source.title,180)||'Unbenannter Entwicklungsschritt',
   paths:fileList,pattern:matched?.id??'generic-diff',documented:stated.length>20,
   intent:stated||'Kein dokumentierter Auftrag im Commit verfügbar.',
-  implementation:matched?.implementation??('Geänderte Dateien: '+(fileList.join(', ')||
+  implementation:(matched?.implementation
+    ?matched.implementation+
+      (codeEvidence(source.detail).length>0
+        ?' Im tatsächlichen Patch erkennbare Bausteine: '+codeEvidence(source.detail).join(', ')+'.'
+        :' Ein passender Patch-Beleg ist nicht vollständig verfügbar; die technischen Details bleiben ein erklärendes Muster.')
+    :undefined)??('Geänderte Dateien: '+(fileList.join(', ')||
    'keine vollständige Dateiliste')+'. Eine konkrete Implementierungsentscheidung kann hier nicht zuverlässig aus den Metadaten abgeleitet werden.'),
   reasoning:matched?.reasoning??'Die fachliche Entscheidung ist aus den vorhandenen Quellen nicht sicher ableitbar. Die tatsächlichen Änderungen und Tests im Commit prüfen.',
   alternative:matched?.alternative??'Keine belegte Alternative dokumentiert; eine Alternative wäre hier Spekulation.',
