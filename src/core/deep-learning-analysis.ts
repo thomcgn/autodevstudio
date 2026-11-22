@@ -9,7 +9,7 @@ const MODEL='qwen2.5-coder:3b';
 const FILE_LIMIT=120;
 const GROUP_SIZE=4;
 const FILE_BYTES=12_000;
-export type LearningPhase='discovery'|'loading'|'model'|'writing'|'finished';
+export type LearningPhase='discovery'|'loading'|'architecture'|'model'|'writing'|'finished';
 export interface DeepLearningProgress {
  runId:string;repository:string;phase:LearningPhase;startedAt:number;
  completed:number;total:number;current:string;etaSeconds:number|null;
@@ -207,7 +207,7 @@ export async function analyzeSourceWithOllama(
  if(eligibleFiles.length===0)throw Error('No suitable code files');
  if(eligibleFiles.length>FILE_LIMIT)throw Error('Repository has more than '+FILE_LIMIT+
   ' eligible files; complete analysis requires a larger source strategy');
- const total=Math.ceil(eligibleFiles.length/GROUP_SIZE);
+ const total=Math.ceil(eligibleFiles.length/GROUP_SIZE)+1;
  send('loading',0,total,'Quelldateien werden schreibgeschützt geladen','',null);
  await (deps.preflight??(()=>requireOllama()))();
  const sources:SourceFile[]=[];
@@ -220,15 +220,34 @@ export async function analyzeSourceWithOllama(
  const solutions:string[]=[];
  const reports:string[]=[];
  const durations:number[]=[];
+ if(signal.aborted)throw Error('Learning analysis cancelled');
+ const overviewFiles=sources.slice(0,8);
+ const allPaths=sources.map(f=>f.path).join('\n');
+ send('architecture',0,total,'Ollama erstellt die Systemübersicht aus Dateistruktur und Einstiegsdateien','',null);
+ const architecturePrompt='Gib die Gesamtarchitektur, die wichtigsten Module, Ein-/Ausgaben,'+
+  ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
+  'Nutze das folgende vollständige Verzeichnis analysierter Quelldateien:\n'+allPaths+
+  '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
+   'DATEI '+f.path+'\n'+f.content.slice(0,2800)).join('\n\n');
+ const architectureStarted=Date.now();
+ const overview=parseLesson(await model(SYSTEM,architecturePrompt,signal));
+ const first=renderLesson(overview,overviewFiles,1);
+ chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
+ durations.push(Date.now()-architectureStarted);
+ send('writing',1,total,'Systemübersicht erstellt',first.book.slice(0,3400),
+  Math.round((total-1)*durations[0]/1000));
  for(let i=0;i<sources.length;i+=GROUP_SIZE){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const part=sources.slice(i,i+GROUP_SIZE);
-  const n=Math.floor(i/GROUP_SIZE);
+  const n=Math.floor(i/GROUP_SIZE)+1;
   const avg=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
   send('model',n,total,'Ollama analysiert '+part.map(f=>f.path).join(', '),
    chapters.slice(-1).join('\n').slice(-2600),avg?Math.round((total-n)*avg/1000):null);
   const started=Date.now();
   const prompt='Repository '+repository+' Commit '+head+'\n'+
+   'ARCHITEKTURKONTEXT AUS DER VORHERIGEN ANALYSE:\n'+
+   overview.implementation.slice(0,1300)+'\n'+overview.reasoning.slice(0,1000)+
+   '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,4500)+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content.slice(0,8000)).join('\n\n');
   const response=await model(SYSTEM,prompt,signal);
   const chapter=renderLesson(parseLesson(response),part,n+1);
