@@ -112,7 +112,7 @@ function safe(value:string):string {
 export function renderDevelopmentCaseStudies(cases:readonly DevelopmentDecision[]):{
  book:string;reports:string
 }{
- const book=['## Fallstudien: Warum und wie wurde FassWerk beziehungsweise das Projekt verändert?','',
+ const book=['## Entwicklungsentscheidungen: vom Problem zur Lösung','',
   'Commit-Nachrichten sind dokumentierte Aussagen. Die technische Einordnung und hypothetische Alternativen sind keine nachgewiesenen Gedanken der Entwickler.'];
  const reports=['## Entwicklungsfallstudien: Herkunft und Grenzen der Aussagen'];
  for(const item of cases.slice(0,100)){
