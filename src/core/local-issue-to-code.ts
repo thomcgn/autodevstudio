@@ -3,6 +3,8 @@ import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {captureGitIdentity} from './git-identity.ts';
+import {inspectGitPreflight} from './git-preflight.ts';
+import {loadCoreCheckpoint} from './checkpoint-store.ts';
 import {prepareControlledIssueRun} from './controlled-run-preparation.ts';
 import {saveCoreCheckpoint,type GitIdentity} from './checkpoint-store.ts';
 import type {IssueTask} from './orchestrator.ts';
@@ -148,6 +150,14 @@ export async function implementIssueLocally(
     typeof issue.title!=='string'||typeof issue.body!=='string')
     throw Error('Invalid issue');
   const root=fs.realpathSync(projectPath);
+  const preflight=await inspectGitPreflight(root);
+  const reasons=preflight.reasons.filter(reason=>
+    reason!=='Protected branch – create an isolated feature branch first');
+  if(!preflight.clean||!preflight.remoteSlug||!preflight.branch||
+    preflight.branch.startsWith('autodev/')||reasons.length)
+    throw Error('Unsafe branch preparation: '+reasons.join('; '));
+  if(loadCoreCheckpoint(base,root))
+    throw Error('Existing Studio checkpoint requires explicit recovery');
   const initial=await captureGitIdentity(root);
   if(signal?.aborted)throw Error('Local issue run cancelled');
   const files=await tracked(root);
