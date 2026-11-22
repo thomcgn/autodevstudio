@@ -39,7 +39,7 @@ export function createKiloLearningModel(options:KiloModelOptions={}):LocalModel 
      ...(key?{'Authorization':'Bearer '+key}:{}),
     },
     body:JSON.stringify({
-     model,stream:false,tool_choice:'none',temperature:0,max_tokens:2400,
+     model,stream:false,tool_choice:'none',temperature:0,max_tokens:4096,
      messages:[{role:'system',content:system},{role:'user',content:prompt}],
     }),
    });
@@ -70,6 +70,8 @@ export function createKiloLearningModel(options:KiloModelOptions={}):LocalModel 
     throw Error('Invalid Kilo cloud completion');
    const choice=choices[0] as Record<string,unknown>|null;
    const message=choice?.message as Record<string,unknown>|undefined;
+   if(choice?.finish_reason==='length')
+    throw Error('Kilo completion truncated at token limit');
    if(!choice||choice.finish_reason!=='stop'||!message||
     message.role!=='assistant'||Object.hasOwn(message,'tool_calls')||
     typeof message.content!=='string'||message.content.length>16_000||
@@ -79,7 +81,7 @@ export function createKiloLearningModel(options:KiloModelOptions={}):LocalModel 
   }catch(error){
    if(signal.aborted||controller.signal.aborted)
     throw Error('Kilo learning cancelled or timed out');
-   if(error instanceof Error&&/^(Kilo free quota|Kilo access|Kilo cloud HTTP|Empty Kilo|Kilo cloud response|Malformed Kilo|Invalid Kilo|Untrusted or truncated Kilo)/.test(error.message))
+   if(error instanceof Error&&/^(Kilo free quota|Kilo access|Kilo cloud HTTP|Empty Kilo|Kilo cloud response|Malformed Kilo|Invalid Kilo|Kilo completion truncated|Untrusted or truncated Kilo)/.test(error.message))
     throw error;
    throw Error('Kilo cloud request failed');
   }finally{
