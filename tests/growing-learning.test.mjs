@@ -21,7 +21,7 @@ test('same topic retains old commits, and additional topics are appended once',a
     {files:[{filename:'src/B.java',patch:'@@\n+values.stream().filter(x -> x > 0);'}]}:
     {files:[{filename:'src/A.java',patch:'@@\n+List<Integer> ids = List.of(1);'}]});
  const grown=mergeHistoricalBook(first,second);
- assert.equal(grown.lessons.length,2);
+ assert.equal(grown.lessons.length,3);
  assert.equal(grown.lessons.find(l=>l.key==='java-generics')?.commits.length,1);
  assert.match(grown.bookMarkdown,/Java: Streams/);
  assert.doesNotMatch(grown.solutionsMarkdown,/### Einfach erklärt/);
@@ -30,7 +30,7 @@ test('same topic retains old commits, and additional topics are appended once',a
   const firstSaved=saveHistoricalBook(dir,first);
   const grownSaved=saveHistoricalBook(dir,grown);
   assert.notEqual(firstSaved.directory,grownSaved.directory);
-  assert.equal(loadHistoricalBook(dir,repo)?.lessonEntries.length,2);
+  assert.equal(loadHistoricalBook(dir,repo)?.lessonEntries.length,3);
   const continued={...grown,pagination:{page:3,hasMore:true}};
   saveHistoricalBook(dir,continued);
   const resumed=loadHistoricalBook(dir,repo);

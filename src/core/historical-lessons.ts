@@ -48,12 +48,72 @@ const concepts:readonly Concept[]=[
    language:'typescript',example:'import assert from "node:assert/strict";\nassert.equal(2+2,4);',
    exercise:'Teste, ob 3*3 den Wert 9 hat.',solution:'assert.equal(3*3,9);',
    sourceTitle:'Node assert',sourceUrl:'https://nodejs.org/api/assert.html'},
+  {key:'spring-di',title:'Spring: Dependency Injection',match:/@(?:Service|Component|RestController|Autowired)\b/,
+   plain:'Spring kann Objekte selbst erstellen und an andere Teile der Anwendung weitergeben.',
+   technical:'Komponenten werden vom Spring-Container verwaltet. Constructor Injection macht Abhängigkeiten explizit und gut testbar.',
+   language:'java',example:'import org.springframework.stereotype.Service;\n@Service\nclass Begruessung {\n  String hallo() { return "Hallo"; }\n}',
+   exercise:'Markiere eine Klasse als Spring-Service.',solution:'@Service\nclass NachrichtenService {}',
+   sourceTitle:'Spring: Classpath Scanning',sourceUrl:'https://docs.spring.io/spring-framework/reference/core/beans/classpath-scanning.html'},
+  {key:'electron-ipc',title:'Electron: Sicher zwischen Prozessen sprechen',match:/\b(?:ipcMain\.handle|ipcRenderer\.invoke)\s*\(/,
+   plain:'In Electron arbeiten Fenster und Hauptprogramm getrennt. Sie senden einander gezielte Nachrichten.',
+   technical:'IPC verbindet Renderer und Main. Die API nur über einen begrenzten Preload freigeben; Eingaben im Main-Prozess prüfen.',
+   language:'typescript',example:'ipcMain.handle("app:version", () => "1.0");\n// Über eine freigegebene Preload-Funktion im Renderer abrufen.',
+   exercise:'Erstelle einen IPC-Handler, der 42 zurückgibt.',solution:'ipcMain.handle("app:antwort", () => 42);',
+   sourceTitle:'Electron IPC Tutorial',sourceUrl:'https://www.electronjs.org/docs/latest/tutorial/ipc'},
+  {key:'rust-results',title:'Rust: Option und Result verstehen',match:/\b(?:Result|Option)<|\b(?:Some|None|Ok|Err)\s*\(/,
+   plain:'Rust nutzt besondere Werte, um auszudrücken: Ein Ergebnis ist da, fehlt oder ein Fehler ist passiert.',
+   technical:'Option<T> kann Some(T) oder None sein; Result<T,E> kann Ok(T) oder Err(E) sein. Fehler lassen sich ausdrücklich behandeln.',
+   language:'rust',example:'fn teilen(a:i32,b:i32)->Option<i32> {\n  if b == 0 { None } else { Some(a/b) }\n}',
+   exercise:'Was gibt teilen(4, 0) zurück?',solution:'None',
+   sourceTitle:'Rust Book: Error Handling',sourceUrl:'https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html'},
+  {key:'python-types',title:'Python: Type Hints',match:/\bdef\s+\w+\([^)\n]*:\s*\w+[^)\n]*\)\s*->\s*\w+|\b(?:list|dict|set)\[(?:str|int|float)\]/,
+   plain:'Type Hints sind Notizen zu den erwarteten Datentypen einer Python-Funktion.',
+   technical:'Python prüft Typannotationen nicht automatisch zur Laufzeit. Statische Werkzeuge können sie analysieren.',
+   language:'python',example:'def verdoppeln(n: int) -> int:\n    return n * 2',
+   exercise:'Schreibe die Funktion quadrat mit einem int als Ein- und Rückgabe.',solution:'def quadrat(n: int) -> int:\n    return n * n',
+   sourceTitle:'Python Typing Documentation',sourceUrl:'https://docs.python.org/3/library/typing.html'},
 ];
 interface LearningNotes {
   glossary:readonly string[];
   questions:readonly {question:string;answer:string}[];
 }
 const learningNotes:Record<string,LearningNotes>={
+ 'git-history':{
+  glossary:['Commit: ein gespeicherter Änderungsschritt im Versionsverlauf.',
+   'Diff: eine Anzeige, welche Zeilen hinzugefügt oder entfernt wurden.'],
+  questions:[{question:'Was zeigt git show --stat?',
+    answer:'Eine Zusammenfassung der Dateien und der Anzahl geänderter Zeilen.'},
+   {question:'Beweist ein Commit-Titel, warum eine Entscheidung getroffen wurde?',
+    answer:'Nein. Er ist ein Hinweis, kein unabhängiger Beleg für die Motivation.'}]},
+ 'spring-di':{
+  glossary:['Dependency Injection: ein Objekt erhält seine benötigten Abhängigkeiten von außen.',
+   'Container: Spring verwaltet und verbindet die Komponenten.'],
+  questions:[{question:'Wer verwaltet mit @Service markierte Klassen?',
+    answer:'Der Spring-Container.'},
+   {question:'Warum ist Constructor Injection oft sinnvoll?',
+    answer:'Abhängigkeiten sind explizit und lassen sich leichter testen.'}]},
+ 'electron-ipc':{
+  glossary:['Renderer: der Prozess, der die Benutzeroberfläche darstellt.',
+   'IPC: Nachrichtenkommunikation zwischen Prozessen.'],
+  questions:[{question:'Wofür wird ipcMain.handle verwendet?',
+    answer:'Für die Bearbeitung freigegebener Anfragen im Main-Prozess.'},
+   {question:'Warum dürfen Renderer nicht beliebige Main-Aktionen auslösen?',
+    answer:'Weil eine begrenzte und geprüfte Schnittstelle Sicherheitsrisiken reduziert.'}]},
+ 'rust-results':{
+  glossary:['Option: Wert oder kein Wert.',
+   'Result: Erfolg oder Fehler mit erklärbaren Varianten.'],
+  questions:[{question:'Wann verwendet man None?',
+    answer:'Wenn bei einer Option kein Wert vorhanden ist.'},
+   {question:'Wie wird ein Fehler bei Result ausgedrückt?',
+    answer:'Mit der Variante Err(error).'}]},
+ 'python-types':{
+  glossary:['Typannotationen: Angaben über erwartete Datenarten.',
+   'Statische Typprüfung: Analyse von Code ohne dessen Ausführung.'],
+  questions:[{question:'Was bedeutet -> int hinter einer Python-Funktion?',
+    answer:'Der vorgesehene Rückgabetyp ist int.'},
+   {question:'Erzwingt Python diese Angabe automatisch?',
+    answer:'Nein. Ein separates Prüfwerkzeug kann sie kontrollieren.'}]},
+
  'java-generics':{
   glossary:['Typparameter: ein Platzhalter für einen Datentyp, zum Beispiel String.',
    'Compiler: ein Programm, das den geschriebenen Code vor dem Start prüft.'],
@@ -106,7 +166,7 @@ function additions(detail:unknown):string {
  const lines:string[]=[];
  for(const f of files.slice(0,40)){
   const file=rec(f);if(!file||typeof file.patch!=='string'||file.patch.length>12000)continue;
-  if(!/\.(java|tsx?|jsx?|mjs|cjs)$/.test(String(file.filename)))continue;
+  if(!/\.(java|tsx?|jsx?|mjs|cjs|rs|py)$/.test(String(file.filename)))continue;
   for(const line of file.patch.split('\n'))
    if(line.startsWith('+')&&!line.startsWith('+++')&&line.length<400)lines.push(line.slice(1));
  }
@@ -135,6 +195,19 @@ export async function generateHistoricalBook(
     if(lesson.paths.length<12&&!lesson.paths.includes(path))lesson.paths.push(path);
    grouped.set(concept.key,lesson);
   }
+ }
+ if(index.commits.length>0){
+  grouped.set('git-history',{
+   key:'git-history',title:'Git: Änderungen nachverfolgen',
+   plain:'Git speichert die Entwicklung eines Programms als einzelne Änderungsschritte. So kannst du sehen, wann etwas verändert wurde.',
+   technical:'Ein Commit hat eine eindeutige SHA. git show zeigt dazu die Änderung und --stat die betroffenen Dateien. Daraus lässt sich nicht automatisch die Absicht der Person beweisen.',
+   language:'shell',example:'git show --stat <COMMIT-SHA>',
+   exercise:'Wie findest du heraus, welche Dateien ein Commit verändert hat?',
+   solution:'git show --stat <COMMIT-SHA>',
+   sourceTitle:'Git-Dokumentation: git-show',sourceUrl:'https://git-scm.com/docs/git-show',
+   commits:index.commits.slice(0,3).map(item=>item.sha),
+   paths:[...new Set(index.commits.flatMap(item=>item.changedPaths))].slice(0,20),
+  });
  }
  const lessons=[...grouped.values()].sort((a,b)=>a.key.localeCompare(b.key,'en'));
 

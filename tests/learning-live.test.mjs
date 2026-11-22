@@ -20,7 +20,7 @@ test('verified completed issue creates a local teaching report without executing
  };
  const result=await createVerifiedIssueLearning(base,'/private/not-accessed',evidence,runner);
  assert.equal(result.recorded,true);
- assert.equal(result.topicCount,1);
+ assert.equal(result.topicCount,2);
  const saved=loadHistoricalBook(base,'example/studio');
  assert.match(saved.reportsMarkdown,/Draft-PR: https:\/\/github.com\/example\/studio\/pull\/17/);
  assert.match(saved.reportsMarkdown,/Reviewer-Checkpoint: PASS/);

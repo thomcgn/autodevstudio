@@ -25,7 +25,7 @@ const read=async endpoint=>{
 };
 test('diff evidence creates thematic explanations and separate exercise solutions',async()=>{
  const book=await generateHistoricalBook(index,read);
- assert.equal(book.lessons.length,2);
+ assert.equal(book.lessons.length,3);
  assert.match(book.bookMarkdown,/### Einfach erklärt/);
  assert.match(book.bookMarkdown,/### Technische Vertiefung/);
  assert.match(book.bookMarkdown,/Java: Generics/);
@@ -41,8 +41,9 @@ test('diff evidence creates thematic explanations and separate exercise solution
 });
 test('missing diff evidence never creates invented chapters',async()=>{
  const book=await generateHistoricalBook(index,async()=>({files:[{filename:'README.md',patch:'@@\n+hello'}]}));
- assert.equal(book.lessons.length,0);
- assert.match(book.bookMarkdown,/kein Kapitel erfunden/);
+ assert.equal(book.lessons.length,1);
+ assert.match(book.bookMarkdown,/Git: Änderungen nachverfolgen/);
+ assert.doesNotMatch(book.bookMarkdown,/Java: Generics/);
 });
 test('repeated imports are idempotent snapshots and never modify source repositories',async t=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-learning-test-'));
