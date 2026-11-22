@@ -8,6 +8,7 @@ import { RunHistory } from './run-history';
 import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
 import { implementIssueLocally } from '../core/local-issue-to-code';
+import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
 import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
@@ -39,6 +40,7 @@ interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
 let localCodeController: AbortController | null = null;
+let publishingDraftPr=false;
 let activeRun: string | null = null;
 let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
@@ -309,7 +311,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('core:workflow', () => WORKFLOW_STAGES);
   ipcMain.handle('core:issue-to-code', async (_event, id:string, issueNumber:number) => {
-    if(active||localCodeController)throw Error('Another Studio run is active');
+    if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid issue-to-code request');
     const project=getProject(id);
@@ -321,7 +323,7 @@ app.whenReady().then(() => {
     if(!issue)throw Error('Issue is not open or no longer available');
     const ollama=await probeOllamaReadiness();
     if(!ollama.ready)throw Error('Local Qwen model is not ready');
-    if(active||localCodeController)throw Error('Another Studio run is active');
+    if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
     try{
@@ -332,7 +334,7 @@ app.whenReady().then(() => {
     }
   });
   ipcMain.handle('core:issue-verify', async (_event,id:string,issueNumber:number) => {
-    if(active||localCodeController)throw Error('Another Studio run is active');
+    if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid issue verification request');
     const project=getProject(id);
@@ -353,7 +355,7 @@ app.whenReady().then(() => {
     if(!quota.decide('normal',true).allowed)
       throw Error('Verified Kilo remaining quota unavailable; independent review paused safely');
     const ollama=await probeOllamaReadiness();
-    if(active||localCodeController)throw Error('Another Studio run is active');
+    if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
     try{
@@ -370,6 +372,23 @@ app.whenReady().then(() => {
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
+  });
+  ipcMain.handle('core:issue-draft-pr', async (_event,id:string,issueNumber:number) => {
+    if(active||localCodeController||publishingDraftPr)
+      throw Error('Another Studio run is active');
+    if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
+      throw Error('Invalid draft PR request');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)
+      throw Error('Not a Git repository');
+    publishingDraftPr=true;
+    try{
+      const issues=await listIssues(project.path);
+      if(!issues.some(item=>item.number===issueNumber))
+        throw Error('Issue is not open or no longer available');
+      return await publishVerifiedDraftPullRequest(app.getPath('userData'),
+        project.path,issueNumber);
+    } finally { publishingDraftPr=false; }
   });
   ipcMain.handle('core:issue-to-code:cancel', () => {
     if(!localCodeController)return false;
@@ -429,7 +448,7 @@ app.whenReady().then(() => {
     return true;
   });
   ipcMain.handle('run:start', (_event, id: string, mode: RunMode, approval?: string) => {
-    if (localCodeController) throw new Error('A local issue-to-code run is active');
+    if (localCodeController||publishingDraftPr) throw new Error('A Studio issue run is active');
     if (active) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);

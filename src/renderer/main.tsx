@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -68,6 +68,9 @@ function App(): React.JSX.Element {
   const [verifyingIssue, setVerifyingIssue] = useState<number | null>(null);
   const [verificationResult, setVerificationResult] = useState<IssueVerificationResult | null>(null);
   const [verificationError, setVerificationError] = useState('');
+  const [publishingIssue, setPublishingIssue] = useState<number | null>(null);
+  const [draftPr, setDraftPr] = useState<DraftIssuePrResult | null>(null);
+  const [draftPrError, setDraftPrError] = useState('');
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [issuesError, setIssuesError] = useState('');
   const [historyError, setHistoryError] = useState('');
@@ -135,6 +138,8 @@ function App(): React.JSX.Element {
     setCodeError('');
     setVerificationResult(null);
     setVerificationError('');
+    setDraftPr(null);
+    setDraftPrError('');
     setGitStatus(null);
     setGitError('');
     setDiagnostics(null);
@@ -200,6 +205,22 @@ function App(): React.JSX.Element {
     try { setIssues(await window.studio.issues(selected)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const createDraftPr = async (issueNumber:number):Promise<void> => {
+    if(!selected||publishingIssue!==null||codingIssue!==null||verifyingIssue!==null)return;
+    setPublishingIssue(issueNumber);
+    setDraftPr(null);
+    setDraftPrError('');
+    try{
+      const result=await window.studio.publishDraftIssuePr(selected,issueNumber);
+      setDraftPr(result);
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+      void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
+    }catch{
+      setDraftPrError('Draft-PR konnte nicht sicher erstellt werden. Nach einem Commit kann ein publish-Checkpoint zur manuellen Wiederaufnahme nötig sein. Bitte nicht erneut starten, bevor der Status geprüft ist.');
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+    }finally{setPublishingIssue(null);}
   };
 
   const verifyIssueCode = async (issueNumber:number):Promise<void> => {
@@ -705,6 +726,16 @@ function App(): React.JSX.Element {
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
           {verificationError && <div className="error" role="alert">{verificationError}</div>}
+          {draftPrError && <div className="error" role="alert">{draftPrError}</div>}
+          {draftPr && <div className="git-readiness ready" role="status">
+            <strong>Draft-Pull-Request für Issue #{draftPr.issueNumber} erstellt</strong>
+            <span>{draftPr.branch} · <a href={draftPr.url} target="_blank" rel="noopener noreferrer">Pull Request auf GitHub öffnen</a></span>
+            <small>Nur Draft. Kein Auto-Merge und kein automatisches Schließen des Issues.</small>
+          </div>}
+          {publishingIssue!==null && <div className="git-readiness" role="status">
+            <strong>Draft-PR für Issue #{publishingIssue} wird erstellt …</strong>
+            <span>Commit, Push und Draft-PR sind nicht unterbrechbar; beim Fehler bleibt ein nachvollziehbarer Checkpoint.</span>
+          </div>}
           {verificationResult && <div className="git-readiness" role="status">
             <strong>{verificationResult.kind==='quality-passed'?'Review und Quality bestanden':
               verificationResult.kind==='review-failed'?'Reviewer verlangt Korrektur':'Quality-Gates fehlgeschlagen'}</strong>
@@ -731,10 +762,18 @@ function App(): React.JSX.Element {
               : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
                   <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
                   <div className="issue-actions">
-                    <button type="button" disabled={codingIssue!==null||simulating!==null||verifyingIssue!==null}
+                    <button type="button" disabled={codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                       onClick={()=>void convertIssueToCode(issue.number)}>
                       {codingIssue===issue.number?'Erzeuge Code …':'Issue lokal in Code umwandeln'}
                     </button>
+                    {studioStatus?.checkpoint?.issueNumber===issue.number &&
+                      studioStatus.checkpoint.stage==='quality' &&
+                      studioStatus.checkpoint.reviewPassed &&
+                      studioStatus.checkpoint.qualityPassed && <button type="button"
+                      disabled={publishingIssue!==null||verifyingIssue!==null||codingIssue!==null||simulating!==null}
+                      onClick={()=>void createDraftPr(issue.number)}>
+                      {publishingIssue===issue.number?'Draft-PR wird erstellt …':'Geprüften Draft-PR erstellen'}
+                    </button>}
                     {studioStatus?.checkpoint?.issueNumber===issue.number &&
                       studioStatus.checkpoint.stage==='review' && <button type="button"
                       disabled={verifyingIssue!==null||codingIssue!==null||simulating!==null}

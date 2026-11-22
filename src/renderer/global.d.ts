@@ -5,6 +5,10 @@ export interface StandaloneStatus {
   checkpoint: { issueNumber: number; stage: string; revision: number; savedAt: string; reviewPassed: boolean; qualityPassed: boolean } | null;
   executionEnabled: false;
 }
+export interface DraftIssuePrResult {
+  issueNumber:number;branch:string;url:string;checkpointRevision:number;
+  draft:true;autoMerge:false;
+}
 export interface IssueVerificationResult {
   kind:'review-failed'|'quality-failed'|'quality-passed';
   issueNumber:number;checkpointRevision:number;feedback?:string;
@@ -114,6 +118,7 @@ declare global {
     simulateIssue(id: string, issueNumber: number): Promise<SimulationResult>;
     issueToCode(id: string, issueNumber: number): Promise<IssueCodeResult>;
     verifyIssue(id: string, issueNumber: number): Promise<IssueVerificationResult>;
+    publishDraftIssuePr(id: string, issueNumber: number): Promise<DraftIssuePrResult>;
     cancelIssueCode(): Promise<boolean>;
     workflowStages(): Promise<WorkflowStageDescription[]>;
     snapshot(id: string): Promise<ControllerSnapshot>;
