@@ -131,3 +131,44 @@ export async function indexPublicRepositoryHistory(
   return {repository:slug,defaultBranch:branch,fixedHead:head,licenseSpdx,
     commits,readOnly:true,requiresInterpretation:true,page,hasMore:commits.length===limit};
 }
+/** Traverse the entire reachable commit history in bounded API pages.
+ * A HEAD pinned on the first response prevents new upstream commits from shifting the cursor.
+ * The caller receives each page immediately for progress/persistence and may abort safely.
+ */
+export async function walkPublicRepositoryHistory(
+ input:string,options:{
+  read?:GitHubHistoryRead;pageSize?:number;signal?:AbortSignal;
+  onPage?:(page:PublicHistoryIndex,commitsSeen:number)=>Promise<void>|void;
+ }={},
+):Promise<{repository:string;head:string;licenseSpdx:string|null;commits:HistoricalCommit[]}>{
+ const read=options.read??readGitHubPublicJson;
+ const pageSize=options.pageSize??20;
+ if(!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>MAX_COMMITS)
+  fail('invalid history page size');
+ const commits:HistoricalCommit[]=[];
+ const seen=new Set<string>();
+ let page=1;
+ let pinnedHead:string|undefined;
+ let repository='';
+ let licenseSpdx:string|null=null;
+ while(true){
+  if(options.signal?.aborted)throw Error('Learning history cancelled');
+  const index=await indexPublicRepositoryHistory(input,read,pageSize,page,pinnedHead);
+  if(pinnedHead!==undefined&&index.fixedHead!==pinnedHead)
+   fail('pinned repository HEAD changed during traversal');
+  pinnedHead=index.fixedHead;
+  repository=index.repository;
+  licenseSpdx=index.licenseSpdx;
+  for(const commit of index.commits){
+   if(seen.has(commit.sha))fail('duplicate SHA across history pages');
+   seen.add(commit.sha);
+   commits.push(commit);
+  }
+  await options.onPage?.(index,commits.length);
+  if(!index.hasMore)break;
+  page++;
+  if(!Number.isSafeInteger(page))fail('commit page counter overflow');
+ }
+ if(pinnedHead===undefined)fail('history traversal produced no verified HEAD');
+ return {repository,head:pinnedHead,licenseSpdx,commits};
+}
