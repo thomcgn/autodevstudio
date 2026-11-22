@@ -344,13 +344,13 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid automated issue request');
     const project=getProject(id);
-    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     // Reserve this process immediately, before any asynchronous gh/catalog call.
     const controller=new AbortController();
     localCodeController=controller;
     try{
+      await assertBranchProtection(project.path);
       const issues=await listProjectIssues(project.path);
       const issue=issues.find(item=>item.number===issueNumber);
       if(!issue)throw Error('Issue is not open or no longer available');
@@ -378,7 +378,6 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid issue-to-code request');
     const project=getProject(id);
-    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
     // Authoritative issue fetched by Main: never trust renderer-supplied title,
     // code, file names, paths, or model instructions.
@@ -389,6 +388,7 @@ app.whenReady().then(() => {
     const controller=new AbortController();
     localCodeController=controller;
     try{
+      await assertBranchProtection(project.path);
       const base=app.getPath('userData');
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -404,7 +404,6 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid issue verification request');
     const project=getProject(id);
-    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     const issues=await listProjectIssues(project.path);
@@ -415,6 +414,7 @@ app.whenReady().then(() => {
     const controller=new AbortController();
     localCodeController=controller;
     try{
+      await assertBranchProtection(project.path);
       const base=app.getPath('userData');
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -435,11 +435,11 @@ app.whenReady().then(() => {
     if(typeof id!=='string'||!Number.isSafeInteger(issueNumber)||issueNumber<1)
       throw Error('Invalid draft PR request');
     const project=getProject(id);
-    await assertBranchProtection(project.path);
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     publishingDraftPr=true;
     try{
+      await assertBranchProtection(project.path);
       const issues=await listProjectIssues(project.path);
       if(!issues.some(item=>item.number===issueNumber))
         throw Error('Issue is not open or no longer available');
