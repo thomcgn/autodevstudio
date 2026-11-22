@@ -40,11 +40,11 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Install pinned Playwright test runner without modifying lockfile
-        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
+        run: node scripts/strict-check.mjs playwrightDependency
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - name: Install headless Chromium
-        run: npx playwright install --with-deps chromium
+        run: node scripts/strict-check.mjs playwrightBrowser
       - name: Click-test real React UI with mocked IPC
         run: node scripts/strict-check.mjs ui
 
@@ -61,7 +61,7 @@ jobs:
       - name: Install desktop dependencies
         run: node scripts/strict-check.mjs install
       - name: Install pinned Playwright test runner without lockfile changes
-        run: npm install --no-save --package-lock=false @playwright/test@1.65.1
+        run: node scripts/strict-check.mjs playwrightDependency
       - name: Build standalone desktop app
         run: node scripts/strict-check.mjs package
       - name: Native Electron desktop click and IPC smoke
