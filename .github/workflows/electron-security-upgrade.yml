@@ -1,0 +1,42 @@
+name: One-time Electron security upgrade on issue branch
+
+on:
+  push:
+    branches:
+      - fix/learning-evidence-based-decisions
+    paths:
+      - .github/workflows/electron-security-upgrade.yml
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    if: github.repository == 'thomcgn/autodevstudio' && github.event.head_commit.message == 'chore: bootstrap electron lock upgrade'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/learning-evidence-based-decisions
+          persist-credentials: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Regenerate lockfile with patched Electron
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm install --save-dev --save-exact electron@45.4.1 --no-audit
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+          node scripts/strict-check.mjs typecheck
+          node scripts/strict-check.mjs policy
+      - name: Commit verified lockfiles only to the dedicated issue branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- package.json package-lock.json
+          git diff --cached --exit-code && exit 1 || true
+          git commit -m "security(deps): upgrade Electron with regenerated audited npm lockfile"
+          git push origin HEAD:refs/heads/fix/learning-evidence-based-decisions
