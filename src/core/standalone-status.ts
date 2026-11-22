@@ -21,7 +21,7 @@ export function assessCheckpointRecovery(
     reason:'Kein gespeicherter Issue-Lauf',automaticResume:false};
   if(checkpoint.stage==='publish')
     return {state:'manual',identityMatches:null,
-      reason:'Publish-Checkpoint: Ein Commit, Push oder Draft-PR kann bereits existieren. GitHub und lokalen Git-Stand vor jeder Wiederholung abgleichen',
+      reason:'Publish-Checkpoint: Ein Commit, Push oder Draft-PR (GitHub-PR) kann bereits existieren. GitHub und lokalen Git-Stand vor jeder Wiederholung abgleichen',
       automaticResume:false};
   if(checkpoint.stage==='done')
     return {state:'manual',identityMatches:null,
