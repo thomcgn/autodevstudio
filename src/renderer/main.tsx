@@ -259,7 +259,7 @@ function App(): React.JSX.Element {
       setVerificationResult(result);
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }catch{
-      setVerificationError('Unabhängiger Review nicht freigegeben oder Quality-Gate fehlgeschlagen. Der Checkpoint bleibt zur Prüfung erhalten. Bei unbekanntem Kilo-Restbudget erfolgt keine Modellanfrage.');
+      setVerificationError('Unabhängiger Kilo-Review oder Quality-Gate fehlgeschlagen. Bei einer echten 429 wird angehalten; der Checkpoint bleibt erhalten.');
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }finally{setVerifyingIssue(null);}
   };
@@ -275,7 +275,7 @@ function App(): React.JSX.Element {
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
       void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
     }catch{
-      setCodeError('Codegenerierung abgebrochen oder nicht sicher möglich. Git-Zustand und Studio-Checkpoint prüfen, bevor ein neuer Versuch startet.');
+      setCodeError('Kilo-Generierung fehlgeschlagen oder abgebrochen. Git-Zustand und Checkpoint vor erneutem Start prüfen.');
       void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
     }finally{setCodingIssue(null);}
   };
@@ -745,7 +745,7 @@ function App(): React.JSX.Element {
         </div>}
 
         {tab === 'issues' && <div className="view issue-view">
-          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Ein-Klick-Ablauf mit lokalem Builder, unabhängiger Review-Pflicht, isolierten Tests und Draft-PR. Ohne verifizierte Kilo-Quote pausiert er sicher beim Review.</p></div>
+          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Kilo ist primärer Planner, Builder und unabhängiger Reviewer: Issue → echter Code → isolierte Tests → Draft-PR. Ollama ist ausschließlich optionaler Fallback.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
           {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ? 'ready' : 'needs-work'}`}><strong>{gitStatus.canExecute ? 'Git-Bereitschaft: geprüft' : 'Git: Vorbereitung erforderlich'}</strong><span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}{gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Sauberer Feature-Branch'}</span></div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
@@ -770,7 +770,7 @@ function App(): React.JSX.Element {
           </div>}
           {automatingIssue!==null && <div className="git-readiness" role="status">
             <strong>Issue #{automatingIssue}: automatisierter Ablauf …</strong>
-            <span>Code → unabhängiger Review → Quality → Draft-PR (nur bei nachgewiesener Freigabe)</span>
+            <span>Kilo Planner → Kilo Builder → unabhängiger Kilo Reviewer → Quality → Draft-PR</span>
             <button type="button" className="quiet" onClick={()=>void window.studio.cancelIssueCode()}>Vor Publish abbrechen</button>
           </div>}
           {draftPr && <div className="git-readiness ready" role="status">
