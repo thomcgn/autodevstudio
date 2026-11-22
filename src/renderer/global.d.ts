@@ -77,6 +77,9 @@ export interface ProviderDiagnostics {
   sandboxTool: 'bwrap' | 'sandbox-exec' | null; sandboxToolAvailable: boolean;
   ghInstalled: boolean; ghAuthenticated: boolean; checkedAt: string;
 }
+export type BranchProtectionStatus =
+  | {protected:true; evidence:{repository:string;branch:string;rulesetId:number;requiredChecks:readonly string[];verifiedAt:string}}
+  | {protected:false;reason:string};
 export interface GitPreflight {
   root: string; branch: string; head: string; remoteSlug: string | null;
   clean: boolean; canExecute: boolean; reasons: string[];
@@ -105,6 +108,7 @@ declare global {
   interface Window { studio: {
     projects(): Promise<Project[]>;
     issues(id: string): Promise<StudioIssue[]>;
+    branchProtection(id: string): Promise<BranchProtectionStatus>;
     issueQueue(id: string): Promise<IssueQueuePreview>;
     gitPreflight(id: string): Promise<GitPreflight>;
     studioStatus(id: string): Promise<StandaloneStatus>;

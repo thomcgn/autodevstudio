@@ -61,3 +61,19 @@ test('malformed Retry-After cannot force unsafe immediate retries',()=>{
  assert.equal(parseRetryAfter(headers({'retry-after':'nonsense'}),now),null);
  assert.equal(parseRetryAfter(headers({'retry-after':'999999999'}),now),null);
 });
+
+test('request in the same millisecond as quota evidence consumes quota',()=>{
+ const gate=new FreeQuotaGate();
+ gate.observe(headers({'x-ratelimit-limit':'200','x-ratelimit-remaining':'11'}),now);
+ gate.recordAccepted(now);
+ assert.equal(gate.status(now).remaining,10);
+ assert.equal(gate.status(now).workAllowed,false);
+});
+test('requests before evidence in the same millisecond are already included',()=>{
+ const gate=new FreeQuotaGate();
+ gate.recordAccepted(now);
+ gate.observe(headers({'x-ratelimit-limit':'200','x-ratelimit-remaining':'11'}),now);
+ assert.equal(gate.status(now).remaining,11);
+ gate.recordAccepted(now);
+ assert.equal(gate.status(now).remaining,10);
+});

@@ -54,6 +54,8 @@ export function parseRetryAfter(headers:Pick<Headers,'get'>,now=Date.now()):numb
 export class FreeQuotaGate {
   private readonly accepted:number[]=[];
   private evidence:RateLimitEvidence|null=null;
+  private acceptedSequence=0;
+  private evidenceSequence=0;
   private blockedUntil:number|null=null;
   private readonly limit:number;
   private readonly reserve:number;
@@ -65,11 +67,12 @@ export class FreeQuotaGate {
   }
   observe(headers:Pick<Headers,'get'>,now=Date.now()):void {
     const evidence=parseQuotaHeaders(headers,now);
-    if(evidence)this.evidence=evidence;
+    if(evidence){this.evidence=evidence;this.evidenceSequence=this.acceptedSequence;}
   }
   recordAccepted(now=Date.now()):void {
     this.prune(now);
     this.accepted.push(now);
+    this.acceptedSequence++;
     // Provider measurements may be stale after another request: do not double count
     // requests already made before the last observation.
   }
@@ -79,15 +82,16 @@ export class FreeQuotaGate {
     // the limited model to find the precise reset time.
     this.blockedUntil=retry??now+60*60*1000;
     const evidence=parseQuotaHeaders(headers,now);
-    if(evidence)this.evidence=evidence;
+    if(evidence){this.evidence=evidence;this.evidenceSequence=this.acceptedSequence;}
   }
   status(now=Date.now()):FreeQuotaSnapshot {
     this.prune(now);
     const recent=this.evidence&&now-this.evidence.observedAt<=60_000?this.evidence:null;
     const limit=recent?.limit??this.limit;
     const reserve=Math.min(this.reserve,limit-1);
-    const afterEvidence=recent
-      ?this.accepted.filter(t=>t>recent.observedAt).length:0;
+    // Count events by occurrence order, not millisecond timestamps: a request
+    // accepted in the same millisecond as a quota observation still consumes quota.
+    const afterEvidence=recent?this.acceptedSequence-this.evidenceSequence:0;
     const remaining=recent
       ?Math.max(0,recent.remaining-afterEvidence)
       :Math.max(0,limit-this.accepted.length);

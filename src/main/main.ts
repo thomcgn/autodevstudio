@@ -20,6 +20,7 @@ import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
+import { assertBranchProtection } from '../core/branch-protection';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
 import { probeBubblewrap } from '../core/bwrap-probe';
@@ -46,6 +47,7 @@ let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
 let localCodeController: AbortController | null = null;
 let publishingDraftPr=false;
+let startingLegacyRun=false;
 let activeRun: string | null = null;
 let activeInfo: { runId: string; projectId: string; mode: RunMode; startedAt: number } | null = null;
 let pendingStop: NodeJS.Timeout | null = null;
@@ -323,6 +325,17 @@ app.whenReady().then(() => {
     const project = getProject(id);
     return inspectGitPreflight(project.path);
   });
+  ipcMain.handle('core:branch-protection', async (_event,id:string) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    try{
+      const evidence=await assertBranchProtection(project.path);
+      return {protected:true,evidence} as const;
+    }catch(error){
+      return {protected:false,reason:error instanceof Error?error.message:
+        'GitHub protection could not be verified'} as const;
+    }
+  });
   ipcMain.handle('core:issues', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
@@ -349,6 +362,7 @@ app.whenReady().then(() => {
     const controller=new AbortController();
     localCodeController=controller;
     try{
+      await assertBranchProtection(project.path);
       const issues=await listProjectIssues(project.path);
       const issue=issues.find(item=>item.number===issueNumber);
       if(!issue)throw Error('Issue is not open or no longer available');
@@ -386,6 +400,7 @@ app.whenReady().then(() => {
     const controller=new AbortController();
     localCodeController=controller;
     try{
+      await assertBranchProtection(project.path);
       const base=app.getPath('userData');
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -411,6 +426,7 @@ app.whenReady().then(() => {
     const controller=new AbortController();
     localCodeController=controller;
     try{
+      await assertBranchProtection(project.path);
       const base=app.getPath('userData');
       const catalog=await fetchKiloFreeModels();
       const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
@@ -435,6 +451,7 @@ app.whenReady().then(() => {
       throw Error('Not a Git repository');
     publishingDraftPr=true;
     try{
+      await assertBranchProtection(project.path);
       const issues=await listProjectIssues(project.path);
       if(!issues.some(item=>item.number===issueNumber))
         throw Error('Issue is not open or no longer available');
@@ -499,14 +516,17 @@ app.whenReady().then(() => {
     persist(projects().filter(p => p.id !== id));
     return true;
   });
-  ipcMain.handle('run:start', (_event, id: string, mode: RunMode, approval?: string) => {
+  ipcMain.handle('run:start', async (_event, id: string, mode: RunMode, approval?: string) => {
     if (localCodeController||publishingDraftPr) throw new Error('A Studio issue run is active');
-    if (active) throw new Error('A run is already active');
+    if (active || startingLegacyRun) throw new Error('A run is already active');
     if (typeof id !== 'string') throw new Error('Invalid project ID');
+    startingLegacyRun=true;
+    try {
     const project = getProject(id);
     if (!inspectProject(project.path).hasCore) throw new Error('AutoDev Core is not installed in this project');
     // Main-process authorization is independent of the renderer.
     assertRunApproved(mode, project.name, approval);
+    if (mode === 'execute') await assertBranchProtection(project.path);
     const bin = path.join(project.path, 'node_modules', '.bin', 'tsx');
     if (!fs.existsSync(bin)) throw new Error('Missing local tsx. Run npm install in the project.');
     const runId = randomUUID();
@@ -547,6 +567,9 @@ app.whenReady().then(() => {
       send('run:event', { runId, type: 'exit', code, signal, time: Date.now() });
     });
     return { runId };
+    } finally {
+      startingLegacyRun=false;
+    }
   });
   ipcMain.handle('run:stop', () => { if (!active) return false; terminate(); return true; });
   ipcMain.handle('run:active', () => Boolean(active));
