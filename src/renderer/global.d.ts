@@ -33,6 +33,7 @@ export interface IssueAutomationOutcome {
   stage:'build'|'review'|'quality'|'publish'|'done';
   issueNumber:number;checkpointRevision:number|null;
   reason:string;draftUrl?:string;autoMerge:false;
+  learningReport?:'saved'|'unavailable';
 }
 export interface DraftIssuePrResult {
   issueNumber:number;branch:string;url:string;checkpointRevision:number;
