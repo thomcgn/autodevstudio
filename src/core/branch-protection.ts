@@ -66,16 +66,17 @@ export async function assertBranchProtection(
 ):Promise<BranchProtectionEvidence>{
   try {
     const slug=parseGitHubRemote(await command('git',['remote','get-url','origin'],projectPath));
-    if(!slug)fail('selected project has no valid GitHub origin');
+    if(slug===null)throw new Error('Branch protection required: selected project has no valid GitHub origin');
     const metadata=parse(await command('gh',['api',`repos/${slug}`],projectPath));
-    if(!object(metadata)||metadata.full_name!==slug||
-      typeof metadata.default_branch!=='string'||
+    if(!object(metadata))throw new Error('Branch protection required: repository metadata unavailable');
+    if(metadata.full_name!==slug||typeof metadata.default_branch!=='string'||
       !/^[a-zA-Z0-9._/-]+$/.test(metadata.default_branch))
-      fail('repository or default branch cannot be verified');
-    const branch=metadata.default_branch as string;
+      throw new Error('Branch protection required: repository or default branch cannot be verified');
+    const branch=metadata.default_branch;
     const pages=parse(await command('gh',['api','--paginate','--slurp',
       `repos/${slug}/rulesets?includes_parents=true&per_page=100`],projectPath));
-    if(!Array.isArray(pages)||!pages.every(Array.isArray))fail('ruleset listing unavailable');
+    if(!Array.isArray(pages))throw new Error('Branch protection required: ruleset listing unavailable');
+    if(!pages.every(Array.isArray))throw new Error('Branch protection required: invalid ruleset pages');
     for(const entry of pages.flat()){
       if(!object(entry)||typeof entry.id!=='number'||!Number.isSafeInteger(entry.id)||entry.enforcement!=='active')
         continue;
