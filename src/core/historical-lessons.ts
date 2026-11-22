@@ -8,6 +8,7 @@ export interface HistoricalLesson {
 export interface HistoricalBook {
   repository:string;head:string;license:string|null;lessons:HistoricalLesson[];
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
+  pagination?:{page:number;hasMore:boolean};
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
 const concepts:readonly Concept[]=[
