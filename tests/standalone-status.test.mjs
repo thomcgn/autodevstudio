@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { acquireProjectLock } from '../src/core/project-lock.ts';
 import { saveCoreCheckpoint } from '../src/core/checkpoint-store.ts';
-import { inspectStandaloneStatus } from '../src/core/standalone-status.ts';
+import { assessCheckpointRecovery, inspectStandaloneStatus } from '../src/core/standalone-status.ts';
 import { captureGitIdentity } from '../src/core/git-identity.ts';
 
 const git=(cwd,...args)=>execFileSync('git',args,{cwd,encoding:'utf8'}).trim();
@@ -85,7 +85,7 @@ test('matching checked identity only recommends inspected manual continuation',a
  try{
   saveCoreCheckpoint(base,repo,lock.record.token,{
    runId:randomUUID(),issueNumber:6,stage:'review',git:identity,
-   sessions:{},reviewPassed:false,qualityPassed:false,
+   sessions:{reviewer:'review-session-0001'},reviewPassed:false,qualityPassed:false,
   },null);
  }finally{lock.release();}
  const good=await inspectStandaloneStatus(base,repo);
@@ -111,4 +111,24 @@ test('publish checkpoint is never eligible for automatic retry',async t=>{
  assert.equal(status.recovery.state,'manual');
  assert.equal(status.recovery.automaticResume,false);
  assert.match(status.recovery.reason,/GitHub-PR/);
+});
+
+test('blocked checkpoint never fabricates an original stop cause',()=>{
+ const result=assessCheckpointRecovery({stage:'blocked'},false,null);
+ assert.equal(result.state,'manual');
+ assert.equal(result.automaticResume,false);
+ assert.match(result.reason,/nicht enthalten/);
+});
+test('publish checkpoint requires reconciliation, not a second push',()=>{
+ const result=assessCheckpointRecovery({stage:'publish'},false,null);
+ assert.equal(result.state,'manual');
+ assert.match(result.reason,/Commit, Push oder Draft-PR/);
+});
+test('missing builder or reviewer session explicitly blocks automatic resume',()=>{
+ for(const stage of ['build','review']){
+  const result=assessCheckpointRecovery({stage,sessions:{}},false,{});
+  assert.equal(result.state,'manual');
+  assert.equal(result.automaticResume,false);
+  assert.match(result.reason,/Session-ID/);
+ }
 });

@@ -19,12 +19,28 @@ export function assessCheckpointRecovery(
     reason:'Projektlock aktiv oder verwaist: zuerst laufenden Prozess prüfen',automaticResume:false};
   if(!checkpoint)return {state:'none',identityMatches:null,
     reason:'Kein gespeicherter Issue-Lauf',automaticResume:false};
-  if(['publish','done','blocked'].includes(checkpoint.stage))
+  if(checkpoint.stage==='publish')
     return {state:'manual',identityMatches:null,
-      reason:'Veröffentlichung oder Abschluss kann bereits erfolgt sein: Commit und GitHub-PR manuell abgleichen',
+      reason:'Publish-Checkpoint: Ein Commit, Push oder Draft-PR (GitHub-PR) kann bereits existieren. GitHub und lokalen Git-Stand vor jeder Wiederholung abgleichen',
+      automaticResume:false};
+  if(checkpoint.stage==='done')
+    return {state:'manual',identityMatches:null,
+      reason:'Abgeschlossener Checkpoint wurde noch nicht abgeglichen. PR und Issue-Abschluss prüfen; keine neue Bearbeitung starten',
+      automaticResume:false};
+  if(checkpoint.stage==='blocked')
+    return {state:'manual',identityMatches:null,
+      reason:'Workflow wurde als BLOCKED gespeichert. Der konkrete ursprüngliche Fehler ist im Checkpoint nicht enthalten. Laufprotokoll, Git-Stand und Review-/Quality-Befunde prüfen; kein automatischer Reset',
       automaticResume:false};
   if(!identity)return {state:'manual',identityMatches:null,
     reason:'Git-Identität kann nicht sicher geprüft werden',automaticResume:false};
+  if(checkpoint.stage==='build'&&!checkpoint.sessions.builder)
+    return {state:'manual',identityMatches:null,
+      reason:'Builder-Checkpoint ohne überprüfbare Kilo-Session-ID. Ein automatisches Resume könnte einen zweiten Builder starten; zuerst Laufprotokoll prüfen',
+      automaticResume:false};
+  if(checkpoint.stage==='review'&&!checkpoint.sessions.reviewer)
+    return {state:'manual',identityMatches:null,
+      reason:'Review-Checkpoint ohne überprüfbare Reviewer-Session-ID. Nicht blind neu starten; Git- und Review-Evidenz zuerst prüfen',
+      automaticResume:false};
   const matches=checkpoint.git.branch===identity.branch &&
     checkpoint.git.head===identity.head &&
     checkpoint.git.worktreeHash===identity.worktreeHash &&

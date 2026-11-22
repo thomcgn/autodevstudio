@@ -5,6 +5,7 @@ import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationRes
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
+import {explainIssueHold} from './issue-hold-explanation';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
 type RunMode = 'status' | 'dry-run' | 'execute';
@@ -220,6 +221,8 @@ function App(): React.JSX.Element {
     setIssuesLoading(true);
     setIssuesError('');
     setBranchProtection(null);
+    void window.studio.studioStatus(selected).then(setStudioStatus)
+      .catch(()=>setStudioStatus(null));
     void window.studio.studioActivity(selected).then(setStudioActivity).catch(()=>setStudioActivity(null));
     void window.studio.branchProtection(selected).then(setBranchProtection).catch(()=>
       setBranchProtection({protected:false,reason:'GitHub-Branch-Protection konnte nicht geprüft werden'}));
@@ -796,6 +799,27 @@ function App(): React.JSX.Element {
               :branchProtection?.protected===false?branchProtection.reason:
                 'Keine Entwicklung, bis GitHub die Regeln bestätigt hat'}</span>
           </div>
+          {studioStatus && (studioStatus.recovery.state!=='none'||studioStatus.lock.held) &&
+            <section className="issue-safety-alert" role="alert" aria-label="Checkpoint-Sperre">
+              <strong>⛔ CHECKPOINT / PROJEKTSPERRE</strong>
+              <p>{studioStatus.checkpoint
+                ?'Issue #'+studioStatus.checkpoint.issueNumber+' · Phase '+studioStatus.checkpoint.stage+
+                  ' · Revision '+studioStatus.checkpoint.revision
+                :'Projektlock vorhanden, aber kein gültiger Checkpoint sichtbar'}</p>
+              <p><b>Warum gesperrt?</b> {studioStatus.recovery.reason}</p>
+              <p><b>Nächster Schritt:</b> Laufprotokoll, Git-Branch und vorhandenen Draft-PR prüfen. Keine automatische Bereinigung, kein erneuter Push.</p>
+              <button type="button" className="quiet" onClick={()=>void loadIssues()}>Diagnose aktualisieren</button>
+            </section>}
+          {issueQueue && !issueQueue.readyToStart && !studioStatus?.checkpoint && !studioStatus?.lock.held &&
+            <section className="issue-safety-alert issue-safety-alert--waiting" role="status">
+              <strong>ISSUE-WARTESCHLANGE NICHT STARTBEREIT</strong>
+              <p>{issueQueue.reason==='No eligible open issues'
+                ?'Kein offenes Issue besitzt derzeit alle erforderlichen Freigabe-Labels.'
+                :issueQueue.reason==='Git repository is not a clean eligible starting point'
+                  ?'Git-Branch oder Working Tree ist nicht für einen neuen Lauf geeignet.'
+                  :issueQueue.reason}</p>
+              <p>Prüfe Status und Priorität an den Issue-Karten. Eine manuelle Änderung ersetzt keine Checkpoint-Prüfung.</p>
+            </section>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
           {issuesError && <div className="error" role="alert">{issuesError}</div>}
           {codeError && <div className="error" role="alert">{codeError}</div>}
@@ -854,7 +878,16 @@ function App(): React.JSX.Element {
           </div>}
           {issuesLoading ? <div className="empty-state">Issues werden geladen …</div>
             : issues.length === 0 ? <div className="empty-state">Keine offenen Issues gefunden oder noch keine Abfrage ausgeführt.</div>
-              : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
+              : <div className="issue-list">{issues.map(issue => {
+                const hold=explainIssueHold(issue.labels,
+                  issueQueue?.queue.find(item=>item.number===issue.number)?.reason,issue.body);
+                const checkpointBlocked=Boolean(studioStatus?.lock.held)||
+                  Boolean(studioStatus?.checkpoint &&
+                    (studioStatus.checkpoint.issueNumber!==issue.number||
+                      studioStatus.recovery.state==='manual'||
+                      studioStatus.recovery.state==='locked'));
+                return <article key={issue.number}
+                  className={'issue-item'+(hold?.severity==='blocked'||checkpointBlocked?' issue-item--blocked':'')}>
                   <div className="issue-item-header">
                     <div className="issue-item-copy">
                       <div className="issue-item-heading"><span className="issue-number">#{issue.number}</span><h3>{issue.title}</h3></div>
@@ -863,9 +896,15 @@ function App(): React.JSX.Element {
                     </div>
                     <a className="issue-external-link" href={issue.url} target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
                   </div>
+                  {hold && <section className={'issue-hold-reason issue-hold-reason--'+hold.severity}
+                    role={hold.severity==='blocked'?'alert':'status'}>
+                    <strong>{hold.title}</strong>
+                    <p><b>Warum?</b> {hold.why}</p>
+                    <p><b>Nächster Schritt:</b> {hold.next}</p>
+                  </section>}
                   <div className="issue-actions">
                     <button className="issue-primary-action" type="button"
-                      disabled={branchProtection?.protected!==true||automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                      disabled={Boolean(hold)||Boolean(checkpointBlocked)||branchProtection?.protected!==true||automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                       onClick={()=>void automateIssue(issue.number)}>
                       {automatingIssue===issue.number?'Automatisiere …':'Issue → Draft-PR'}
                     </button>
@@ -897,7 +936,7 @@ function App(): React.JSX.Element {
                       </div>
                     </details>
                   </div>
-                </article>)}</div>}
+                </article>;})}</div>}
           <div className="agent-footnote">Kilo plant, erstellt die Änderung und übergibt sie dem unabhängigen Reviewer und den Quality-Gates. Der Hauptlauf erstellt ausschließlich einen Draft-PR; kein automatischer Merge.</div>
         </div>}
 
