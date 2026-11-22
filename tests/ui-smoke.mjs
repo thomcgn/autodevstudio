@@ -179,6 +179,24 @@ try {
   await page.getByText('Das Label enthält keinen konkreten technischen Fehlergrund',{exact:false}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Issue → Draft-PR'}).isDisabled(),true);
   await page.evaluate(()=>{
+    window.__uiSmoke.overrides.studioStatus={
+      git:{root:'/tmp/autodev-ui-fixture',branch:'autodev/issue-5',
+        head:'a'.repeat(40),remoteSlug:null,clean:false,canExecute:false,reasons:[]},
+      lock:{held:false,startedAt:null},
+      checkpoint:{issueNumber:5,stage:'blocked',revision:3,savedAt:'2026-11-22T12:00:00Z',
+        reviewPassed:false,qualityPassed:false},
+      recovery:{state:'manual',identityMatches:null,
+        reason:'Workflow wurde als BLOCKED gespeichert. Der konkrete ursprüngliche Fehler ist im Checkpoint nicht enthalten.',
+        automaticResume:false},
+      executionEnabled:false,
+    };
+  });
+  await page.getByRole('button',{name:'Aktualisieren',exact:true}).click();
+  await page.getByText('CHECKPOINT / PROJEKTSPERRE',{exact:false}).waitFor();
+  await page.getByText('Der konkrete ursprüngliche Fehler ist im Checkpoint nicht enthalten',{exact:false}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Issue → Draft-PR'}).isDisabled(),true);
+  await page.evaluate(()=>{
+    delete window.__uiSmoke.overrides.studioStatus;
     delete window.__uiSmoke.overrides.studioActivity;
     delete window.__uiSmoke.overrides.issues;
     delete window.__uiSmoke.overrides.issueQueue;
