@@ -27,8 +27,8 @@ export function ScrollJumpControls({scopeRef,refreshKey}:ScrollJumpControlsProps
       if(scrollable(scope))return scope;
       const view=scope.querySelector<HTMLElement>('.view');
       if(view&&scrollable(view))return view;
-      for(const node of scope.querySelectorAll<HTMLElement>(
-        '.project-list,.console,.history-list,.saved-log,.simulation-scroll,.view,.modal')){
+      for(const node of Array.from(scope.querySelectorAll<HTMLElement>(
+        '.project-list,.console,.history-list,.saved-log,.simulation-scroll,.view,.modal'))){
         if(scrollable(node))return node;
       }
       return null;
