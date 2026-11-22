@@ -85,9 +85,12 @@ test('partial Ollama source analysis persists an exact resume cursor across rest
    bookMarkdown:'# Codebook\n\n## Kapitel 1: Overview\n',
    solutionsMarkdown:'# Solutions\n',reportsMarkdown:'# Reports\n',
    deepCursor:{nextOffset:600,filesTotal:601,filesAnalyzed:600,
-     filesSkipped:0,model:'qwen2.5-coder:3b'}};
+     filesSkipped:0,model:'qwen2.5-coder:3b'},
+   deepSummary:{model:'qwen2.5-coder:3b',filesAnalyzed:600,filesTotal:601,
+     filesSkipped:0,complete:false}};
   saveHistoricalBook(dir,source);
   assert.deepEqual(loadHistoricalBook(dir,repo)?.deepCursor,source.deepCursor);
+  assert.deepEqual(loadHistoricalBook(dir,repo)?.deepSummary,source.deepSummary);
   assert.match(loadHistoricalBook(dir,repo)?.bookMarkdown??'',/Kapitel 1/);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
