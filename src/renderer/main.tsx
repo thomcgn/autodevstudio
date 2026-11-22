@@ -1145,7 +1145,7 @@ function App(): React.JSX.Element {
             {learningBook.deepAnalysis&&!learningBook.deepAnalysis.complete&&
               <p role="alert">Codeanalyse mit Einschränkungen: {learningBook.deepAnalysis.filesSkipped}
                 Dateien wurden aus Sicherheits-, Format- oder Größengründen ausgelassen.
-                Das Buch behauptet keine vollständige Abdeckung.</p>
+                Das Buch behauptet keine vollständige Abdeckung.</p>}
             <div className="learning-export-actions">
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','pdf')}>Lehrbuch als PDF</button>
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','md')}>Markdown</button>
