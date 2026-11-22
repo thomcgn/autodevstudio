@@ -115,7 +115,7 @@ export async function runIssueToDraftPr(
     return pause('publish',issue.number,cp.revision,
       'Publishing already started or completed; manual reconciliation required');
   if(cp.stage!=='quality'||!cp.reviewPassed||!cp.qualityPassed)
-    return pause(cp.stage==='review'?'review':'quality',issue.number,cp.revision,
+    return pause('quality',issue.number,cp.revision,
       'Checkpoint not eligible for publication');
   report('publish');
   // This action may commit and push; no safe automatic retry after it starts.
