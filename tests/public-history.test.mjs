@@ -89,7 +89,7 @@ test('invalid SHA and unsupported page sizes are rejected',async()=>{
  const {read}=fixture();
  const bad=async endpoint=>endpoint.endsWith('/branches/main')?{commit:{sha:'bad'}}:read(endpoint);
  await assert.rejects(indexPublicRepositoryHistory('example/studio',bad,2),/invalid branch HEAD/);
- await assert.rejects(indexPublicRepositoryHistory('example/studio',read,21),/invalid commit limit/);
+ await assert.rejects(indexPublicRepositoryHistory('example/studio',read,101),/invalid commit limit/);
 });
 test('reader refuses non-readonly or unrelated endpoints',async()=>{
  await assert.rejects(readGitHubPublicJson('user/repos'),/forbidden API endpoint/);
