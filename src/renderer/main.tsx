@@ -714,7 +714,7 @@ function App(): React.JSX.Element {
           <button className={tab === 'logs' ? 'active' : ''} aria-current={tab === 'logs' ? 'page' : undefined} onClick={() => setTab('logs')}>Live-Protokoll {events.length > 0 ? <span className="count">{events.length}</span> : null}</button>
           <button className={tab === 'history' ? 'active' : ''} aria-current={tab === 'history' ? 'page' : undefined} onClick={() => setTab('history')}>Verlauf</button>
           <button className={tab === 'issues' ? 'active' : ''} aria-current={tab === 'issues' ? 'page' : undefined} onClick={() => { setTab('issues'); void loadIssues(); }}>Issues</button>
-          <button className={tab === 'learning' ? 'active' : ''} aria-current={tab === 'learning' ? 'page' : undefined} onClick={() => setTab('learning')}>Lehrbuch</button>
+          <button className={tab === 'learning' ? 'active' : ''} aria-current={tab === 'learning' ? 'page' : undefined} onClick={() => {setTab('learning');if(!ownedLoaded&&!ownedLoading)void loadOwnedRepositories();}}>Lehrbuch</button>
         </nav>
 
         {tab === 'overview' && <div className="view overview">
