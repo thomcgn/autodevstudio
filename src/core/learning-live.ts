@@ -52,7 +52,7 @@ export async function createVerifiedIssueLearning(
   commitSha:evidence.commitSha,reason:'unsupported-repository'};
  const index:PublicHistoryIndex={repository:evidence.repository,
   defaultBranch:'local-verified-issue',fixedHead:evidence.commitSha,licenseSpdx:null,
-  readOnly:true,requiresInterpretation:true,
+  readOnly:true,requiresInterpretation:true,page:1,hasMore:false,
   commits:[{sha:evidence.commitSha,title:'Geprüfter Issue-Commit #'+evidence.issueNumber,
     committedAt:null,changedPaths:files,pathsComplete:true,
     evidenceUrl:'https://github.com/'+evidence.repository+'/commit/'+evidence.commitSha}]};
