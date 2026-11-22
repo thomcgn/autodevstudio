@@ -9,7 +9,9 @@ import { inspectProject } from './project-capabilities';
 import { listIssues } from '../core/issues';
 import { previewIssueQueue } from '../core/issue-queue-preview';
 import { implementIssueLocally } from '../core/local-issue-to-code';
-import { runIssueToDraftPr } from '../core/issue-draft-orchestrator';
+import { runIssueToDraftPr, defaultIssueAutomationDependencies } from '../core/issue-draft-orchestrator';
+import { createKiloPrimaryBuilder } from '../core/kilo-primary-builder';
+import { createKiloPrimaryReviewer,selectPrimaryKiloRoles } from '../core/kilo-primary-reviewer';
 import { loadCoreCheckpoint } from '../core/checkpoint-store';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
@@ -339,35 +341,17 @@ app.whenReady().then(() => {
       const cp=loadCoreCheckpoint(base,project.path);
       if(cp && cp.issueNumber!==issue.number)
         throw Error('Another issue has a pending checkpoint');
-      if(!cp){
-        const local=await probeOllamaReadiness();
-        if(!local.ready)throw Error('Local builder unavailable');
-      }
       const scripts=selectSafeQualityScripts(project.path);
-      const roles=loadKiloRoles(base,id);
       const catalog=await fetchKiloFreeModels();
+      const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
       const quota=new FreeQuotaGuard(base);
-      // The local Qwen Builder is the ACTUAL author; Qwen never reviews itself.
-      const transport=createAttestedProjectReviewerTransport({
-        userData:base,projectId:id,
-        roles:{planner:roles?.planner??'',builder:'qwen2.5-coder:3b',
-          reviewer:roles?.reviewer??''},
-        freeCatalog:catalog.models,quota,
-        ollamaReadiness:{ready:false,reason:'unreachable'},
-      });
-      const canReview=async()=>{
-        if(!roles||!catalog.models.some(m=>m.id===roles.reviewer))
-          return {ready:false,reason:'Independent Kilo reviewer not configured as verified free'};
-        if(roles.reviewer==='qwen2.5-coder:3b')
-          return {ready:false,reason:'Self-review by local builder is forbidden'};
-        const permission=quota.decide('normal',true);
-        return permission.allowed
-          ?{ready:true,reason:'Verified independent reviewer available'}
-          :{ready:false,reason:'Independent review paused: provider-verified Kilo IP quota missing or exhausted'};
-      };
+      const kiloBuilder=createKiloPrimaryBuilder(roles,catalog.models,quota);
+      const reviewer=createKiloPrimaryReviewer(base,id,roles,catalog.models,quota);
+      const deps={...defaultIssueAutomationDependencies,
+        build:kiloBuilder.build,repair:kiloBuilder.repair};
       return await runIssueToDraftPr(base,project.path,{
         number:issue.number,title:issue.title,body:issue.body,
-      },transport,scripts,controller.signal,undefined,undefined,canReview);
+      },reviewer.transport,scripts,controller.signal,undefined,deps,reviewer.canReview);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
@@ -383,14 +367,16 @@ app.whenReady().then(() => {
     const issues=await listIssues(project.path);
     const issue=issues.find(x=>x.number===issueNumber);
     if(!issue)throw Error('Issue is not open or no longer available');
-    const ollama=await probeOllamaReadiness();
-    if(!ollama.ready)throw Error('Local Qwen model is not ready');
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
     try{
-      return await implementIssueLocally(app.getPath('userData'),project.path,
-        {number:issue.number,title:issue.title,body:issue.body},undefined,controller.signal);
+      const base=app.getPath('userData');
+      const catalog=await fetchKiloFreeModels();
+      const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
+      const builder=createKiloPrimaryBuilder(roles,catalog.models,new FreeQuotaGuard(base));
+      return await builder.build(base,project.path,
+        {number:issue.number,title:issue.title,body:issue.body},controller.signal);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
@@ -405,32 +391,21 @@ app.whenReady().then(() => {
     const issues=await listIssues(project.path);
     const issue=issues.find(item=>item.number===issueNumber);
     if(!issue)throw Error('Issue not found among open issues');
-    // Verify scripts and provider eligibility BEFORE any real model inference.
-    // This first local Qwen Builder cannot review its OWN output with Qwen.
     const scripts=selectSafeQualityScripts(project.path);
-    const roles=loadKiloRoles(app.getPath('userData'),id);
-    if(!roles)throw Error('Reviewer model selection missing');
-    const catalog=await fetchKiloFreeModels();
-    if(!catalog.models.some(model=>model.id===roles.reviewer))
-      throw Error('Reviewer no longer verified free');
-    const quota=new FreeQuotaGuard(app.getPath('userData'));
-    if(!quota.decide('normal',true).allowed)
-      throw Error('Verified Kilo remaining quota unavailable; independent review paused safely');
-    const ollama=await probeOllamaReadiness();
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
     try{
-      const transport=createAttestedProjectReviewerTransport({
-        userData:app.getPath('userData'),projectId:id,
-        // Source of truth: the current issue branch was written by local Qwen,
-        // not by the model selected under the unrelated Kilo Builder role.
-        roles:{...roles,builder:'qwen2.5-coder:3b'},
-        freeCatalog:catalog.models,quota,ollamaReadiness:ollama,
-      });
-      return await verifyGeneratedIssue(app.getPath('userData'),project.path,
+      const base=app.getPath('userData');
+      const catalog=await fetchKiloFreeModels();
+      const roles=selectPrimaryKiloRoles(loadKiloRoles(base,id),catalog.models);
+      const reviewer=createKiloPrimaryReviewer(base,id,roles,catalog.models,
+        new FreeQuotaGuard(base));
+      const ready=await reviewer.canReview();
+      if(!ready.ready)throw Error(ready.reason);
+      return await verifyGeneratedIssue(base,project.path,
         {number:issue.number,title:issue.title,body:issue.body},
-        transport,scripts,controller.signal);
+        reviewer.transport,scripts,controller.signal);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
