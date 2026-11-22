@@ -27,6 +27,7 @@ jobs:
 
   ui-smoke:
     name: Renderer click tests (Playwright)
+    needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -50,6 +51,7 @@ jobs:
 
   desktop-smoke:
     name: Packaged Electron integration (Playwright)
+    needs: [typecheck, ui-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
