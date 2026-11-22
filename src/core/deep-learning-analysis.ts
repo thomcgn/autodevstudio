@@ -6,9 +6,10 @@ const exec=promisify(execFile);
 const SHA=/^[0-9a-f]{40}$/i;
 const HOST='http://127.0.0.1:11434';
 const MODEL='qwen2.5-coder:3b';
-const FILE_LIMIT=120;
+const FILE_LIMIT=600;
 const GROUP_SIZE=4;
-const FILE_BYTES=12_000;
+const FILE_BYTES=64_000;
+const CHUNK_CHARS=5500;
 export type LearningPhase='discovery'|'loading'|'architecture'|'model'|'writing'|'finished';
 export interface DeepLearningProgress {
  runId:string;repository:string;phase:LearningPhase;startedAt:number;
@@ -56,7 +57,9 @@ function decodeBlob(value:unknown,sha:string):string{
   throw Error('Invalid blob base64');
  const bytes=Buffer.from(input,'base64');
  if(bytes.length!==x.size||bytes.includes(0))throw Error('Binary or corrupted source');
- return redact(bytes.toString('utf8'));
+ const content=bytes.toString('utf8');
+ if(!Buffer.from(content,'utf8').equals(bytes))throw Error('Source is not valid UTF-8');
+ return redact(content);
 }
 export const readSourceGitHub:GitHubReader=async endpoint=>{
  if(!/^repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/git\/(?:trees|blobs|commits)\/[a-f0-9]{40}(?:\?recursive=1)?$/i.test(endpoint))
@@ -206,16 +209,22 @@ export async function analyzeSourceWithOllama(
  const eligibleFiles=all.filter(eligible).sort((a,b)=>a.path.localeCompare(b.path));
  if(eligibleFiles.length===0)throw Error('No suitable code files');
  if(eligibleFiles.length>FILE_LIMIT)throw Error('Repository has more than '+FILE_LIMIT+
-  ' eligible files; complete analysis requires a larger source strategy');
- const total=Math.ceil(eligibleFiles.length/GROUP_SIZE)+1;
- send('loading',0,total,'Quelldateien werden schreibgeschützt geladen','',null);
+  ' eligible files; complete analysis is beyond the safe per-run source limit');
+ send('loading',0,eligibleFiles.length,'Quelldateien werden schreibgeschützt geladen','',null);
  await (deps.preflight??(()=>requireOllama()))();
  const sources:SourceFile[]=[];
+ const chunks:SourceFile[]=[];
  for(const item of eligibleFiles){
   if(signal.aborted)throw Error('Learning analysis cancelled');
-  sources.push({path:item.path,sha:item.sha,
-   content:decodeBlob(await read('repos/'+repository+'/git/blobs/'+item.sha),item.sha)});
+  const content=decodeBlob(await read('repos/'+repository+'/git/blobs/'+item.sha),item.sha);
+  sources.push({path:item.path,sha:item.sha,content});
+  for(let start=0,n=1;start<content.length;start+=CHUNK_CHARS,n++)
+   chunks.push({path:item.path+' (Abschnitt '+n+')',sha:item.sha,
+     content:content.slice(start,start+CHUNK_CHARS)});
+  send('loading',sources.length,eligibleFiles.length,
+   'Quelldatei '+sources.length+'/'+eligibleFiles.length+': '+item.path,'',null);
  }
+ const total=Math.ceil(chunks.length/GROUP_SIZE)+1;
  const chapters:string[]=[];
  const solutions:string[]=[];
  const reports:string[]=[];
@@ -236,9 +245,9 @@ export async function analyzeSourceWithOllama(
  durations.push(Date.now()-architectureStarted);
  send('writing',1,total,'Systemübersicht erstellt',first.book.slice(0,3400),
   Math.round((total-1)*durations[0]/1000));
- for(let i=0;i<sources.length;i+=GROUP_SIZE){
+ for(let i=0;i<chunks.length;i+=GROUP_SIZE){
   if(signal.aborted)throw Error('Learning analysis cancelled');
-  const part=sources.slice(i,i+GROUP_SIZE);
+  const part=chunks.slice(i,i+GROUP_SIZE);
   const n=Math.floor(i/GROUP_SIZE)+1;
   const avg=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
   send('model',n,total,'Ollama analysiert '+part.map(f=>f.path).join(', '),
@@ -248,7 +257,7 @@ export async function analyzeSourceWithOllama(
    'ARCHITEKTURKONTEXT AUS DER VORHERIGEN ANALYSE:\n'+
    overview.implementation.slice(0,1300)+'\n'+overview.reasoning.slice(0,1000)+
    '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,4500)+'\n'+
-   part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content.slice(0,8000)).join('\n\n');
+   part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
   const response=await model(SYSTEM,prompt,signal);
   const chapter=renderLesson(parseLesson(response),part,n+1);
   chapters.push(chapter.book);
@@ -261,7 +270,7 @@ export async function analyzeSourceWithOllama(
  }
  const index=['# Code-Lehrbuch: '+repository,'','Commit: '+head,
   'Modell: lokales Ollama '+MODEL+' (kein externer Tokenverbrauch)',
-  'Abgedeckte Quelldateien: '+sources.length+'; ausgelassene Blob-Dateien: '+(all.length-sources.length),
+  'Abgedeckte Quelldateien: '+sources.length+' in '+chunks.length+' Codeabschnitten; ausgelassene Blob-Dateien: '+(all.length-sources.length),
   'Eine vollständige Abdeckung sämtlicher Dateiformate ist nur bei null ausgelassenen Dateien gegeben.',
   'Architekturgründe sind technische Einordnungen, nicht nachgewiesene Entwicklergedanken.',
   '','## Inhaltsverzeichnis',
