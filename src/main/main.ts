@@ -26,7 +26,7 @@ import { assertBranchProtection } from '../core/branch-protection';
 import {installRequiredIssueLabels} from '../core/issue-label-onboarding';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
-import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/public-history';
+import { indexPublicRepositoryHistory, readGitHubPublicJson, walkPublicRepositoryHistory } from '../core/public-history';
 import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
@@ -351,23 +351,19 @@ app.whenReady().then(() => {
     const runId=randomUUID();
     const startedAt=Date.now();
     try{
-      let observedCommits=0;
-      const trackedRead=async(endpoint:string):Promise<unknown>=>{
-        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
-        const response=await readGitHubPublicJson(endpoint);
-        if(/\/commits\/[a-f0-9]{40}$/i.test(endpoint)){
-          observedCommits++;
+      const index=await walkPublicRepositoryHistory(input,{
+        signal:controller.signal,pageSize:20,
+        onPage:(page,commitsSeen)=>{
           send('learning:progress',{
-            runId,repository:input,phase:'discovery',startedAt,
-            completed:observedCommits,total:12,
-            current:'Git-Historie: '+observedCommits+' Commits untersucht',
+            runId,repository:page.repository,phase:'discovery',startedAt,
+            completed:commitsSeen,total:0,
+            current:'Git-Historie: '+commitsSeen+' Commits untersucht · Seite '+page.page+
+              (page.hasMore?' · weitere Seiten werden geladen':' · Historie vollständig eingelesen'),
             etaSeconds:null,preview:'',model:'qwen2.5-coder:3b',
           });
-        }
-        return response;
-      };
-      const index=await indexPublicRepositoryHistory(input,trackedRead,12);
-      const result=await analyzeSourceWithOllama(index.repository,index.fixedHead,
+        },
+      });
+      const result=await analyzeSourceWithOllama(index.repository,index.head,
         runId,startedAt,event=>send('learning:progress',event),controller.signal,{
           history:index.commits.map(commit=>({
             sha:commit.sha,title:commit.title,changedPaths:commit.changedPaths,
