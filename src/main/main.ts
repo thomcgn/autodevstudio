@@ -26,7 +26,7 @@ import { assertBranchProtection } from '../core/branch-protection';
 import {installRequiredIssueLabels} from '../core/issue-label-onboarding';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
-import { indexPublicRepositoryHistory, readGitHubPublicJson, walkPublicRepositoryHistory } from '../core/public-history';
+import { indexPublicRepositoryHistory, parsePublicRepository, readGitHubPublicJson, walkPublicRepositoryHistory } from '../core/public-history';
 import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
@@ -398,8 +398,15 @@ app.whenReady().then(() => {
     // Automatic bounded paging: persist each successful page so an API error
     // leaves the last verified Markdown snapshot recoverable.
     let lastSaved:ReturnType<typeof saveHistoricalBook>|null=null;
+    const current=loadHistoricalBook(app.getPath('userData'),parsePublicRepository(input));
+    const resume=current?.pagination?.hasMore===true&&
+      current.pagination.pageSize===20&&current.lessonEntries.length===current.lessons;
     await walkPublicRepositoryHistory(input,{
       pageSize:20,
+      startPage:resume?current.pagination!.page+1:1,
+      pinnedHead:resume?current.head:undefined,
+      initialCount:resume?current.pagination!.page*20:0,
+      collect:false,
       onPage:async index=>{
         const candidate=await generateHistoricalBook(index,readGitHubPublicJson);
         const previous=loadHistoricalBook(app.getPath('userData'),index.repository);
@@ -414,7 +421,7 @@ app.whenReady().then(() => {
             reportsMarkdown:previous.reportsMarkdown,
             caseStudies:previous.caseStudies}:null;
         const grown=mergeHistoricalBook(prior,candidate);
-        grown.pagination={page:index.page,hasMore:index.hasMore};
+        grown.pagination={page:index.page,hasMore:index.hasMore,pageSize:20};
         lastSaved=saveHistoricalBook(app.getPath('userData'),grown);
       },
     });
