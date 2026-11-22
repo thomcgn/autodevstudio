@@ -31,6 +31,15 @@ test('same topic retains old commits, and additional topics are appended once',a
   const grownSaved=saveHistoricalBook(dir,grown);
   assert.notEqual(firstSaved.directory,grownSaved.directory);
   assert.equal(loadHistoricalBook(dir,repo)?.lessonEntries.length,2);
+  const continued={...grown,pagination:{page:3,hasMore:true}};
+  saveHistoricalBook(dir,continued);
+  const resumed=loadHistoricalBook(dir,repo);
+  assert.equal(resumed?.pagination?.page,3);
+  assert.equal(resumed?.pagination?.hasMore,true);
+  const final={...continued,pagination:{page:4,hasMore:false}};
+  const last=saveHistoricalBook(dir,final);
+  assert.notEqual(last.directory,grownSaved.directory);
+  assert.equal(loadHistoricalBook(dir,repo)?.pagination?.hasMore,false);
   assert.equal(fs.existsSync(path.join(firstSaved.directory,'book.md')),true);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

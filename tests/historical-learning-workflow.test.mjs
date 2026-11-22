@@ -29,6 +29,9 @@ test('diff evidence creates thematic explanations and separate exercise solution
  assert.match(book.bookMarkdown,/### Einfach erklärt/);
  assert.match(book.bookMarkdown,/### Technische Vertiefung/);
  assert.match(book.bookMarkdown,/Java: Generics/);
+ assert.match(book.bookMarkdown,/### Fachbegriffe/);
+ assert.match(book.bookMarkdown,/### Kontrollfragen/);
+ assert.match(book.solutionsMarkdown,/### Antworten auf die Kontrollfragen/);
  assert.match(book.bookMarkdown,/React: useState/);
  assert.match(book.bookMarkdown,/docs\.oracle\.com/);
  assert.match(book.bookMarkdown,/github.com\/example\/studio\/commit/);
@@ -59,6 +62,9 @@ test('repeated imports are idempotent snapshots and never modify source reposito
 test('HTML export is printable, escapes source text and keeps HTTPS links',()=>{
  const html=markdownToPrintHtml('# Titel\n\n## Thema\n\nText <script>x</script>\n\n~~~typescript\nconst x = "<b>";\n~~~\n\n- [Doc](https://example.org/help)');
  assert.match(html,/<h1>Titel<\/h1>/);
+ const toc=markdownToPrintHtml('# Buch\n\n## Inhaltsverzeichnis\n1. Generics\n\n## Generics\nKapitel');
+ assert.match(toc,/href="#generics"/);
+ assert.match(toc,/<h2 id="generics">Generics<\/h2>/);
  assert.match(html,/&lt;script&gt;/);
  assert.doesNotMatch(html,/<script>/);
  assert.match(html,/<pre><code>const x = &quot;&lt;b&gt;&quot;;/);
