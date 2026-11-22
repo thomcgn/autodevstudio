@@ -221,6 +221,8 @@ function App(): React.JSX.Element {
     setIssuesLoading(true);
     setIssuesError('');
     setBranchProtection(null);
+    void window.studio.studioStatus(selected).then(setStudioStatus)
+      .catch(()=>setStudioStatus(null));
     void window.studio.studioActivity(selected).then(setStudioActivity).catch(()=>setStudioActivity(null));
     void window.studio.branchProtection(selected).then(setBranchProtection).catch(()=>
       setBranchProtection({protected:false,reason:'GitHub-Branch-Protection konnte nicht geprüft werden'}));
@@ -879,8 +881,11 @@ function App(): React.JSX.Element {
               : <div className="issue-list">{issues.map(issue => {
                 const hold=explainIssueHold(issue.labels,
                   issueQueue?.queue.find(item=>item.number===issue.number)?.reason);
-                const checkpointBlocked=studioStatus?.checkpoint?.issueNumber===issue.number &&
-                  (studioStatus.recovery.state==='manual'||studioStatus.recovery.state==='locked');
+                const checkpointBlocked=Boolean(studioStatus?.lock.held)||
+                  Boolean(studioStatus?.checkpoint &&
+                    (studioStatus.checkpoint.issueNumber!==issue.number||
+                      studioStatus.recovery.state==='manual'||
+                      studioStatus.recovery.state==='locked'));
                 return <article key={issue.number}
                   className={'issue-item'+(hold?.severity==='blocked'||checkpointBlocked?' issue-item--blocked':'')}>
                   <div className="issue-item-header">
