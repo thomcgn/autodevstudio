@@ -69,3 +69,24 @@ test('rejects confusing GitHub lookalike and unsafe issue URLs', () => {
     ])), /Invalid GitHub issue/);
   }
 });
+
+test('issue from another repository is not returned to the selected project',async()=>{
+ const runner=async()=>JSON.stringify([
+  {number:7,title:'Remove LaceFrame Legacy Core',
+   url:'https://github.com/thomcgn/laceframe/issues/7',labels:[]},
+ ]);
+ await assert.rejects(
+  listIssues('/projects/autodev-studio',runner,'thomcgn/autodevstudio'),
+  /Invalid GitHub issue/,
+ );
+});
+test('selected project accepts only matching issue URLs and real issue numbers',()=>{
+ const good=JSON.stringify([{number:5,title:'Fix Studio UI',
+  url:'https://github.com/thomcgn/autodevstudio/issues/5',labels:[]}]);
+ assert.equal(parseIssues(good,'thomcgn/autodevstudio')[0].number,5);
+ assert.throws(()=>parseIssues(good,'thomcgn/laceframe'),/Invalid GitHub issue/);
+ const wrongNumber=JSON.stringify([{number:5,title:'Wrong issue',
+  url:'https://github.com/thomcgn/autodevstudio/issues/7',labels:[]}]);
+ assert.throws(()=>parseIssues(wrongNumber,'thomcgn/autodevstudio'),/Invalid GitHub issue/);
+ assert.throws(()=>parseIssues(good,'../laceframe'),/Invalid expected GitHub repository/);
+});
