@@ -30,7 +30,7 @@ export interface IssueAutomationDependencies {
   draft:(base:string,project:string,issueNumber:number)=>Promise<DraftPullRequest>;
   repair?:(base:string,project:string,issue:IssueTask,feedback:string,signal?:AbortSignal)=>Promise<unknown>;
 }
-const defaultDeps:IssueAutomationDependencies={
+export const defaultIssueAutomationDependencies:IssueAutomationDependencies={
   build:(base,project,issue,signal)=>implementIssueLocally(base,project,issue,undefined,signal),
   review:(base,project,issue,transport,scripts,signal)=>
     verifyGeneratedIssue(base,project,issue,transport,scripts,signal),
@@ -72,7 +72,7 @@ export async function runIssueToDraftPr(
   reviewer:EvidenceOnlyReviewerTransport,
   approvedScripts:readonly string[],
   signal?:AbortSignal,onStep?:IssueAutomationStep,
-  deps:IssueAutomationDependencies=defaultDeps,
+  deps:IssueAutomationDependencies=defaultIssueAutomationDependencies,
   canReview?:()=>Promise<{ready:boolean;reason:string}>,
   repairDepth=0,
 ):Promise<IssueAutomationOutcome>{
