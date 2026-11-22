@@ -18,7 +18,7 @@ import {previewCheckpointIssueStatus} from '../core/issue-status-policy';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
-import {assertSeniorStackPreflight} from '../core/tech-stack-profile';
+import {assertSeniorStackPreflight,detectTechStackProfile} from '../core/tech-stack-profile';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
 import { inspectGitPreflight } from '../core/git-preflight';
@@ -429,6 +429,12 @@ app.whenReady().then(() => {
       return {protected:false,reason:error instanceof Error?error.message:
         'GitHub protection could not be verified'} as const;
     }
+  });
+  ipcMain.handle('core:tech-stack', (_event,id:unknown) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    const project=getProject(id);
+    if(!inspectProject(project.path).isGitRepo)throw Error('Not a Git repository');
+    return detectTechStackProfile(project.path);
   });
   ipcMain.handle('core:issue-labels:install', async (_event,id:unknown) => {
     if(typeof id!=='string')throw Error('Invalid project ID');
