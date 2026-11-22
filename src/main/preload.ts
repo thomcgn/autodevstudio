@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('studio', {
   saveKiloRoleModels: (id: string, roles: {planner:string;builder:string;reviewer:string}) => ipcRenderer.invoke('core:kilo-role-models:save', id, roles),
   simulateIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:simulate', id, issueNumber),
   issueToCode: (id: string, issueNumber: number) => ipcRenderer.invoke('core:issue-to-code', id, issueNumber),
+  issueQueue: (id: string) => ipcRenderer.invoke('core:issue-queue', id),
   automateDraftIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:issue-auto-draft', id, issueNumber),
   verifyIssue: (id: string, issueNumber: number) => ipcRenderer.invoke('core:issue-verify', id, issueNumber),
   publishDraftIssuePr: (id: string, issueNumber: number) => ipcRenderer.invoke('core:issue-draft-pr', id, issueNumber),
