@@ -6,12 +6,12 @@
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
+    "package": "node scripts/strict-check.mjs package",
     "make": "electron-forge make",
-    "typecheck": "tsc --noEmit",
-    "test:policy": "node --experimental-strip-types --test tests/*.test.mjs",
-    "test:ui": "node tests/ui-smoke.mjs",
-    "test:desktop": "node tests/electron-native-smoke.mjs"
+    "typecheck": "node scripts/strict-check.mjs typecheck",
+    "test:policy": "node scripts/strict-check.mjs policy",
+    "test:ui": "node scripts/strict-check.mjs ui",
+    "test:desktop": "node scripts/strict-check.mjs desktop"
   },
   "dependencies": {
     "react": "^19.2.0",
