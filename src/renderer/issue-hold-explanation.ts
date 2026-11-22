@@ -8,13 +8,19 @@ export interface IssueHoldExplanation {
   severity:'blocked'|'waiting';
 }
 export function explainIssueHold(
-  labels:readonly string[],queueReason:string|undefined,
+  labels:readonly string[],queueReason:string|undefined,issueBody='',
 ):IssueHoldExplanation|null {
+  // Treat issue descriptions as displayed evidence, never executable instructions.
+  const body=issueBody.slice(0,30_000);
+  const section=/(?:^|\n)#{1,3}\s*(?:Abhängigkeiten?|Blockiert durch|Blocked by)\s*\n([\s\S]*?)(?=\n#{1,3}\s|$)/im.exec(body);
+  const statedReason=section?.[1]?.trim().replace(/\s+/g,' ').slice(0,250);
   const values=labels.map(label=>label.trim().toLowerCase());
   const has=(label:string):boolean=>values.includes(label);
   if(has('status:blocked')||has('blocked'))
     return {title:'BLOCKED – Issue gesperrt',
-      why:'Das Issue ist auf GitHub als blockiert markiert. Das Label enthält keinen konkreten technischen Fehlergrund.',
+      why:statedReason
+        ?'Im GitHub-Issue als Abhängigkeit dokumentiert: '+statedReason
+        :'Das Issue ist auf GitHub als blockiert markiert. Das Label enthält keinen konkreten technischen Fehlergrund.',
       next:'Issue-Beschreibung, Abhängigkeiten und Laufdiagnose prüfen. Erst nach dokumentierter Freigabe wieder auf status:ready setzen.',
       severity:'blocked'};
   if(has('manual-only')||has('do-not-automate'))
