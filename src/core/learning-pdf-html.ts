@@ -5,9 +5,10 @@ function escape(value:string):string{
 }
 function inline(value:string):string{
  const escaped=escape(value);
- return escaped.replace(/\[([^\]\n]{1,180})\]\((https:\/\/[^\s)\n]{1,1500})\)/g,
+ const linked=escaped.replace(/\[([^\]\n]{1,180})\]\((https:\/\/[^\s)\n]{1,1500})\)/g,
   (_match,label:string,url:string)=>'<a href="'+url.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+
    '">'+label+'</a>');
+ return linked.replace(/\*\*([^*\n]{1,240})\*\*/g,'<strong>$1</strong>');
 }
 export function markdownToPrintHtml(markdown:string,title='Programmierlehrbuch'):string{
  if(typeof markdown!=='string'||markdown.length>2_000_000)throw Error('Document exceeds print limit');
