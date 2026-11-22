@@ -12,7 +12,10 @@ export interface OllamaReadinessResult {
 export async function probeOllamaReadiness(
   fetcher:typeof fetch=fetch,
   timeoutMs=5000,
+  modelName=MODEL,
 ):Promise<OllamaReadinessResult> {
+  if(!['qwen2.5-coder:3b','granite3.3:2b'].includes(modelName))
+    throw new Error('Unsupported local Ollama model');
   if(!Number.isSafeInteger(timeoutMs)||timeoutMs<100||timeoutMs>10000)
     throw new Error('Invalid preflight timeout');
   const controller=new AbortController();
@@ -46,7 +49,7 @@ export async function probeOllamaReadiness(
       item&&typeof item==='object'&&!Array.isArray(item)&&
       typeof (item as Record<string,unknown>).name==='string'))
       return {ready:false,reason:'invalid-response'};
-    return models.some(item=>(item as {name:string}).name===MODEL)
+    return models.some(item=>(item as {name:string}).name===modelName)
       ?{ready:true,reason:'ready'}
       :{ready:false,reason:'model-missing'};
   }catch{
