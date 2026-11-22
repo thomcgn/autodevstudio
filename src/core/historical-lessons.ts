@@ -1,4 +1,5 @@
 import type {PublicHistoryIndex,GitHubHistoryRead} from './public-history.ts';
+import {analyzeDevelopmentDecision,renderDevelopmentCaseStudies,type DevelopmentDecision} from './development-case-studies.ts';
 
 export interface HistoricalLesson {
   key:string;title:string;plain:string;technical:string;
@@ -9,6 +10,7 @@ export interface HistoricalBook {
   repository:string;head:string;license:string|null;lessons:HistoricalLesson[];
   bookMarkdown:string;solutionsMarkdown:string;reportsMarkdown:string;
   pagination?:{page:number;hasMore:boolean};
+  caseStudies?:DevelopmentDecision[];
 }
 type Concept=Omit<HistoricalLesson,'commits'|'paths'> & {match:RegExp};
 const concepts:readonly Concept[]=[
@@ -184,9 +186,15 @@ export async function generateHistoricalBook(
  if(index.readOnly!==true||!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(index.repository)||
  !/^[0-9a-f]{40}$/i.test(index.fixedHead))throw Error('Invalid historical source');
  const grouped=new Map<string,HistoricalLesson>();
+ const studies:DevelopmentDecision[]=[];
  for(const commit of index.commits.slice(0,12)){
   if(!/^[0-9a-f]{40}$/i.test(commit.sha))throw Error('Invalid commit SHA');
-  const added=additions(await read('repos/'+index.repository+'/commits/'+commit.sha));
+  const detail=await read('repos/'+index.repository+'/commits/'+commit.sha);
+  const added=additions(detail);
+  studies.push(analyzeDevelopmentDecision({
+    repository:index.repository,sha:commit.sha,title:commit.title,
+    paths:commit.changedPaths,detail,
+  }));
   for(const concept of concepts){
    if(!concept.match.test(added))continue;
    const lesson=grouped.get(concept.key)??{...concept,commits:[],paths:[]};
@@ -211,12 +219,13 @@ export async function generateHistoricalBook(
  }
  const lessons=[...grouped.values()].sort((a,b)=>a.key.localeCompare(b.key,'en'));
 
- return renderHistoricalBook(index,lessons);
+ return renderHistoricalBook(index,lessons,studies);
 }
 /** Render the same certified source records in a stable thematic order. */
 export function renderHistoricalBook(
  index:Pick<PublicHistoryIndex,'repository'|'fixedHead'|'licenseSpdx'>,
  lessons:HistoricalLesson[],
+ caseStudies:readonly DevelopmentDecision[]=[],
 ):HistoricalBook {
  const book=['# Programmieren verstehen: '+safe(index.repository),'',
   '## Beleglage',
@@ -224,10 +233,16 @@ export function renderHistoricalBook(
   'Die ursprüngliche Absicht und die Qualität des fremden Codes sind ohne zusätzliche Belege **nicht bestätigt**.',
   'Die Übungsbeispiele verwenden Java 21 bzw. modernes TypeScript/React. Ein historisches Projekt kann andere Sprach- und Framework-Versionen einsetzen.',
   'Commit-Stand: '+index.fixedHead+' · Lizenz: '+(index.licenseSpdx??'nicht verifiziert'),'',
-  '## Inhaltsverzeichnis',...lessons.map((l,i)=>(i+1)+'. '+l.title)];
+  '## Inhaltsverzeichnis',...(caseStudies.length?['1. Entwicklungsentscheidungen: vom Problem zur Lösung']:[]),
+  ...lessons.map((l,i)=>(i+1+(caseStudies.length?1:0))+'. '+l.title)];
  const solutions=['# Getrennte Musterlösungen – '+safe(index.repository)];
  const reports=['# Quellen- und Entwicklungsreport – '+safe(index.repository),
   'Fakten sind als Commit-Links belegt. Eine historische Motivationsbehauptung wird nicht abgeleitet.'];
+ if(caseStudies.length){
+  const cases=renderDevelopmentCaseStudies(caseStudies);
+  book.push('',cases.book);
+  reports.push('',cases.reports);
+ }
  for(const l of lessons){
   book.push('','## '+l.title,'','### Einfach erklärt',l.plain,
    '','### Technische Vertiefung',l.technical,
@@ -259,7 +274,7 @@ export function renderHistoricalBook(
  if(!lessons.length)book.push('','Keine unterstützten Syntaxmuster erkannt; es wird kein Kapitel erfunden.');
  return {repository:index.repository,head:index.fixedHead,license:index.licenseSpdx,lessons,
   bookMarkdown:book.join('\n')+'\n',solutionsMarkdown:solutions.join('\n')+'\n',
-  reportsMarkdown:reports.join('\n')+'\n'};
+  reportsMarkdown:reports.join('\n')+'\n',caseStudies:[...caseStudies]};
 }
 /** Keep old lessons and their provenance when subsequent commit pages are imported. */
 export function mergeHistoricalBook(
@@ -276,7 +291,11 @@ export function mergeHistoricalBook(
    commits:[...new Set([...original.commits,...lesson.commits])],
    paths:[...new Set([...original.paths,...lesson.paths])].slice(0,50)});
  }
+ const caseMap=new Map<string,DevelopmentDecision>();
+ for(const item of [...(previous.caseStudies??[]),...(incoming.caseStudies??[])])
+  caseMap.set(item.repository+'/'+item.sha,item);
  return renderHistoricalBook({
   repository:incoming.repository,fixedHead:incoming.head,licenseSpdx:incoming.license??previous.license,
- },[...merged.values()].sort((a,b)=>a.key.localeCompare(b.key,'en')));
+ },[...merged.values()].sort((a,b)=>a.key.localeCompare(b.key,'en')),
+ [...caseMap.values()]);
 }

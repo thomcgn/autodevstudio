@@ -97,6 +97,7 @@ async function fixture(page){
       runInfo:async()=>null,
       onEvent:()=>()=>{},
       onIssueProgress:()=>()=>{},
+      onLearningProgress:(callback)=>{window.__uiSmoke.learningProgress=callback;return()=>{};},
       snapshot:async()=>({currentIssue:null,reviewIteration:0,processedIssues:[],failedIssues:[],
         checkpoint:null,hasState:false,updatedAt:null}),
       studioActivity:()=>respond('studioActivity'),
@@ -131,6 +132,18 @@ async function fixture(page){
       installIssueLabels:async()=>({repository:'example/studio',protectedBranch:'main',created:['status:ready'],alreadyPresent:[],total:16}),
       publicRepoHistory:()=>respond('publicRepoHistory'),
       generateLearningBook:()=>respond('learningBook'),
+      deepLearningBook:async()=>{
+        const startedAt=Date.now();
+        const progress={runId:'demo-run',repository:'example/studio',
+          phase:'writing',startedAt,completed:1,total:1,
+          current:'Kapitel 1 geschrieben',etaSeconds:0,model:'qwen2.5-coder:3b',
+          preview:'## Kapitel 1: Erklärtes Modul'};
+        window.__uiSmoke.learningProgress?.(progress);
+        const saved=await respond('learningBook');
+        return {...saved,deepAnalysis:{model:'qwen2.5-coder:3b',
+          filesAnalyzed:4,filesSkipped:0,complete:true}};
+      },
+      cancelDeepLearning:async()=>true,
       loadLearningBook:()=>respond('learningBook'),
       exportLearningBook:async()=>({exported:true}),
       branchProtection:()=>respond('branchProtection'),
@@ -250,8 +263,12 @@ try {
   await page.getByRole('button',{name:'Historie lesen',exact:true}).click();
   await page.getByText('feat: introduce typed list',{exact:true}).waitFor();
   await page.getByText('Quellenindex, noch kein fertiges Lehrbuch',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'Lehrbuch erstellen'}).click();
+  await page.getByRole('button',{name:'Lehrbuch mit Ollama analysieren'}).click();
+  await page.getByRole('dialog',{name:'Code-Lehrbuch mit lokalem Ollama'}).waitFor();
+  await page.getByText('Kapitel 1 geschrieben',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Schließen',exact:true}).click();
   await page.getByText('Dein Lehrbuch – example/studio',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Git-Schnellüberblick (ohne Modell)'}).click();
   await page.getByRole('button',{name:'Weitere 12 Commits analysieren'}).click();
   await page.getByText('Weitere Commits geprüft.',{exact:false}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch als PDF'}).click();

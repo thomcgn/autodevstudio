@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent, IssueProgressEvent } from '../main/preload';
 import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, StudioActivity, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview, BranchProtectionStatus, PublicHistoryIndex, LearningBookPreview, IssueStatusPreview, TechStackProfilePreview } from './global';
+import type {DeepLearningProgress} from '../main/preload';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
@@ -24,6 +25,10 @@ function App(): React.JSX.Element {
   const [learningHistory, setLearningHistory] = useState<PublicHistoryIndex | null>(null);
   const [learningBook, setLearningBook] = useState<LearningBookPreview|null>(null);
   const [learningGenerating,setLearningGenerating] = useState(false);
+  const [learningProgress,setLearningProgress] = useState<DeepLearningProgress|null>(null);
+  const [learningModalOpen,setLearningModalOpen] = useState(false);
+  const [learningStartedAt,setLearningStartedAt] = useState(0);
+  const [learningModalError,setLearningModalError] = useState('');
   const [learningExporting,setLearningExporting] = useState(false);
   const [learningMessage,setLearningMessage] = useState('');
   const [learningLoading, setLearningLoading] = useState(false);
@@ -144,11 +149,14 @@ function App(): React.JSX.Element {
         setActiveInfo(null);
       }
     });
+    const unsubscribeLearning=window.studio.onLearningProgress(event=>{
+      setLearningProgress(event);
+    });
     const unsubscribeIssue=window.studio.onIssueProgress(event=>{
       if(Number.isSafeInteger(event.issueNumber)&&event.issueNumber>0)
         setIssueProgress(event);
     });
-    return () => { clearInterval(ticker); unsubscribe(); unsubscribeIssue(); };
+    return () => { clearInterval(ticker); unsubscribe(); unsubscribeIssue(); unsubscribeLearning(); };
   }, []);
 
   useEffect(() => {
@@ -272,14 +280,28 @@ function App(): React.JSX.Element {
   const generateLearning = async ():Promise<void>=>{
     if(learningGenerating||!learningInput.trim())return;
     setLearningGenerating(true);setLearningError('');setLearningMessage('');
+    setLearningProgress(null);setLearningModalError('');
+    setLearningStartedAt(Date.now());setLearningModalOpen(true);
+    try{
+      const result=await window.studio.deepLearningBook(learningInput.trim());
+      setLearningBook(result);
+      setLearningMessage('Ollama-Lehrbuch lokal gespeichert: '+
+        (result.deepAnalysis?.filesAnalyzed??result.lessons)+' Quelldateien untersucht.');
+    }catch(error){
+      const message=error instanceof Error?error.message:'Unbekannter Analysefehler';
+      setLearningModalError(message);
+      setLearningError('Lokale Ollama-Analyse fehlgeschlagen: '+message);
+    }finally{setLearningGenerating(false);}
+  };
+  const quickLearning=async():Promise<void>=>{
+    if(learningGenerating||!learningInput.trim())return;
+    setLearningGenerating(true);setLearningError('');setLearningMessage('');
     try{
       const result=await window.studio.generateLearningBook(learningInput.trim());
       setLearningBook(result);
-      setLearningMessage(result.lessons===0
-        ?'Kein unterstütztes Konzept erkannt. Es wurden keine Inhalte erfunden.'
-        :'Lehrbuch im lokalen Arbeitsbereich gespeichert – '+result.lessons+' Themenkapitel.');
-    }catch{
-      setLearningError('Lehrbuch konnte nicht erzeugt werden. Quellenzugriff und Netzwerk prüfen.');
+      setLearningMessage('Git-Überblick gespeichert (kein tiefes Codeverständnis).');
+    }catch(error){
+      setLearningError(error instanceof Error?error.message:'Git-Überblick fehlgeschlagen');
     }finally{setLearningGenerating(false);}
   };
   const growLearning=async():Promise<void>=>{
@@ -1074,9 +1096,10 @@ function App(): React.JSX.Element {
 
         {tab === 'learning' && <div className="view issue-view learning-view">
           <div className="view-intro">
-            <h2>Lehrbuch – historische Projekte verstehen</h2>
-            <p>Untersuche die Commit-Historie eigener oder fremder öffentlicher GitHub-Projekte.
-              Diese erste Stufe sammelt nur nachvollziehbare Quellen, keine automatisch erfundenen Erklärungen.</p>
+            <h2>Lehrbuch – Code wirklich verstehen</h2>
+            <p>AutoDev liest den aktuellen Quellstand und erklärt mit lokalem Ollama
+              Funktionen, Datenflüsse, Designentscheidungen, mögliche Alternativen und Tests.
+              Die Git-Schnellanalyse bleibt als getrennte, einfachere Funktion verfügbar.</p>
           </div>
           <form className="learning-source-form" onSubmit={event=>{event.preventDefault();void inspectLearningHistory();}}>
             <label htmlFor="learning-repo">Öffentliches GitHub-Repository</label>
@@ -1102,15 +1125,27 @@ function App(): React.JSX.Element {
           <div className="learning-source-controls">
             <button type="button" disabled={learningGenerating||!learningInput.trim()}
               onClick={()=>void generateLearning()}>
-              {learningGenerating?'Lehrbuch wird erstellt …':'Lehrbuch erstellen'}
+              {learningGenerating?'Ollama analysiert …':'Lehrbuch mit Ollama analysieren'}
             </button>
-            {learningBook&&<span role="status">{learningBook.lessons} Themen · Stand {learningBook.head.slice(0,12)}</span>}
+            <button type="button" className="quiet" disabled={learningGenerating||!learningInput.trim()}
+              onClick={()=>void quickLearning()}>Git-Schnellüberblick (ohne Modell)</button>
+            {learningBook&&<span role="status">{learningBook.deepAnalysis
+              ?learningBook.deepAnalysis.filesAnalyzed+' Quelldateien'
+              :learningBook.lessons+' Themen'} · Stand {learningBook.head.slice(0,12)}</span>}
           </div>
           {learningMessage&&<p role="status">{learningMessage}</p>}
           {learningBook&&<section className="learning-results" aria-label="Lehrbuch lesen und exportieren">
             <h3>Dein Lehrbuch – {learningBook.repository}</h3>
-            <p>Automatisch erkannte Konzepte mit eigenen Übungsbeispielen.
-              Jede Lektion verlinkt auf ihre Git-Quelle; unbekannte Motive werden nicht behauptet.</p>
+            <p>{learningBook.deepAnalysis
+              ?'Lokale Codeanalyse mit '+learningBook.deepAnalysis.model+
+                '. Analysierte Dateien: '+learningBook.deepAnalysis.filesAnalyzed+
+                ', ausgelassen: '+learningBook.deepAnalysis.filesSkipped+
+                '. Hypothetische Entwicklungsgründe bleiben als Interpretation gekennzeichnet.'
+              :'Automatische Git- und Konzeptübersicht ohne vollständige Modellanalyse.'}</p>
+            {learningBook.deepAnalysis&&!learningBook.deepAnalysis.complete&&
+              <p role="alert">Codeanalyse mit Einschränkungen: {learningBook.deepAnalysis.filesSkipped}
+                Dateien wurden aus Sicherheits-, Format- oder Größengründen ausgelassen.
+                Das Buch behauptet keine vollständige Abdeckung.</p>}
             <div className="learning-export-actions">
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','pdf')}>Lehrbuch als PDF</button>
               <button type="button" disabled={learningExporting} onClick={()=>void exportLearning('book','md')}>Markdown</button>
@@ -1160,6 +1195,48 @@ function App(): React.JSX.Element {
       </section>
     </div>
 
+    {learningModalOpen && <div className="modal-backdrop">
+      <div className="modal learning-progress-modal" role="dialog" aria-modal="true"
+        aria-labelledby="learning-progress-title">
+        <div className="agent-info-header">
+          <h2 id="learning-progress-title">Code-Lehrbuch mit lokalem Ollama</h2>
+          {!learningGenerating&&<button type="button" className="quiet"
+            onClick={()=>setLearningModalOpen(false)}>Schließen</button>}
+        </div>
+        <p><strong>{learningModalError?'Fehlgeschlagen':learningGenerating
+          ?'Analyse läuft':'Analyse abgeschlossen'}</strong> ·
+          {' '+(learningProgress?.repository??learningInput)}</p>
+        <p role="status">{learningProgress?.current??'GitHub-Historie wird geprüft …'}</p>
+        <div className="learning-progress-track" role="progressbar"
+          aria-label="Analysefortschritt" aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={learningProgress?.total
+            ?Math.round(100*learningProgress.completed/learningProgress.total):0}>
+          <div style={{width:(learningProgress?.total
+            ?Math.round(100*learningProgress.completed/learningProgress.total):0)+'%'}}/>
+        </div>
+        <p>Schritt {learningProgress?.completed??0} von {learningProgress?.total||'?'} ·
+          Laufzeit: {Math.max(0,Math.floor((clock-(learningProgress?.startedAt??learningStartedAt))/1000))} s ·
+          ETA: {learningProgress?.etaSeconds===null||learningProgress?.etaSeconds===undefined
+            ?'noch nicht messbar':learningProgress.etaSeconds+' s'}</p>
+        <p>Modell: {learningProgress?.model??'qwen2.5-coder:3b'} ·
+          lokal auf 127.0.0.1 · keine externen KI-Tokens</p>
+        {learningProgress?.preview&&<section className="learning-progress-preview"
+          aria-label="Live-Vorschau der letzten Lektion">
+          <strong>Live-Vorschau</strong>
+          <pre>{learningProgress.preview}</pre>
+        </section>}
+        {learningModalError&&<p role="alert">{learningModalError}</p>}
+        {learningGenerating&&<button type="button" className="quiet"
+          onClick={()=>void window.studio.cancelDeepLearning()}>
+          Analyse abbrechen
+        </button>}
+        {!learningGenerating&&!learningModalError&&<p role="status">
+          Verarbeitung abgeschlossen. {learningBook?.deepAnalysis&&!learningBook.deepAnalysis.complete
+            ?'Einige Dateien wurden ausgeschlossen; die Abdeckung wird im Buch ausgewiesen. '
+            :''}Das Markdown ist lokal gespeichert und kann als PDF exportiert werden.
+        </p>}
+      </div>
+    </div>}
     {agentInfoOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAgentInfoOpen(false); }}>
       <div className="modal agent-info-modal" role="dialog" aria-modal="true" aria-labelledby="agent-info-title" onKeyDown={event => { if (event.key === 'Escape') setAgentInfoOpen(false); }}>
         <div className="agent-info-header"><h2 id="agent-info-title">Hinweise zur Agentensteuerung</h2><button type="button" className="quiet" onClick={() => setAgentInfoOpen(false)}>Schließen</button></div>
