@@ -48,7 +48,7 @@ function rec(value:unknown):Record<string,unknown>|null {
 }
 function codeEvidence(detail:unknown):string[]{
  const code=patches(detail);
- const fingerprints:[
+ const fingerprints:[string,RegExp][]=[
   ['Idempotency-Key',/Idempotency-Key|idempotencyKey/i],
   ['Persistierter Operationsnachweis',/operation_key|operationRepository|existingOperation|replay\(/i],
   ['Erwartete Revision',/expectedRevision/i],
