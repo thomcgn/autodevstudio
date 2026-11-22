@@ -354,18 +354,20 @@ app.whenReady().then(() => {
       bookMarkdown:previous.bookMarkdown,solutionsMarkdown:previous.solutionsMarkdown,
       reportsMarkdown:previous.reportsMarkdown}:null;
     const grown=mergeHistoricalBook(prior,candidate);
+    grown.pagination={page:index.page,hasMore:index.hasMore};
     const saved=saveHistoricalBook(app.getPath('userData'),grown);
     return {repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
       solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
-      page:index.page,hasMore:index.hasMore};
+      page:saved.pagination?.page,hasMore:saved.pagination?.hasMore};
   });
   ipcMain.handle('learning:load', (_event, repository: unknown) => {
     if(typeof repository!=='string')throw Error('Invalid learning repository');
     const saved=loadHistoricalBook(app.getPath('userData'),repository);
     return saved?{repository:saved.repository,head:saved.head,
       lessons:saved.lessons,bookMarkdown:saved.bookMarkdown,
-      solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown}:null;
+      solutionsMarkdown:saved.solutionsMarkdown,reportsMarkdown:saved.reportsMarkdown,
+      page:saved.pagination?.page,hasMore:saved.pagination?.hasMore}:null;
   });
   ipcMain.handle('learning:export',async (_event,repository:unknown,
     kind:unknown,format:unknown) => {
