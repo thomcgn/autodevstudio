@@ -225,7 +225,7 @@ test('incomplete or dangerous historical Git patches are never silently accepted
 test('long historical patch is split into model windows and includes final diff',async()=>{
  const sha='d'.repeat(40);
  const trailing='const historicalTail = 777;';
- const patch='@@\n'+Array.from({length:160},(_,i)=>'+const line'+i+' = '+i+';').join('\n')+
+ const patch='@@\n'+Array.from({length:500},(_,i)=>'+const line'+i+' = '+i+';').join('\n')+
   '\n+'+trailing;
  const prompts=[];
  const result=await analyzeHistoricalCommitWithOllama('example/project',sha,1,
