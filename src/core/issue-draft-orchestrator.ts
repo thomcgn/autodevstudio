@@ -2,6 +2,8 @@ import {loadCoreCheckpoint} from './checkpoint-store.ts';
 import {acquireProjectLock} from './project-lock.ts';
 import {captureGitIdentity} from './git-identity.ts';
 import {implementIssueLocally,type IssueCodeResult} from './local-issue-to-code.ts';
+import {repairGeneratedIssue} from './repair-generated-issue.ts';
+import {MAX_LOCAL_REPAIR_ATTEMPTS} from './repair-budget.ts';
 import {verifyGeneratedIssue,type IssueVerificationResult} from './verify-generated-issue.ts';
 import {verifyQualityForReviewedIssue,type VerifiedQualityResult} from './reviewed-quality-gate.ts';
 import {publishVerifiedDraftPullRequest,type DraftPullRequest} from './verified-draft-pr.ts';
@@ -26,6 +28,7 @@ export interface IssueAutomationDependencies {
   quality:(base:string,project:string,revision:number,scripts:readonly string[],
     signal?:AbortSignal)=>Promise<VerifiedQualityResult>;
   draft:(base:string,project:string,issueNumber:number)=>Promise<DraftPullRequest>;
+  repair?:(base:string,project:string,issue:IssueTask,feedback:string,signal?:AbortSignal)=>Promise<unknown>;
 }
 const defaultDeps:IssueAutomationDependencies={
   build:(base,project,issue,signal)=>implementIssueLocally(base,project,issue,undefined,signal),
@@ -37,6 +40,7 @@ const defaultDeps:IssueAutomationDependencies={
     finally{lock.release();}
   },
   draft:(base,project,issueNumber)=>publishVerifiedDraftPullRequest(base,project,issueNumber),
+  repair:(base,project,issue,feedback,signal)=>repairGeneratedIssue(base,project,issue,feedback,signal),
 };
 const checkpointFor=(base:string,project:string,issueNumber:number)=>{
   const cp=loadCoreCheckpoint(base,project);
@@ -70,6 +74,7 @@ export async function runIssueToDraftPr(
   signal?:AbortSignal,onStep?:IssueAutomationStep,
   deps:IssueAutomationDependencies=defaultDeps,
   canReview?:()=>Promise<{ready:boolean;reason:string}>,
+  repairDepth=0,
 ):Promise<IssueAutomationOutcome>{
   if(!Number.isSafeInteger(issue?.number)||issue.number<1||
     typeof issue.title!=='string'||typeof issue.body!=='string')
@@ -94,18 +99,35 @@ export async function runIssueToDraftPr(
       if(!gate.ready)return pause('review',issue.number,cp.revision,gate.reason);
     }
     const result=await deps.review(base,project,issue,reviewer,approvedScripts,signal);
-    if(result.kind==='review-failed'||result.kind==='quality-failed')
-      return pause(result.kind==='review-failed'?'review':'quality',
-        issue.number,result.checkpointRevision,result.feedback??'Review or quality rejected');
+    if(result.kind==='review-failed'||result.kind==='quality-failed'){
+      const stage=result.kind==='review-failed'?'review':'quality';
+      const feedback=result.feedback??'Review or quality rejected';
+      if(deps.repair&&repairDepth<MAX_LOCAL_REPAIR_ATTEMPTS&&!signal?.aborted){
+        report('build');
+        await deps.repair(base,project,issue,feedback,signal);
+        return runIssueToDraftPr(base,project,issue,reviewer,approvedScripts,
+          signal,onStep,deps,canReview,repairDepth+1);
+      }
+      return pause(stage,issue.number,result.checkpointRevision,
+        feedback+'; automatic repair exhausted or unavailable');
+    }
     cp=checkpointFor(base,project,issue.number);
     if(!cp||cp.stage!=='quality'||!cp.reviewPassed||!cp.qualityPassed)
       throw Error('Reviewer/Quality result did not persist both PASS gates');
   }else if(cp.stage==='quality'&&cp.reviewPassed&&!cp.qualityPassed){
     report('quality');
     const result=await deps.quality(base,project,cp.revision,approvedScripts,signal);
-    if(result.kind==='quality-failed')
+    if(result.kind==='quality-failed'){
+      const feedback=result.feedback??'Quality tests failed';
+      if(deps.repair&&repairDepth<MAX_LOCAL_REPAIR_ATTEMPTS&&!signal?.aborted){
+        report('build');
+        await deps.repair(base,project,issue,feedback,signal);
+        return runIssueToDraftPr(base,project,issue,reviewer,approvedScripts,
+          signal,onStep,deps,canReview,repairDepth+1);
+      }
       return pause('quality',issue.number,result.checkpointRevision,
-        result.feedback??'Quality tests failed');
+        feedback+'; automatic repair exhausted or unavailable');
+    }
     cp=checkpointFor(base,project,issue.number);
     if(!cp||cp.stage!=='quality'||!cp.reviewPassed||!cp.qualityPassed)
       throw Error('Quality result did not persist a valid PASS');
