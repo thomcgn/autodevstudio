@@ -46,6 +46,10 @@ interface Project { id: string; name: string; path: string }
 let window: BrowserWindow | null = null;
 let active: ChildProcess | null = null;
 let localCodeController: AbortController | null = null;
+type StudioOperation='issue-auto-draft'|'issue-build'|'issue-review'|'draft-publish';
+interface RunningStudioOperation { projectId:string; issueNumber:number; kind:StudioOperation }
+let localCodeOwner:RunningStudioOperation|null=null;
+let publishingOwner:RunningStudioOperation|null=null;
 let publishingDraftPr=false;
 let startingLegacyRun=false;
 let activeRun: string | null = null;
@@ -319,6 +323,16 @@ app.whenReady().then(() => {
     const project = getProject(id);
     return inspectLocalProviders(project.path);
   });
+  ipcMain.handle('core:activity', (_event,id:string) => {
+    if(typeof id!=='string')throw Error('Invalid project ID');
+    getProject(id);
+    const operation=localCodeOwner ?? publishingOwner;
+    if(operation)return {busy:true,kind:operation.kind,
+      projectId:operation.projectId,issueNumber:operation.issueNumber} as const;
+    if(active||startingLegacyRun)return {busy:true,kind:'legacy-run',
+      projectId:activeInfo?.projectId??null,issueNumber:null} as const;
+    return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
+  });
   ipcMain.handle('core:status', async (_event, id: string) => {
     if (typeof id !== 'string') throw new Error('Invalid project ID');
     const project = getProject(id);
@@ -366,6 +380,7 @@ app.whenReady().then(() => {
     // Reserve this process immediately, before any asynchronous gh/catalog call.
     const controller=new AbortController();
     localCodeController=controller;
+    localCodeOwner={projectId:id,issueNumber,kind:'issue-auto-draft'};
     try{
       await assertBranchProtection(project.path);
       const issues=await listProjectIssues(project.path);
@@ -390,7 +405,7 @@ app.whenReady().then(() => {
       stage=>send('issue:progress',{projectId:id,issueNumber,stage,time:Date.now()}),
       deps,reviewer.canReview);
     }finally{
-      if(localCodeController===controller)localCodeController=null;
+      if(localCodeController===controller){localCodeController=null;localCodeOwner=null;}
     }
   });
   ipcMain.handle('core:issue-to-code', async (_event, id:string, issueNumber:number) => {
@@ -409,6 +424,7 @@ app.whenReady().then(() => {
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
+    localCodeOwner={projectId:id,issueNumber,kind:'issue-build'};
     try{
       await assertBranchProtection(project.path);
       const base=app.getPath('userData');
@@ -418,7 +434,7 @@ app.whenReady().then(() => {
       return await builder.build(base,project.path,
         {number:issue.number,title:issue.title,body:issue.body},controller.signal);
     }finally{
-      if(localCodeController===controller)localCodeController=null;
+      if(localCodeController===controller){localCodeController=null;localCodeOwner=null;}
     }
   });
   ipcMain.handle('core:issue-verify', async (_event,id:string,issueNumber:number) => {
@@ -435,6 +451,7 @@ app.whenReady().then(() => {
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
+    localCodeOwner={projectId:id,issueNumber,kind:'issue-review'};
     try{
       await assertBranchProtection(project.path);
       const base=app.getPath('userData');
@@ -448,7 +465,7 @@ app.whenReady().then(() => {
         {number:issue.number,title:issue.title,body:issue.body},
         reviewer.transport,scripts,controller.signal);
     }finally{
-      if(localCodeController===controller)localCodeController=null;
+      if(localCodeController===controller){localCodeController=null;localCodeOwner=null;}
     }
   });
   ipcMain.handle('core:issue-draft-pr', async (_event,id:string,issueNumber:number) => {
@@ -460,6 +477,7 @@ app.whenReady().then(() => {
     if(!inspectProject(project.path).isGitRepo)
       throw Error('Not a Git repository');
     publishingDraftPr=true;
+    publishingOwner={projectId:id,issueNumber,kind:'draft-publish'};
     try{
       await assertBranchProtection(project.path);
       const issues=await listProjectIssues(project.path);
@@ -467,7 +485,7 @@ app.whenReady().then(() => {
         throw Error('Issue is not open or no longer available');
       return await publishVerifiedDraftPullRequest(app.getPath('userData'),
         project.path,issueNumber);
-    } finally { publishingDraftPr=false; }
+    } finally { publishingDraftPr=false;publishingOwner=null; }
   });
   ipcMain.handle('core:issue-to-code:cancel', () => {
     if(!localCodeController)return false;
