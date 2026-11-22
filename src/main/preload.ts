@@ -18,8 +18,9 @@ contextBridge.exposeInMainWorld('studio', {
     return ()=>ipcRenderer.removeListener('learning:progress',listener);
   },
   loadLearningBook: (repo:string) => ipcRenderer.invoke('learning:load', repo),
-  exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf') =>
-    ipcRenderer.invoke('learning:export',repo,kind,format),
+  exportLearningBook: (repo:string,kind:'book'|'solutions'|'reports',
+    format:'md'|'pdf',mode:'history'|'deep'='history') =>
+    ipcRenderer.invoke('learning:export',repo,kind,format,mode),
   studioActivity: (id: string) => ipcRenderer.invoke('core:activity', id),
   diagnostics: (id: string) => ipcRenderer.invoke('core:diagnostics', id),
   sandboxProbe: (id: string) => ipcRenderer.invoke('core:sandbox-probe', id),
