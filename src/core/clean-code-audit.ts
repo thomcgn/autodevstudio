@@ -1,6 +1,6 @@
 import ts from 'typescript';
 
-export type QualityPrinciple='clean-code'|'solid'|'dry'|'maintainability';
+export type QualityPrinciple='clean-code'|'solid'|'dry'|'maintainability'|'security';
 export interface CodeQualityFinding {
   principle:QualityPrinciple;
   rule:string;
@@ -11,7 +11,7 @@ export interface CodeQualityAudit {
   passed:boolean;
   file:string;
   findings:CodeQualityFinding[];
-  checked:['clean-code','solid','dry'];
+  checked:['clean-code','solid','dry','security'];
 }
 /** Deterministic, dependency-free AST checks for an individual TypeScript/JS file.
  * These checks are evidence, not a proof of SOLID/DRY adherence. All findings
@@ -57,6 +57,27 @@ export function auditCodeSource(file:string,source:string):CodeQualityAudit {
     if(item.kind===ts.SyntaxKind.AnyKeyword)
       add('clean-code','explicit-any',item.getStart(node),
         'Replace any with a declared type or narrowed unknown');
+    if(ts.isCallExpression(item)&&ts.isIdentifier(item.expression)&&
+      item.expression.text==='eval')
+      add('security','dynamic-eval',item.getStart(node),
+        'Dynamic eval executes untrusted JavaScript');
+    if(ts.isNewExpression(item)&&ts.isIdentifier(item.expression)&&
+      item.expression.text==='Function')
+      add('security','dynamic-function',item.getStart(node),
+        'Constructing executable code from strings is unsafe');
+    if(ts.isBinaryExpression(item)&&
+      item.operatorToken.kind===ts.SyntaxKind.EqualsToken&&
+      ts.isPropertyAccessExpression(item.left)&&item.left.name.text==='innerHTML')
+      add('security','unsafe-html-assignment',item.getStart(node),
+        'Direct innerHTML writes bypass safe DOM rendering');
+    if(ts.isVariableDeclaration(item)&&ts.isIdentifier(item.name)&&
+      /(?:api[_-]?key|secret|password|access[_-]?token|private[_-]?key)/i.test(item.name.text)&&
+      item.initializer&&ts.isStringLiteral(item.initializer)){
+      const value=item.initializer.text;
+      if(value.length>=12&&!/^(?:example|placeholder|test|dummy|change[_-]?me)/i.test(value))
+        add('security','hardcoded-credential',item.getStart(node),
+          'Potential credential stored in a source literal');
+    }
     ts.forEachChild(item,visit);
   }
   visit(node);
@@ -96,5 +117,5 @@ export function auditCodeSource(file:string,source:string):CodeQualityAudit {
     else blocks.set(signature,i);
   }
   return {passed:findings.length===0,file,findings,
-    checked:['clean-code','solid','dry']};
+    checked:['clean-code','solid','dry','security']};
 }
