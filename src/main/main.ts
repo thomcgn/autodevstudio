@@ -355,7 +355,7 @@ app.whenReady().then(() => {
     const prior=previous?{repository:previous.repository,head:previous.head,
       license:previous.license,lessons:previous.lessonEntries,
       bookMarkdown:previous.bookMarkdown,solutionsMarkdown:previous.solutionsMarkdown,
-      reportsMarkdown:previous.reportsMarkdown}:null;
+      reportsMarkdown:previous.reportsMarkdown,caseStudies:previous.caseStudies}:null;
     const grown=mergeHistoricalBook(prior,candidate);
     grown.pagination={page:index.page,hasMore:index.hasMore};
     const saved=saveHistoricalBook(app.getPath('userData'),grown);
