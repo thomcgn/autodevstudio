@@ -29,3 +29,20 @@ test('missing typecheck or test script prevents quality preflight',()=>{
   finally{f.close();}
  }
 });
+
+test('declared regression and coverage scripts are mandatory quality stages',()=>{
+ const f=fixture({typecheck:'tsc --noEmit',test:'node --test',
+   'test:regression':'node --test tests/regression/*.mjs',
+   'test:coverage':'node --test --experimental-test-coverage'});
+ try{
+  assert.deepEqual(selectSafeQualityScripts(f.root),
+    ['typecheck','test','test:regression','test:coverage']);
+ }finally{f.close();}
+});
+test('optional coverage script not declared is not claimed as a completed check',()=>{
+ const f=fixture({typecheck:'tsc',test:'node --test','test:regression':'node --test regression'});
+ try{
+  assert.deepEqual(selectSafeQualityScripts(f.root),
+    ['typecheck','test','test:regression']);
+ }finally{f.close();}
+});

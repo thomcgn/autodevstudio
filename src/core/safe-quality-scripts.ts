@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const MAX_BYTES=256*1024;
-const SUPPORTED=['typecheck','test','test:policy','test:unit'] as const;
+const SUPPORTED=['typecheck','test','test:policy','test:unit','test:regression','test:coverage'] as const;
 
 /** Conservative first-run policy. Quality scripts are chosen by trusted Studio
  * code, never from issue contents, model output, renderer input or arbitrary
@@ -30,5 +30,10 @@ export function selectSafeQualityScripts(projectPath:string):string[]{
     available.find(name=>name==='test:policy')??
     available.find(name=>name==='test:unit');
   if(!test)throw Error('Quality requires an approved test script');
-  return ['typecheck',test];
+  // If a project already declares dedicated regression/coverage scripts,
+  // they become mandatory: a failure must block the reviewed issue PR.
+  // Missing scripts are never fabricated and never considered "100% coverage".
+  const extra=['test:regression','test:coverage']
+    .filter(name=>available.includes(name as typeof SUPPORTED[number])&&name!==test);
+  return ['typecheck',test,...extra];
 }
