@@ -884,6 +884,11 @@ function App(): React.JSX.Element {
             <span>Issue #{automationResult.issueNumber} · Phase {automationResult.stage} · {automationResult.reason}</span>
             {automationResult.draftUrl && <a href={automationResult.draftUrl}
               target="_blank" rel="noopener noreferrer">Draft-PR auf GitHub öffnen</a>}
+            {automationResult.learningReport && <small>
+              Lehrbuchreport: {automationResult.learningReport==='saved'
+                ?'automatisch im lokalen Lehrbuch gespeichert'
+                :'nicht erstellt; Draft-PR ist trotzdem erfolgreich, bitte Lehrbuchdiagnose prüfen'}
+            </small>}
             <small>Kein Auto-Merge. Ein unterbrochener Publish-Vorgang muss manuell geprüft werden.</small>
           </div>}
           {automatingIssue!==null && <div className="git-readiness" role="status">
@@ -1006,6 +1011,15 @@ function App(): React.JSX.Element {
             </div>
             <p>Nur lesen · maximal 12 Commits · keine Downloads oder Codeausführung im Fremdprojekt</p>
           </form>
+          {studioStatus?.git.remoteSlug && <button type="button" className="quiet"
+            onClick={()=>void window.studio.loadLearningBook(studioStatus.git.remoteSlug!)
+              .then(saved=>{
+                if(saved){setLearningBook(saved);setLearningInput(saved.repository);
+                  setLearningMessage('Gespeichertes Projekt-Lehrbuch geladen.');}
+                else setLearningMessage('Für dieses Projekt wurde noch kein Lehrbuch gespeichert.');
+              }).catch(()=>setLearningError('Projekt-Lehrbuch konnte nicht gelesen werden.'))}>
+            Gespeichertes Projekt-Lehrbuch öffnen
+          </button>}
           <div className="learning-source-controls">
             <button type="button" disabled={learningGenerating||!learningInput.trim()}
               onClick={()=>void generateLearning()}>
