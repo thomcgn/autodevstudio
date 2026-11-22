@@ -12,7 +12,7 @@ export function explainIssueHold(
 ):IssueHoldExplanation|null {
   // Treat issue descriptions as displayed evidence, never executable instructions.
   const body=issueBody.slice(0,30_000);
-  const section=/(?:^|\n)#{1,3}\s*(?:Abhängigkeiten?|Blockiert durch|Blocked by)\s*\n([\s\S]*?)(?=\n#{1,3}\s|$)/im.exec(body);
+  const section=/(?:^|\n)#{1,3}\s*(?:Abhängigkeit(?:en)?|Blockiert durch|Blocked by)\s*\n([\s\S]*?)(?=\n#{1,3}\s|$)/im.exec(body);
   const statedReason=section?.[1]?.trim().replace(/\s+/g,' ').slice(0,250);
   const values=labels.map(label=>label.trim().toLowerCase());
   const has=(label:string):boolean=>values.includes(label);
