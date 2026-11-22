@@ -77,3 +77,17 @@ test('all commits in a page contribute evidence, including commits after twelve'
  const generics=result.lessons.find(lesson=>lesson.key==='java-generics');
  assert.equal(generics?.commits.length,16);
 });
+
+test('partial Ollama source analysis persists an exact resume cursor across restart',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-deep-resume-'));
+ try{
+  const source={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Codebook\n\n## Kapitel 1: Overview\n',
+   solutionsMarkdown:'# Solutions\n',reportsMarkdown:'# Reports\n',
+   deepCursor:{nextOffset:600,filesTotal:601,filesAnalyzed:600,
+     filesSkipped:0,model:'qwen2.5-coder:3b'}};
+  saveHistoricalBook(dir,source);
+  assert.deepEqual(loadHistoricalBook(dir,repo)?.deepCursor,source.deepCursor);
+  assert.match(loadHistoricalBook(dir,repo)?.bookMarkdown??'',/Kapitel 1/);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
