@@ -12,6 +12,7 @@ export interface SavedLearningBook {
   caseStudies:DevelopmentDecision[];
   deepCursor?:{nextOffset:number;filesTotal:number;filesAnalyzed:number;
     filesSkipped:number;model:string};
+  deepSummary?:{model:string;filesAnalyzed:number;filesSkipped:number;complete:boolean;filesTotal:number};
   pagination?:{page:number;hasMore:boolean;pageSize?:number};
 }
 const SHA=/^[0-9a-f]{40}$/i;
@@ -34,7 +35,7 @@ function storeFiles(directory:string,book:HistoricalBook):void {
  fs.writeFileSync(path.join(directory,'sources.json'),JSON.stringify({
   repository:book.repository,head:book.head,license:book.license,
   lessons:book.lessons,caseStudies:book.caseStudies??[],pagination:book.pagination??null,
-  deepCursor:book.deepCursor??null,
+  deepCursor:book.deepCursor??null,deepSummary:book.deepSummary??null,
  },null,2),{mode:0o600,flag:'wx'});
 }
 /** Local application data only. Never writes into source repositories.
@@ -70,7 +71,7 @@ export function saveHistoricalBook(
   mode:0o600,flag:'w'});
  fs.renameSync(temporary,latest);
  return {...book,directory:target,lessons:book.lessons.length,
-  lessonEntries:book.lessons,license:book.license,pagination:book.pagination,deepCursor:book.deepCursor,
+  lessonEntries:book.lessons,license:book.license,pagination:book.pagination,deepCursor:book.deepCursor,deepSummary:book.deepSummary,
   caseStudies:book.caseStudies??[]};
 }
 export function loadHistoricalBook(base:string,input:string):SavedLearningBook|null{
@@ -95,7 +96,7 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
  }
  const sources:unknown=JSON.parse(fs.readFileSync(path.join(directory,'sources.json'),'utf8'));
  const metadata=typeof sources==='object'&&sources!==null&&!Array.isArray(sources)
-  ?sources as {lessons?:unknown;license?:unknown;pagination?:unknown;caseStudies?:unknown;deepCursor?:unknown}:null;
+  ?sources as {lessons?:unknown;license?:unknown;pagination?:unknown;caseStudies?:unknown;deepCursor?:unknown;deepSummary?:unknown}:null;
  const list=metadata?.lessons;
  const lessonEntries:HistoricalLesson[]=Array.isArray(list)?list.filter((x:unknown):
     x is HistoricalLesson=>typeof x==='object'&&x!==null&&!Array.isArray(x)&&
@@ -122,6 +123,17 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
    ?{nextOffset:Number(cursor.nextOffset),filesTotal:Number(cursor.filesTotal),
      filesAnalyzed:Number(cursor.filesAnalyzed),filesSkipped:Number(cursor.filesSkipped),
      model:cursor.model}:undefined;
+ const rawSummary=metadata?.deepSummary;
+ const summary=rawSummary!==null&&typeof rawSummary==='object'&&!Array.isArray(rawSummary)
+  ?rawSummary as Record<string,unknown>:null;
+ const deepSummary=summary&&typeof summary.model==='string'&&summary.model.length<100&&
+   Number.isSafeInteger(summary.filesAnalyzed)&&Number(summary.filesAnalyzed)>=0&&
+   Number.isSafeInteger(summary.filesSkipped)&&Number(summary.filesSkipped)>=0&&
+   Number.isSafeInteger(summary.filesTotal)&&Number(summary.filesTotal)>=Number(summary.filesAnalyzed)&&
+   typeof summary.complete==='boolean'
+   ?{model:summary.model,filesAnalyzed:Number(summary.filesAnalyzed),
+     filesSkipped:Number(summary.filesSkipped),filesTotal:Number(summary.filesTotal),
+     complete:summary.complete}:undefined;
  const p=metadata?.pagination;
  const pagination=p!==null&&typeof p==='object'&&!Array.isArray(p)&&
    Number.isSafeInteger((p as {page?:unknown}).page)&&
@@ -133,7 +145,7 @@ export function loadHistoricalBook(base:string,input:string):SavedLearningBook|n
       Number((p as {pageSize?:unknown}).pageSize)<=100))
    ?p as {page:number;hasMore:boolean;pageSize?:number}:undefined;
  return {repository:input,head:info.head,directory,
-  lessons:Array.isArray(list)?list.length:0,lessonEntries,license,pagination,caseStudies,deepCursor,
+  lessons:Array.isArray(list)?list.length:0,lessonEntries,license,pagination,caseStudies,deepCursor,deepSummary,
   bookMarkdown:fs.readFileSync(path.join(directory,'book.md'),'utf8'),
   solutionsMarkdown:fs.readFileSync(path.join(directory,'solutions.md'),'utf8'),
   reportsMarkdown:fs.readFileSync(path.join(directory,'reports.md'),'utf8')};
