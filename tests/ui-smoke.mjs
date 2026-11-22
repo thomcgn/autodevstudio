@@ -31,10 +31,10 @@ const success={
     sandboxTool:'bwrap',sandboxToolAvailable:true,ghInstalled:true,ghAuthenticated:true,
     checkedAt:'2026-01-01'},
   studioActivity:{busy:false,kind:null,projectId:null,issueNumber:null},
-  learningBook:{repository:'example/studio',head:'a'.repeat(40),lessons:1,
+  learningBook:{repository:'example/studio',head:'a'.repeat(40),lessons:1,page:1,hasMore:true,
     bookMarkdown:'# Programmieren verstehen\n\n## Java: Generics\nEinfach erklärt',
     solutionsMarkdown:'# Musterlösungen',reportsMarkdown:'# Quellen'},
-  publicRepoHistory:{repository:'example/studio',defaultBranch:'main',
+  publicRepoHistory:{repository:'example/studio',defaultBranch:'main',page:1,hasMore:true,
     fixedHead:'a'.repeat(40),licenseSpdx:'MIT',readOnly:true,requiresInterpretation:true,
     commits:[{sha:'b'.repeat(40),title:'feat: introduce typed list',
       committedAt:'2026-11-01T10:00:00Z',changedPaths:['src/list.ts'],
@@ -220,6 +220,8 @@ try {
   await page.getByText('Quellenindex, noch kein fertiges Lehrbuch',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch erstellen'}).click();
   await page.getByText('Dein Lehrbuch – example/studio',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Weitere 12 Commits analysieren'}).click();
+  await page.getByText('Weitere Commits geprüft.',{exact:false}).waitFor();
   await page.getByRole('button',{name:'Lehrbuch als PDF'}).click();
   await page.getByText('Export erfolgreich gespeichert.',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
