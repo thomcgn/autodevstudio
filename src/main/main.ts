@@ -14,6 +14,7 @@ import { loadCoreCheckpoint } from '../core/checkpoint-store';
 import { publishVerifiedDraftPullRequest } from '../core/verified-draft-pr';
 import { verifyGeneratedIssue } from '../core/verify-generated-issue';
 import { createAttestedProjectReviewerTransport } from '../core/attested-project-reviewer';
+import { createIndependentLocalReviewerSession } from '../core/independent-local-reviewer';
 import { selectSafeQualityScripts } from '../core/safe-quality-scripts';
 import { WORKFLOW_STAGES } from '../core/workflow';
 import { orchestrateIssue, createSimulationAdapters } from '../core/orchestrator';
@@ -344,30 +345,15 @@ app.whenReady().then(() => {
         if(!local.ready)throw Error('Local builder unavailable');
       }
       const scripts=selectSafeQualityScripts(project.path);
-      const roles=loadKiloRoles(base,id);
-      const catalog=await fetchKiloFreeModels();
-      const quota=new FreeQuotaGuard(base);
-      // The local Qwen Builder is the ACTUAL author; Qwen never reviews itself.
-      const transport=createAttestedProjectReviewerTransport({
-        userData:base,projectId:id,
-        roles:{planner:roles?.planner??'',builder:'qwen2.5-coder:3b',
-          reviewer:roles?.reviewer??''},
-        freeCatalog:catalog.models,quota,
-        ollamaReadiness:{ready:false,reason:'unreachable'},
-      });
-      const canReview=async()=>{
-        if(!roles||!catalog.models.some(m=>m.id===roles.reviewer))
-          return {ready:false,reason:'Independent Kilo reviewer not configured as verified free'};
-        if(roles.reviewer==='qwen2.5-coder:3b')
-          return {ready:false,reason:'Self-review by local builder is forbidden'};
-        const permission=quota.decide('normal',true);
-        return permission.allowed
-          ?{ready:true,reason:'Verified independent reviewer available'}
-          :{ready:false,reason:'Independent review paused: provider-verified Kilo IP quota missing or exhausted'};
-      };
+      // Completely offline independent reviewer; no Kilo request, catalog,
+      // API key, shared-IP quota, or self-review by the Qwen Builder.
+      // A synthetic PASS/FAIL calibration is run automatically before
+      // disclosing any actual issue diff to the local Granite reviewer.
+      const independent=createIndependentLocalReviewerSession(controller.signal);
       return await runIssueToDraftPr(base,project.path,{
         number:issue.number,title:issue.title,body:issue.body,
-      },transport,scripts,controller.signal,undefined,undefined,canReview);
+      },independent.transport,scripts,controller.signal,undefined,undefined,
+        independent.canReview);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
@@ -408,29 +394,16 @@ app.whenReady().then(() => {
     // Verify scripts and provider eligibility BEFORE any real model inference.
     // This first local Qwen Builder cannot review its OWN output with Qwen.
     const scripts=selectSafeQualityScripts(project.path);
-    const roles=loadKiloRoles(app.getPath('userData'),id);
-    if(!roles)throw Error('Reviewer model selection missing');
-    const catalog=await fetchKiloFreeModels();
-    if(!catalog.models.some(model=>model.id===roles.reviewer))
-      throw Error('Reviewer no longer verified free');
-    const quota=new FreeQuotaGuard(app.getPath('userData'));
-    if(!quota.decide('normal',true).allowed)
-      throw Error('Verified Kilo remaining quota unavailable; independent review paused safely');
-    const ollama=await probeOllamaReadiness();
     if(active||localCodeController||publishingDraftPr)throw Error('Another Studio run is active');
     const controller=new AbortController();
     localCodeController=controller;
     try{
-      const transport=createAttestedProjectReviewerTransport({
-        userData:app.getPath('userData'),projectId:id,
-        // Source of truth: the current issue branch was written by local Qwen,
-        // not by the model selected under the unrelated Kilo Builder role.
-        roles:{...roles,builder:'qwen2.5-coder:3b'},
-        freeCatalog:catalog.models,quota,ollamaReadiness:ollama,
-      });
+      const independent=createIndependentLocalReviewerSession(controller.signal);
+      const readiness=await independent.canReview();
+      if(!readiness.ready)throw Error(readiness.reason);
       return await verifyGeneratedIssue(app.getPath('userData'),project.path,
         {number:issue.number,title:issue.title,body:issue.body},
-        transport,scripts,controller.signal);
+        independent.transport,scripts,controller.signal);
     }finally{
       if(localCodeController===controller)localCodeController=null;
     }
