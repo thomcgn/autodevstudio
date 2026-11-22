@@ -59,7 +59,7 @@ function decodeBlob(value:unknown,sha:string):string{
  return redact(bytes.toString('utf8'));
 }
 export const readSourceGitHub:GitHubReader=async endpoint=>{
- if(!/^repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/git\/(?:trees|blobs)\/[a-f0-9]{40}(?:\?recursive=1)?$/i.test(endpoint))
+ if(!/^repos\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/git\/(?:trees|blobs|commits)\/[a-f0-9]{40}(?:\?recursive=1)?$/i.test(endpoint))
   throw Error('Forbidden GitHub source API');
  const result=await exec('gh',['api','--method','GET',endpoint],{
   encoding:'utf8',timeout:25000,maxBuffer:20_000_000,shell:false,
@@ -195,7 +195,11 @@ export async function analyzeSourceWithOllama(
    preview,model:MODEL});
  send('discovery',0,0,'GitHub-Dateibaum wird geprüft','',null);
  if(signal.aborted)throw Error('Learning analysis cancelled');
- const tree=object(await read('repos/'+repository+'/git/trees/'+head+'?recursive=1'));
+ const commit=object(await read('repos/'+repository+'/git/commits/'+head));
+ const treeRef=object(commit?.tree)?.sha;
+ if(typeof treeRef!=='string'||!SHA.test(treeRef))
+  throw Error('GitHub commit has no verified tree SHA');
+ const tree=object(await read('repos/'+repository+'/git/trees/'+treeRef+'?recursive=1'));
  if(!tree||tree.truncated!==false||!Array.isArray(tree.tree))
   throw Error('GitHub tree incomplete: cannot claim full analysis');
  const all=tree.tree.filter(raw=>object(raw)?.type==='blob').map(validEntry);
@@ -238,13 +242,14 @@ export async function analyzeSourceWithOllama(
  }
  const index=['# Code-Lehrbuch: '+repository,'','Commit: '+head,
   'Modell: lokales Ollama '+MODEL+' (kein externer Tokenverbrauch)',
-  'Abgedeckte Quelldateien: '+sources.length+'; ausgeschlossene Dateien: '+(all.length-sources.length),
+  'Abgedeckte Quelldateien: '+sources.length+'; ausgelassene Blob-Dateien: '+(all.length-sources.length),
+  'Eine vollständige Abdeckung sämtlicher Dateiformate ist nur bei null ausgelassenen Dateien gegeben.',
   'Architekturgründe sind technische Einordnungen, nicht nachgewiesene Entwicklergedanken.',
   '','## Inhaltsverzeichnis',
   ...chapters.map((_,i)=>(i+1)+'. Kapitel '+(i+1)),''];
  const result:DeepLearningResult={
   repository,head,model:MODEL,filesAnalyzed:sources.length,
-  filesSkipped:all.length-sources.length,complete:true,
+  filesSkipped:all.length-sources.length,complete:all.length===sources.length,
   bookMarkdown:index.join('\n')+chapters.join('\n\n')+'\n',
   solutionsMarkdown:'# Getrennte Musterlösungen – '+repository+'\n\n'+solutions.join('\n\n')+'\n',
   reportsMarkdown:'# Quellen und Einschränkungen – '+repository+'\n\n'+reports.join('\n\n')+'\n',
