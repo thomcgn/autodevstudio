@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
-import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
+import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview } from './global';
 import './style.css';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
@@ -71,6 +71,9 @@ function App(): React.JSX.Element {
   const [publishingIssue, setPublishingIssue] = useState<number | null>(null);
   const [draftPr, setDraftPr] = useState<DraftIssuePrResult | null>(null);
   const [draftPrError, setDraftPrError] = useState('');
+  const [automatingIssue, setAutomatingIssue] = useState<number | null>(null);
+  const [automationResult, setAutomationResult] = useState<IssueAutomationOutcome | null>(null);
+  const [automationError, setAutomationError] = useState('');
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [issuesError, setIssuesError] = useState('');
   const [historyError, setHistoryError] = useState('');
@@ -140,6 +143,8 @@ function App(): React.JSX.Element {
     setVerificationError('');
     setDraftPr(null);
     setDraftPrError('');
+    setAutomationResult(null);
+    setAutomationError('');
     setGitStatus(null);
     setGitError('');
     setDiagnostics(null);
@@ -205,6 +210,23 @@ function App(): React.JSX.Element {
     try { setIssues(await window.studio.issues(selected)); }
     catch (error) { setIssuesError(String(error)); }
     finally { setIssuesLoading(false); }
+  };
+
+  const automateIssue = async (issueNumber:number):Promise<void> => {
+    if(!selected||automatingIssue!==null||codingIssue!==null||
+      verifyingIssue!==null||publishingIssue!==null)return;
+    setAutomatingIssue(issueNumber);
+    setAutomationResult(null);
+    setAutomationError('');
+    try{
+      const result=await window.studio.automateDraftIssue(selected,issueNumber);
+      setAutomationResult(result);
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+      void window.studio.gitPreflight(selected).then(setGitStatus).catch(()=>{});
+    }catch{
+      setAutomationError('Automatischer Issue-Lauf angehalten. Der bestehende Git-Branch und Checkpoint bleiben für sichere Inspektion erhalten. Bei Netzwerkfehlern nach Commit nicht blind erneut starten.');
+      void window.studio.studioStatus(selected).then(setStudioStatus).catch(()=>{});
+    }finally{setAutomatingIssue(null);}
   };
 
   const createDraftPr = async (issueNumber:number):Promise<void> => {
@@ -719,7 +741,7 @@ function App(): React.JSX.Element {
         </div>}
 
         {tab === 'issues' && <div className="view issue-view">
-          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Erster echter Codepfad: vorhandene Quelldatei mit lokalem Ollama ändern, eigener Issue-Branch, anschließend Review-Pause. Ohne Commit oder Push.</p></div>
+          <div className="view-intro issue-title"><div><h2>GitHub-Issues</h2><p>Ein-Klick-Ablauf mit lokalem Builder, unabhängiger Review-Pflicht, isolierten Tests und Draft-PR. Ohne verifizierte Kilo-Quote pausiert er sicher beim Review.</p></div>
             <button disabled={!selected || issuesLoading} onClick={() => void loadIssues()}>Aktualisieren</button></div>
           {gitStatus && <div className={`git-readiness ${gitStatus.canExecute ? 'ready' : 'needs-work'}`}><strong>{gitStatus.canExecute ? 'Git-Bereitschaft: geprüft' : 'Git: Vorbereitung erforderlich'}</strong><span>{gitStatus.remoteSlug ?? 'Ohne unterstütztes GitHub-Remote'} · {gitStatus.branch || 'Detached HEAD'}{gitStatus.reasons.length ? ` · ${gitStatus.reasons.join('; ')}` : ' · Sauberer Feature-Branch'}</span></div>}
           {gitError && <p className="muted">Git-Bereitschaft konnte nicht geprüft werden: {gitError}</p>}
@@ -727,6 +749,19 @@ function App(): React.JSX.Element {
           {codeError && <div className="error" role="alert">{codeError}</div>}
           {verificationError && <div className="error" role="alert">{verificationError}</div>}
           {draftPrError && <div className="error" role="alert">{draftPrError}</div>}
+          {automationError && <div className="error" role="alert">{automationError}</div>}
+          {automationResult && <div className="git-readiness" role="status">
+            <strong>{automationResult.status==='draft-created'?'Draft-PR automatisch erstellt':'Automatisierung sicher pausiert'}</strong>
+            <span>Issue #{automationResult.issueNumber} · Phase {automationResult.stage} · {automationResult.reason}</span>
+            {automationResult.draftUrl && <a href={automationResult.draftUrl}
+              target="_blank" rel="noopener noreferrer">Draft-PR auf GitHub öffnen</a>}
+            <small>Kein Auto-Merge. Ein unterbrochener Publish-Vorgang muss manuell geprüft werden.</small>
+          </div>}
+          {automatingIssue!==null && <div className="git-readiness" role="status">
+            <strong>Issue #{automatingIssue}: automatisierter Ablauf …</strong>
+            <span>Code → unabhängiger Review → Quality → Draft-PR (nur bei nachgewiesener Freigabe)</span>
+            <button type="button" className="quiet" onClick={()=>void window.studio.cancelIssueCode()}>Vor Publish abbrechen</button>
+          </div>}
           {draftPr && <div className="git-readiness ready" role="status">
             <strong>Draft-Pull-Request für Issue #{draftPr.issueNumber} erstellt</strong>
             <span>{draftPr.branch} · <a href={draftPr.url} target="_blank" rel="noopener noreferrer">Pull Request auf GitHub öffnen</a></span>
@@ -762,7 +797,11 @@ function App(): React.JSX.Element {
               : <div className="issue-list">{issues.map(issue => <article key={issue.number} className="issue-item">
                   <div><b>#{issue.number} · {issue.title}</b><p>{issue.labels.join(' · ') || 'Keine Labels'}</p></div>
                   <div className="issue-actions">
-                    <button type="button" disabled={codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                    <button type="button" disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
+                      onClick={()=>void automateIssue(issue.number)}>
+                      {automatingIssue===issue.number?'Automatisiere …':'Issue → Draft-PR automatisieren'}
+                    </button>
+                    <button type="button" disabled={automatingIssue!==null||codingIssue!==null||simulating!==null||verifyingIssue!==null||publishingIssue!==null}
                       onClick={()=>void convertIssueToCode(issue.number)}>
                       {codingIssue===issue.number?'Erzeuge Code …':'Issue lokal in Code umwandeln'}
                     </button>
@@ -770,17 +809,17 @@ function App(): React.JSX.Element {
                       studioStatus.checkpoint.stage==='quality' &&
                       studioStatus.checkpoint.reviewPassed &&
                       studioStatus.checkpoint.qualityPassed && <button type="button"
-                      disabled={publishingIssue!==null||verifyingIssue!==null||codingIssue!==null||simulating!==null}
+                      disabled={publishingIssue!==null||verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
                       onClick={()=>void createDraftPr(issue.number)}>
                       {publishingIssue===issue.number?'Draft-PR wird erstellt …':'Geprüften Draft-PR erstellen'}
                     </button>}
                     {studioStatus?.checkpoint?.issueNumber===issue.number &&
                       studioStatus.checkpoint.stage==='review' && <button type="button"
-                      disabled={verifyingIssue!==null||codingIssue!==null||simulating!==null}
+                      disabled={verifyingIssue!==null||codingIssue!==null||simulating!==null||automatingIssue!==null}
                       onClick={()=>void verifyIssueCode(issue.number)}>
                       {verifyingIssue===issue.number?'Review läuft …':'Review + Quality prüfen'}
                     </button>}
-                    <button disabled={simulating !== null||codingIssue!==null||verifyingIssue!==null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
+                    <button disabled={simulating !== null||codingIssue!==null||verifyingIssue!==null||automatingIssue!==null} onClick={() => void simulate(issue.number)}>{simulating === issue.number ? 'Simuliere …' : 'Ablauf simulieren'}</button><a href={issue.url} target="_blank" rel="noopener noreferrer">Auf GitHub öffnen</a></div>
                 </article>)}</div>}
           <div className="agent-footnote">Der lokale Issue→Code-Lauf kann eine bestehende TS/JS-Datei in einem neuen Git-Branch tatsächlich ändern. Er ist bewusst auf genau eine Datei begrenzt, benötigt ein sauberes Repository und erzeugt weder Commit noch PR. Der vollautomatische Kilo-Builder/Review/Quality/PR-Zyklus bleibt separat gesperrt.</div>
         </div>}
