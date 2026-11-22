@@ -22,6 +22,7 @@ const success={
     kiloRunCommandReady:true,agentCatalogReadable:true,agentCatalogProblem:null,
     sandboxTool:'bwrap',sandboxToolAvailable:true,ghInstalled:true,ghAuthenticated:true,
     checkedAt:'2026-01-01'},
+  studioActivity:{busy:false,kind:null,projectId:null,issueNumber:null},
   branchProtection:{protected:true,evidence:{repository:'example/studio',branch:'main',rulesetId:111,requiredChecks:['typecheck'],verifiedAt:'2026-11-22T00:00:00.000Z'}},
   sandboxProbe:{available:true,isolated:true,reason:'passed',detail:null,exitCode:0},
   reviewerProbe:{supported:true,passed:true,reason:'passed',detail:null},
@@ -75,7 +76,7 @@ async function fixture(page){
       onIssueProgress:()=>()=>{},
       snapshot:async()=>({currentIssue:null,reviewIteration:0,processedIssues:[],failedIssues:[],
         checkpoint:null,hasState:false,updatedAt:null}),
-      studioActivity:async()=>({busy:false,kind:null,projectId:null,issueNumber:null}),
+      studioActivity:()=>respond('studioActivity'),
       studioStatus:async()=>({git:{root:project.path,branch:'main',head:'a'.repeat(40),
           remoteSlug:null,clean:true,canExecute:false,reasons:[]},
         lock:{held:false,startedAt:null},checkpoint:null,
@@ -147,6 +148,15 @@ try {
   await fixture(page);
   await page.getByRole('button',{name:'Übersicht',exact:true}).click();
   await page.getByText('Wiederaufnahme: Keine Wiederaufnahme nötig',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Agenten',exact:true}).click();
+  await page.evaluate(()=>{
+    window.__uiSmoke.overrides.studioActivity={
+      busy:true,kind:'issue-review',projectId:'fixture-other',issueNumber:5};
+  });
+  await page.getByRole('button',{name:'Issues',exact:true}).click();
+  await page.getByText('Studio-Prozess belegt',{exact:true}).waitFor();
+  await page.getByText('anderes Projekt',{exact:false}).first().waitFor();
+  await page.evaluate(()=>{delete window.__uiSmoke.overrides.studioActivity;});
   await page.getByRole('button',{name:'Agenten',exact:true}).click();
   await page.getByRole('button',{name:'Sandbox testen',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Sandbox testen',exact:true}).isDisabled(),true);
