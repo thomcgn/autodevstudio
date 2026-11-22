@@ -593,8 +593,10 @@ function App(): React.JSX.Element {
                   <div><small>Working Tree</small><strong>{studioStatus.git.clean ? 'Sauber' : 'Änderungen vorhanden'}</strong></div>
                   <div><small>Projektlock</small><strong>{studioStatus.lock.held ? 'Belegt' : 'Frei'}</strong></div>
                   <div><small>Checkpoint</small><strong>{studioStatus.checkpoint ? `#${studioStatus.checkpoint.issueNumber} · ${studioStatus.checkpoint.stage}` : 'Keiner'}</strong></div>
-                  {(studioStatus.checkpoint||studioStatus.lock.held) && <p role="status">Wiederaufnahme: {studioStatus.recovery.reason}</p>}
-                  <p>Studio-Engine · {studioStatus.git.remoteSlug ?? 'Kein unterstütztes GitHub-Remote'} · Produktive Agentenläufe noch nicht freigegeben.</p>
+                  <p role="status">Wiederaufnahme: {studioStatus.recovery.state==='none'
+                    ?'Keine Wiederaufnahme nötig – kein offener Studio-Checkpoint'
+                    :studioStatus.recovery.reason}</p>
+                  <p>Studio-Engine · {studioStatus.git.remoteSlug ?? 'Kein unterstütztes GitHub-Remote'} · Issue-Start nur nach GitHub-Schutzprüfung und freigegebener Triage; Status unter „Issues“ prüfen.</p>
                 </div>)}
           {project?.hasCore && (snapshotError ? <div className="error" role="alert">{snapshotError}</div>
             : !selected ? <div className="empty-state">Wähle links ein Projekt aus.</div>
