@@ -3,12 +3,14 @@ import { createRoot } from 'react-dom/client';
 import type { StudioEvent } from '../main/preload';
 import type { Project, ControllerSnapshot, RunRecord, StudioIssue, SimulationResult, IssueCodeResult, IssueVerificationResult, DraftIssuePrResult, IssueAutomationOutcome, GitPreflight, ProviderDiagnostics, StandaloneStatus, SandboxProbeResult, ReviewerToolProbe, IsolatedQualityProbe, QualityScriptProbeResult, FullPipelineProbeResult, OfflineKiloProbeResult, OfflineReviewerProbeResult, LocalReviewModelProbeResult, ReviewerCalibrationResult, OllamaReadinessResult, KiloFreeCatalog, KiloRoleModels, KiloFreeUsage, FreeRunReadiness, FreeRoutePreview, IssueQueuePreview } from './global';
 import './style.css';
+import {ScrollJumpControls} from './scroll-jump-controls';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues';
 type RunMode = 'status' | 'dry-run' | 'execute';
 interface ActiveRun { projectId: string; mode: string; startedAt: number }
 
 function App(): React.JSX.Element {
+  const scrollScopeRef=React.useRef<HTMLElement|null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selected, setSelected] = useState(() => localStorage.getItem('autodev:selected') ?? '');
   const [tab, setTab] = useState<Tab>('overview');
@@ -554,7 +556,7 @@ function App(): React.JSX.Element {
           </button>)}</div>
       </aside>
 
-      <section className="content">
+      <section className="content" ref={scrollScopeRef}>
         <div className="project-heading">
           <div className="project-identity"><h1>{project?.name ?? 'Projekt auswählen'}</h1><p title={project?.path}>{project?.path ?? 'Füge links ein Projekt hinzu.'}</p></div>
           <div className="heading-actions">{busy && <button className="danger" onClick={() => void stop()}>Prozess stoppen</button>}
@@ -865,6 +867,7 @@ function App(): React.JSX.Element {
           <div className="agent-footnote">Kilo plant, erstellt die Änderung und übergibt sie dem unabhängigen Reviewer und den Quality-Gates. Der Hauptlauf erstellt ausschließlich einen Draft-PR; kein automatischer Merge.</div>
         </div>}
 
+        <ScrollJumpControls scopeRef={scrollScopeRef} refreshKey={`${tab}:${selected}`} />
         {error && <div className="error floating-error" role="alert">{error}<button onClick={() => setError('')}>Schließen</button></div>}
       </section>
     </div>
