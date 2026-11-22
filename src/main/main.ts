@@ -27,6 +27,7 @@ import {installRequiredIssueLabels} from '../core/issue-label-onboarding';
 import { inspectLocalProviders } from '../core/provider-diagnostics';
 import { inspectStandaloneStatus } from '../core/standalone-status';
 import { indexPublicRepositoryHistory, readGitHubPublicJson } from '../core/public-history';
+import {listOwnedGitHubRepositories} from '../core/owned-github-repositories';
 import { generateHistoricalBook, mergeHistoricalBook } from '../core/historical-lessons';
 import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
@@ -341,6 +342,7 @@ app.whenReady().then(() => {
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
   });
+  ipcMain.handle('learning:owned-repositories', async () => listOwnedGitHubRepositories());
   ipcMain.handle('learning:generate', async (_event, input: unknown,
     page:unknown=1,pinnedHead?:unknown) => {
     if(typeof input!=='string'||input.length>250||typeof page!=='number'||
