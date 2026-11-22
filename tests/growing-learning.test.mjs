@@ -111,3 +111,27 @@ test('history checkpoint advances even if an unpatchable commit produces identic
   assert.equal(loadHistoricalBook(dir,repo)?.historyCursor?.incomplete,1);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('quick-history and deep-Ollama snapshots are independently resumable',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'autodev-learning-modes-'));
+ try{
+  const quick={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Quick Git overview',solutionsMarkdown:'# Quick solution',
+   reportsMarkdown:'# Quick reports',pagination:{page:1,hasMore:true,pageSize:20}};
+  const deep={repository:repo,head:A,license:'MIT',lessons:[],
+   bookMarkdown:'# Deep source analysis',solutionsMarkdown:'# Deep solution',
+   reportsMarkdown:'# Deep reports',deepSummary:{model:'qwen2.5-coder:3b',
+     filesAnalyzed:15,filesTotal:30,filesSkipped:0,complete:false},
+   deepCursor:{nextOffset:15,filesTotal:30,filesAnalyzed:15,
+     filesSkipped:0,model:'qwen2.5-coder:3b'}};
+  const savedQuick=saveHistoricalBook(dir,quick);
+  const savedDeep=saveHistoricalBook(dir,deep,'deep');
+  assert.notEqual(savedDeep.directory,savedQuick.directory);
+  assert.match(loadHistoricalBook(dir,repo)?.bookMarkdown??'',/Quick Git overview/);
+  assert.match(loadHistoricalBook(dir,repo,'deep')?.bookMarkdown??'',/Deep source analysis/);
+  const update={...quick,pagination:{page:2,hasMore:false,pageSize:20}};
+  saveHistoricalBook(dir,update);
+  assert.equal(loadHistoricalBook(dir,repo,'deep')?.deepCursor?.nextOffset,15);
+  assert.equal(loadHistoricalBook(dir,repo)?.pagination?.page,2);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
