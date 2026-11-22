@@ -76,7 +76,8 @@ export async function createVerifiedIssueLearning(
   throw Error('Previous learning snapshot lacks typed topic records');
  const book=mergeHistoricalBook(previous?{
   repository:previous.repository,head:previous.head,license:previous.license,
-  lessons:previous.lessonEntries,bookMarkdown:previous.bookMarkdown,
+  lessons:previous.lessonEntries,caseStudies:previous.caseStudies,
+  bookMarkdown:previous.bookMarkdown,
   solutionsMarkdown:previous.solutionsMarkdown,reportsMarkdown:previous.reportsMarkdown,
  }:null,candidate);
  const safeTitle=(evidence.issueTitle??'Kein Titel übergeben')
