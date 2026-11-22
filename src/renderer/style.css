@@ -475,3 +475,10 @@ html,body,#root{max-width:100%;overflow:hidden}
 .issue-triage-details small{font-size:11px;color:#abc3dc;line-height:1.45}
 .issue-triage-details[open]{display:block}
 @media(max-width:850px){.issue-triage-details{padding:8px}}
+
+.issue-label-onboarding{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:8px 0;min-width:0}
+.issue-label-onboarding small{font-size:11px;color:#b7cce3;overflow-wrap:anywhere}
+.issue-label-onboarding p{flex:1 1 100%;font-size:12px;margin:0;overflow-wrap:anywhere}
+.issue-label-onboarding [role=alert]{color:#ffd4cf}
+@media(max-width:850px){.issue-label-onboarding button{width:100%}}
