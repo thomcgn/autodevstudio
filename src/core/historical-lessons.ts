@@ -94,7 +94,7 @@ export async function generateHistoricalBook(
 /** Render the same certified source records in a stable thematic order. */
 export function renderHistoricalBook(
  index:Pick<PublicHistoryIndex,'repository'|'fixedHead'|'licenseSpdx'>,
- lessons:readonly HistoricalLesson[],
+ lessons:HistoricalLesson[],
 ):HistoricalBook {
  const book=['# Programmieren verstehen: '+safe(index.repository),'',
   '## Beleglage',
