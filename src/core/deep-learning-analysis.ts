@@ -22,7 +22,7 @@ export interface DeepLearningResult {
  solutionsMarkdown:string;reportsMarkdown:string;
 }
 export type GitHubReader=(endpoint:string)=>Promise<unknown>;
-export type LocalModel=(system:string,prompt:string,signal:AbortSignal)=>Promise<string>;
+export type LocalModel=(system:string,prompt:string,signal:AbortSignal,onPulse?:(fragments:number)=>void)=>Promise<string>;
 interface TreeEntry {path:string;sha:string;size:number;type:string}
 interface SourceFile {path:string;sha:string;content:string}
 const object=(value:unknown):Record<string,unknown>|null=>
@@ -102,27 +102,59 @@ export async function requireOllama(
  }catch(error){throw Error(error instanceof Error?error.message:'Ollama nicht erreichbar');}
  finally{clearTimeout(timer);}
 }
-export function localOllamaModel(
- model=MODEL,fetcher:typeof fetch=fetch,
-):LocalModel{
+/** Stream NDJSON only to fixed loopback, never a remote or token-based model. */
+export function localOllamaModel(model=MODEL,fetcher:typeof fetch=fetch):LocalModel{
  if(!/^[A-Za-z0-9][A-Za-z0-9._/:-]{0,127}$/.test(model)||model.includes('..'))
   throw Error('Invalid Ollama model identifier');
- return async(system,prompt,signal)=>{
+ return async(system,prompt,signal,onPulse)=>{
   const response=await fetcher(HOST+'/api/chat',{
    method:'POST',redirect:'error',signal,
    headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({
-    model,stream:false,format:'json',think:false,keep_alive:'5m',
+   body:JSON.stringify({model,stream:true,format:'json',think:false,keep_alive:'5m',
     options:{num_predict:1400,num_ctx:8192,temperature:0},
-    messages:[{role:'system',content:system},{role:'user',content:prompt}],
-   }),
+    messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
   });
   if(!response.ok)throw Error('Ollama HTTP '+response.status);
-  const result=object(await boundedJson(response,128_000));
-  const message=object(result?.message);
-  if(result?.done!==true||typeof message?.content!=='string'||
-     message.content.length>16000)throw Error('Ollama completion invalid');
-  return message.content;
+  if(!response.body)throw Error('Ollama response has no body');
+  const reader=response.body.getReader();
+  const decoder=new TextDecoder('utf-8',{fatal:true});
+  let buffer='',output='',count=0,bytes=0,done=false;
+  const processLine=(line:string)=>{
+   if(!line.trim())return;
+   let parsed:unknown;
+   try{parsed=JSON.parse(line);}catch{throw Error('Malformed Ollama stream JSON');}
+   const item=object(parsed);
+   const message=object(item?.message);
+   if(!item||!message||Object.hasOwn(message,'tool_calls')||
+     typeof message.content!=='string')throw Error('Invalid Ollama stream response');
+   output+=message.content;
+   if(output.length>16000)throw Error('Ollama output exceeded safe size');
+   count++;
+   if(count%20===0)onPulse?.(count);
+   if(item.done===true)done=true;
+  };
+  try{
+   while(!done){
+    if(signal.aborted)throw Error('Ollama analysis cancelled');
+    const chunk=await reader.read();
+    if(chunk.done)break;
+    bytes+=chunk.value.byteLength;
+    if(bytes>128_000)throw Error('Ollama stream exceeds size limit');
+    buffer+=decoder.decode(chunk.value,{stream:true});
+    if(buffer.length>128_000)throw Error('Ollama stream line exceeds size limit');
+    let pos=buffer.indexOf('\n');
+    while(pos>=0){
+     processLine(buffer.slice(0,pos));
+     buffer=buffer.slice(pos+1);
+     if(done)break;
+     pos=buffer.indexOf('\n');
+    }
+   }
+   if(!done)processLine(buffer+decoder.decode());
+   if(!done||!output.trim())throw Error('Ollama stream unfinished');
+   onPulse?.(count);
+   return output;
+  }finally{await reader.cancel().catch(()=>{});}
  };
 }
 interface Lesson{
@@ -248,7 +280,9 @@ export async function analyzeSourceWithOllama(
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
    'DATEI '+f.path+'\n'+f.content.slice(0,2800)).join('\n\n');
  const architectureStarted=Date.now();
- const overview=parseLesson(await model(SYSTEM,architecturePrompt,signal));
+ const overview=parseLesson(await model(SYSTEM,architecturePrompt,signal,fragments=>
+  send('architecture',0,total,'Ollama erstellt die Architekturübersicht · '+
+   fragments+' Antwortteile empfangen','',null)));
  const first=renderLesson(overview,overviewFiles,1);
  chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
  durations.push(Date.now()-architectureStarted);
@@ -270,7 +304,10 @@ export async function analyzeSourceWithOllama(
     .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
-  const response=await model(SYSTEM,prompt,signal);
+  const response=await model(SYSTEM,prompt,signal,fragments=>
+   send('model',n,total,'Ollama arbeitet an Kapitel '+(n+1)+' · '+
+    fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
+    avg?Math.round((total-n)*avg/1000):null));
   const chapter=renderLesson(parseLesson(response),part,n+1);
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
