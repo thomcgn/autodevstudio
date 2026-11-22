@@ -351,7 +351,22 @@ app.whenReady().then(() => {
     const runId=randomUUID();
     const startedAt=Date.now();
     try{
-      const index=await indexPublicRepositoryHistory(input,readGitHubPublicJson,12);
+      let observedCommits=0;
+      const trackedRead=async(endpoint:string):Promise<unknown>=>{
+        if(controller.signal.aborted)throw Error('Learning analysis cancelled');
+        const response=await readGitHubPublicJson(endpoint);
+        if(/\/commits\/[a-f0-9]{40}$/i.test(endpoint)){
+          observedCommits++;
+          send('learning:progress',{
+            runId,repository:input,phase:'discovery',startedAt,
+            completed:observedCommits,total:12,
+            current:'Git-Historie: '+observedCommits+' Commits untersucht',
+            etaSeconds:null,preview:'',model:'qwen2.5-coder:3b',
+          });
+        }
+        return response;
+      };
+      const index=await indexPublicRepositoryHistory(input,trackedRead,12);
       const result=await analyzeSourceWithOllama(index.repository,index.fixedHead,
         runId,startedAt,event=>send('learning:progress',event),controller.signal,{
           history:index.commits.map(commit=>({
