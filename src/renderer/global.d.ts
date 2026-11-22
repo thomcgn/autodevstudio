@@ -152,7 +152,7 @@ declare global {
     deepLearningBook(input:string,provider?:'ollama'|'kilo',consent?:boolean):Promise<LearningBookPreview>;
     cancelDeepLearning():Promise<boolean>;
     onLearningProgress(callback:(value:DeepLearningProgress)=>void):()=>void;
-    loadLearningBook(repo:string):Promise<LearningBookPreview|null>;
+    loadLearningBook(repo:string,provider?:'ollama'|'kilo'):Promise<LearningBookPreview|null>;
     exportLearningBook(repo:string,kind:'book'|'solutions'|'reports',format:'md'|'pdf',
       mode?:'history'|'deep'|'deep-kilo'):Promise<{exported:boolean}>;
     studioActivity(id: string): Promise<StudioActivity>;
