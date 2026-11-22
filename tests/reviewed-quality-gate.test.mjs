@@ -1,3 +1,4 @@
+import {readQualityRunReport} from '../src/core/quality-report.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -48,6 +49,11 @@ test('real quality transition requires proof and runs only approved script names
   assert.equal(cp.reviewPassed,true);
   assert.equal(cp.qualityPassed,true);
   assert.equal(cp.stage,'quality');
+  const report=readQualityRunReport(f.base,f.project);
+  assert.equal(report.outcome,'passed');
+  assert.equal(report.issueNumber,3);
+  assert.equal(report.checkpointRevision,2);
+  assert.equal(report.reviewFingerprint,'c'.repeat(64));
  }finally{f.close();}
 });
 test('failed script never approves quality or runs later scripts',async()=>{
@@ -121,5 +127,23 @@ test('new Clean Code/SOLID/DRY violations block Quality PASS and all scripts',as
   assert.match(result.feedback,/explicit-any/);
   assert.deepEqual(f.scripts,[]);
   assert.equal(loadCoreCheckpoint(f.base,f.project).qualityPassed,false);
+ }finally{f.close();}
+});
+
+test('failed static audit persists concrete rule and prevents quality approval',async()=>{
+ const f=fixture();
+ try{
+  const result=await f.run(['typecheck','test'],{
+    ...f.dependencies,
+    audit:async()=>({passed:false,changedFile:'src/a.ts',
+      findings:[{principle:'clean-code',rule:'explicit-any',line:12,
+        detail:'New any declaration'}]}),
+  });
+  assert.equal(result.kind,'quality-failed');
+  const report=readQualityRunReport(f.base,f.project);
+  assert.equal(report.outcome,'failed');
+  assert.equal(report.findings[0].line,12);
+  assert.equal(report.findings[0].rule,'explicit-any');
+  assert.equal(report.checkpointRevision,1);
  }finally{f.close();}
 });

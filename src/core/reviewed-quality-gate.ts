@@ -5,6 +5,7 @@ import {requireReviewedEvidenceProof} from './review-approval-proof.ts';
 import {runTrustedQualityGates,type QualityScriptRunner} from './quality-gates.ts';
 import {runIsolatedNpmScript} from './isolated-quality.ts';
 import {auditReviewedSource,type ReviewedSourceAudit} from './audit-reviewed-source.ts';
+import {writeQualityRunReport,type QualityRunReport} from './quality-report.ts';
 
 export interface VerifiedQualityResult {
   kind:'quality-passed'|'quality-failed';
@@ -49,15 +50,28 @@ export async function verifyQualityForReviewedIssue(
   const gitBefore=await dependencies.capture(projectPath);
   if(!same(cp.git,gitBefore))throw Error('Repository drift before quality');
   const proof=requireReviewedEvidenceProof(base,projectPath,cp,gitBefore);
+  const record=(outcome:'passed'|'failed',feedback:string,findings:ReviewedSourceAudit['findings'],revision:number)=>{
+    const report:QualityRunReport={
+      schemaVersion:1,issueNumber:cp.issueNumber,runId:cp.runId,
+      reviewFingerprint:proof.evidenceFingerprint,checkpointRevision:revision,
+      outcome,checks:['clean-code','solid','dry',...approvedScripts],
+      findings:findings.slice(0,40),feedback:feedback.slice(0,1200),
+      recordedAt:new Date().toISOString(),
+    };
+    writeQualityRunReport(base,projectPath,lockToken,report);
+  };
   if(signal?.aborted)throw Error('Quality cancelled');
   const audit=await dependencies.audit(projectPath);
-  if(!audit.passed)return {
-    kind:'quality-failed',issueNumber:cp.issueNumber,
-    checkpointRevision:expectedRevision,reviewedFingerprint:proof.evidenceFingerprint,
-    feedback:'Clean Code/SOLID/DRY: '+audit.findings.slice(0,5)
-      .map(f=>f.rule+' at '+audit.changedFile+':'+f.line).join('; '),
-    publishAuthorized:false,
-  };
+  if(!audit.passed){
+    const feedback='Clean Code/SOLID/DRY: '+audit.findings.slice(0,5)
+      .map(f=>f.rule+' at '+audit.changedFile+':'+f.line).join('; ');
+    record('failed',feedback,audit.findings,expectedRevision);
+    return {
+      kind:'quality-failed',issueNumber:cp.issueNumber,
+      checkpointRevision:expectedRevision,reviewedFingerprint:proof.evidenceFingerprint,
+      feedback,publishAuthorized:false,
+    };
+  }
   const result=await runTrustedQualityGates({
     cwd:projectPath,scripts:approvedScripts,timeoutMs:120000,signal,
   },dependencies.runScript);
@@ -76,15 +90,19 @@ export async function verifyQualityForReviewedIssue(
   // Re-read the durable receipt after scripts. Scripts are untrusted project
   // programs, including ones which return exit 0.
   requireReviewedEvidenceProof(base,projectPath,cpAfter,gitAfter);
-  if(!result.passed)return {
-    kind:'quality-failed',issueNumber:cp.issueNumber,
-    checkpointRevision:expectedRevision,reviewedFingerprint:proof.evidenceFingerprint,
-    feedback:result.feedback,publishAuthorized:false,
-  };
+  if(!result.passed){
+    record('failed',result.feedback??'Quality scripts failed',[],expectedRevision);
+    return {
+      kind:'quality-failed',issueNumber:cp.issueNumber,
+      checkpointRevision:expectedRevision,reviewedFingerprint:proof.evidenceFingerprint,
+      feedback:result.feedback,publishAuthorized:false,
+    };
+  }
   const next=saveCoreCheckpoint(base,projectPath,lockToken,{
     runId:cp.runId,issueNumber:cp.issueNumber,stage:'quality',
     git:gitAfter,sessions:cp.sessions,reviewPassed:true,qualityPassed:true,
   },expectedRevision);
+  record('passed','Static analysis and required scripts passed',[],next.revision);
   return {
     kind:'quality-passed',issueNumber:cp.issueNumber,
     checkpointRevision:next.revision,reviewedFingerprint:proof.evidenceFingerprint,
