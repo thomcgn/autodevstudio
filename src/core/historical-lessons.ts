@@ -88,6 +88,14 @@ export async function generateHistoricalBook(
   }
  }
  const lessons=[...grouped.values()].sort((a,b)=>a.key.localeCompare(b.key,'en'));
+
+ return renderHistoricalBook(index,lessons);
+}
+/** Render the same certified source records in a stable thematic order. */
+export function renderHistoricalBook(
+ index:Pick<PublicHistoryIndex,'repository'|'fixedHead'|'licenseSpdx'>,
+ lessons:readonly HistoricalLesson[],
+):HistoricalBook {
  const book=['# Programmieren verstehen: '+safe(index.repository),'',
   '## Beleglage',
   'Die Kapitel beruhen auf erkannten Syntaxmustern in Git-Diffs. Beispiele sind eigens erstellte Übungen, keine Kopien des Projektcodes.',
@@ -120,4 +128,23 @@ export async function generateHistoricalBook(
  return {repository:index.repository,head:index.fixedHead,license:index.licenseSpdx,lessons,
   bookMarkdown:book.join('\n')+'\n',solutionsMarkdown:solutions.join('\n')+'\n',
   reportsMarkdown:reports.join('\n')+'\n'};
+}
+/** Keep old lessons and their provenance when subsequent commit pages are imported. */
+export function mergeHistoricalBook(
+ previous:HistoricalBook|null,incoming:HistoricalBook,
+):HistoricalBook{
+ if(!previous)return incoming;
+ if(previous.repository!==incoming.repository)
+  throw Error('Cross-repository textbook merge forbidden');
+ const merged=new Map<string,HistoricalLesson>();
+ for(const lesson of [...previous.lessons,...incoming.lessons]){
+  const original=merged.get(lesson.key);
+  if(!original){merged.set(lesson.key,{...lesson,commits:[...lesson.commits],paths:[...lesson.paths]});continue;}
+  merged.set(lesson.key,{...lesson,
+   commits:[...new Set([...original.commits,...lesson.commits])],
+   paths:[...new Set([...original.paths,...lesson.paths])].slice(0,50)});
+ }
+ return renderHistoricalBook({
+  repository:incoming.repository,fixedHead:incoming.head,licenseSpdx:incoming.license??previous.license,
+ },[...merged.values()].sort((a,b)=>a.key.localeCompare(b.key,'en')));
 }
