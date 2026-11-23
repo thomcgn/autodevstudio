@@ -374,7 +374,7 @@ export async function analyzeSourceWithOllama(
   ?{implementation:deps.resumeContext??'',reasoning:''}
   :await requestValidatedLesson(model,pedagogicalSystem,architecturePrompt,signal,fragments=>
     send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
-     fragments+' Antwortteile empfangen','',null));
+     fragments+' Antwortteile empfangen','',null),Boolean(learningProfile));
  if(resumeChapter===0){
   const first=renderLesson(overview as Lesson,overviewFiles,chapterOffset+1,learningProfile);
   chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
@@ -404,7 +404,7 @@ export async function analyzeSourceWithOllama(
   const chapterLesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal,fragments=>
    send('model',n,total,providerLabel+' arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
-    avg?Math.round((total-n)*avg/1000):null));
+    avg?Math.round((total-n)*avg/1000):null),Boolean(learningProfile));
   const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1,learningProfile);
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
@@ -506,7 +506,7 @@ export async function analyzeHistoricalCommitWithOllama(
    'Erkläre konkreten Code, plausible Gründe, Handimplementierung und Alternativen.',
    'Behaupte keine nicht belegten Tests oder Gedanken der Entwickler.',
   ].join('\n');
-  const lesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal);
+  const lesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal,undefined,Boolean(learningProfile));
   const n=numberStart+i;
   const evidence='https://github.com/'+repository+'/commit/'+sha;
   const title=escape(lesson.title);
