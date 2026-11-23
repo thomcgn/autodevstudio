@@ -436,7 +436,8 @@ export interface HistoricalCommitAnalysis {
 }
 export async function analyzeHistoricalCommitWithOllama(
  repositoryInput:string,sha:string,numberStart:number,signal:AbortSignal,
- deps:{read?:GitHubReader;model?:LocalModel;onProgress?:(message:string)=>void}={},
+ deps:{read?:GitHubReader;model?:LocalModel;onProgress?:(message:string)=>void;
+  learningProfile?:LearningProfile}={},
 ):Promise<HistoricalCommitAnalysis>{
  const repository=parsePublicRepository(repositoryInput);
  if(!SHA.test(sha)||!Number.isSafeInteger(numberStart)||numberStart<1)
@@ -444,6 +445,8 @@ export async function analyzeHistoricalCommitWithOllama(
  if(signal.aborted)throw Error('Historical learning cancelled');
  const read=deps.read??readGitHubPublicJsonForCommit;
  const model=deps.model??localOllamaModel();
+ const learningProfile=deps.learningProfile?validateLearningProfile(deps.learningProfile):undefined;
+ const pedagogicalSystem=SYSTEM+(learningProfile?'\nLernprofil: '+learningInstructions(learningProfile):'\nGrundlagen erklären; keine Vorkenntnisse voraussetzen.');
  const raw=object(await read('repos/'+repository+'/commits/'+sha));
  if(!raw||raw.sha!==sha||!Array.isArray(raw.files))
   throw Error('Unverified commit detail for '+sha);
@@ -492,22 +495,23 @@ export async function analyzeHistoricalCommitWithOllama(
    'Erkläre konkreten Code, plausible Gründe, Handimplementierung und Alternativen.',
    'Behaupte keine nicht belegten Tests oder Gedanken der Entwickler.',
   ].join('\n');
-  const lesson=await requestValidatedLesson(model,SYSTEM,prompt,signal);
+  const lesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal);
   const n=numberStart+i;
   const evidence='https://github.com/'+repository+'/commit/'+sha;
   const title=escape(lesson.title);
   chapters.push([
    '## Kapitel '+n+': '+title,'',
    '**Git-Beleg:** '+evidence,'',
-   '### Ausgangsproblem',escape(lesson.problem),'',
-   '### Umsetzung im tatsächlichen Diff',escape(lesson.implementation),'',
-   '### Plausible technische Begründung (Interpretation)',escape(lesson.reasoning),'',
-   '### Alternativen',escape(lesson.alternatives),'',
-   '### Trade-offs und Risiken',escape(lesson.tradeoffs),'',
-   '### Von Hand nachbauen',escape(lesson.walkthrough),'',
+   '### Ausgangsproblem – einfach erklärt',escape(lesson.problem),'',
+   '### Schritt für Schritt',escape(lesson.walkthrough),'',
    '### Eigenständiges Beispiel','~~~text',
    redact(lesson.codeExample).replace(/~~~/g,'').slice(0,1800),'~~~','',
    '### Übung',escape(lesson.exercise),'',
+   '### Technische Vertiefung',
+   '#### Umsetzung im tatsächlichen Diff',escape(lesson.implementation),'',
+   '#### Plausible technische Begründung (Interpretation)',escape(lesson.reasoning),'',
+   '#### Alternativen',escape(lesson.alternatives),'',
+   '#### Trade-offs und Risiken',escape(lesson.tradeoffs),'',
    '### Quellenlage und Unsicherheit',escape(lesson.uncertainty),
   ].join('\n'));
   solutions.push('## Kapitel '+n+': '+title+'\n\n'+escape(lesson.solution));
