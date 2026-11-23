@@ -52,7 +52,7 @@ export function evaluateLearningProfile(answers:readonly LearningAnswer[],now:nu
 export function validateLearningProfile(input:unknown):LearningProfile {
  if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Invalid learning profile');
  const profile=input as Partial<LearningProfile>;
- if(profile.version!==1||!Number.isSafeInteger(profile.assessedAt)||profile.assessedAt < 0||
+ if(profile.version!==1||typeof profile.assessedAt!=='number'||!Number.isSafeInteger(profile.assessedAt)||profile.assessedAt<0||
   !profile.levels||!profile.scores)throw Error('Invalid learning profile');
  for(const stack of LEARNING_STACKS){
   if(!['beginner','foundation','intermediate'].includes(profile.levels[stack])||
