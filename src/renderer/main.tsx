@@ -1221,7 +1221,7 @@ function App(): React.JSX.Element {
               <input type="checkbox" checked={learningCloudConsent} disabled={learningGenerating}
                 onChange={event=>setLearningCloudConsent(event.target.checked)}/>
               Ich stimme ausdrücklich zu, dass AutoDev ausgewählte Quellcodeausschnitte
-              und Git-Diffs zur Analyse an den Kilo-Cloud-Dienst überträgt.
+              und Git-Diffs sowie mein Lernprofil (Lernstufen ohne Antworten) zur Analyse an den Kilo-Cloud-Dienst überträgt.
               Kein Git-Schreibzugriff und keine Tool-Ausführung durch das Modell.
             </label>}
           </div>
