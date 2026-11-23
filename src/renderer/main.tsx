@@ -7,7 +7,7 @@ import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
 import {formatLearningDuration,formatRemainingEta} from './learning-time';
-import {LEARNING_QUESTIONS,evaluateLearningProfile,validateLearningProfile,type LearningProfile} from '../core/learning-assessment';
+import {LEARNING_QUESTIONS,evaluateLearningProfile,validateLearningProfile,type LearningProfile,type LearningStack} from '../core/learning-assessment';
 import {explainIssueHold} from './issue-hold-explanation';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues' | 'learning';
@@ -25,6 +25,7 @@ function App(): React.JSX.Element {
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [learningInput, setLearningInput] = useState('');
   const [learningAnswers,setLearningAnswers] = useState<Record<string,number>>({});
+  const [learningStacks,setLearningStacks] = useState<LearningStack[]>(['fundamentals','java','spring','typescript','react','sql']);
   const [learningAssessmentOpen,setLearningAssessmentOpen] = useState(false);
   const [learningProfile,setLearningProfile] = useState<LearningProfile|null>(()=>{
     try {const raw=localStorage.getItem('autodev:learning-profile:v1');
@@ -130,6 +131,7 @@ function App(): React.JSX.Element {
   const [agentInfoOpen, setAgentInfoOpen] = useState(false);
   const [approval, setApproval] = useState('');
 
+  const activeLearningQuestions=LEARNING_QUESTIONS.filter(q=>learningStacks.includes(q.stack));
   const project = projects.find(p => p.id === selected);
   const canRun = Boolean(project?.hasCore);
   const elapsed = activeInfo ? Math.max(0, Math.floor((clock - activeInfo.startedAt) / 1000)) : 0;
@@ -362,6 +364,9 @@ function App(): React.JSX.Element {
     try{
       const result=await window.studio.publicRepoHistory(learningInput.trim(),20);
       setLearningHistory(result);
+      const detected=await window.studio.detectLearningStacks(result.repository,result.fixedHead)
+        .catch(()=>null);
+      if(detected&&detected.length>0){setLearningStacks(detected);setLearningAnswers({});}
     }catch(error){
       const reason=error instanceof Error?error.message:'';
       setLearningError(reason.startsWith('Public history:')
@@ -1134,6 +1139,8 @@ function App(): React.JSX.Element {
             <div className="learning-source-controls">
               <input id="learning-repo" value={learningInput} onChange={event=>{
                 setLearningInput(event.target.value);setLearningHistory(null);setLearningBook(null);setLearningError('');
+                setLearningStacks(['fundamentals','java','spring','typescript','react','sql']);
+                setLearningAnswers({});
               }} placeholder="owner/repo oder https://github.com/owner/repo" autoComplete="off" />
               <button type="submit" disabled={learningLoading||!learningInput.trim()}>
                 {learningLoading?'GitHub-Historie wird geprüft …':'Historie lesen'}
@@ -1180,15 +1187,15 @@ function App(): React.JSX.Element {
             </div>}
             {learningAssessmentOpen&&<form className="learning-quiz" onSubmit={event=>{
               event.preventDefault();
-              try {const answers=LEARNING_QUESTIONS.map(q=>({questionId:q.id,choice:learningAnswers[q.id]}));
-                const profile=evaluateLearningProfile(answers,Date.now());
+              try {const answers=activeLearningQuestions.map(q=>({questionId:q.id,choice:learningAnswers[q.id]}));
+                const profile=evaluateLearningProfile(answers,Date.now(),learningStacks);
                 localStorage.setItem('autodev:learning-profile:v1',JSON.stringify(profile));
                 setLearningProfile(profile);setLearningAssessmentOpen(false);setLearningMessage('Lernprofil aktualisiert. Neue Kapitel berücksichtigen die Einstufung.');
               }catch{setLearningError('Bitte alle Einstufungsfragen beantworten.');}
             }}>
-              <p>Kurzer Wissenstest zu Programmierung, Java, Spring, TypeScript, React und SQL.
+              <p>Kurzer Wissenstest zu den im Repository erkannten Technologien: {learningStacks.join(', ')}.
                 Für unbekannte Technologien wird immer beim Einstieg begonnen.</p>
-              {LEARNING_QUESTIONS.map((question,index)=><fieldset key={question.id}>
+              {activeLearningQuestions.map((question,index)=><fieldset key={question.id}>
                 <legend>{index+1}. {question.prompt} <small>· {question.stack}</small></legend>
                 {question.answers.map((answer,choice)=><label key={choice}>
                   <input type="radio" name={question.id} checked={learningAnswers[question.id]===choice}
@@ -1196,7 +1203,7 @@ function App(): React.JSX.Element {
                   {answer}
                 </label>)}
               </fieldset>)}
-              <button type="submit" disabled={LEARNING_QUESTIONS.some(q=>learningAnswers[q.id]===undefined)}>
+              <button type="submit" disabled={activeLearningQuestions.some(q=>learningAnswers[q.id]===undefined)}>
                 Lernprofil auswerten und speichern
               </button>
             </form>}
