@@ -6,6 +6,7 @@ import type {DeepLearningProgress} from '../main/preload';
 import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
+import {formatLearningDuration,formatRemainingEta} from './learning-time';
 import {explainIssueHold} from './issue-hold-explanation';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues' | 'learning';
@@ -30,6 +31,7 @@ function App(): React.JSX.Element {
   const [learningProgress,setLearningProgress] = useState<DeepLearningProgress|null>(null);
   const [learningModalOpen,setLearningModalOpen] = useState(false);
   const [learningStartedAt,setLearningStartedAt] = useState(0);
+  const [learningEtaReceivedAt,setLearningEtaReceivedAt] = useState(0);
   const [learningModalError,setLearningModalError] = useState('');
   const [learningExporting,setLearningExporting] = useState(false);
   const [learningMessage,setLearningMessage] = useState('');
@@ -153,6 +155,7 @@ function App(): React.JSX.Element {
     });
     const unsubscribeLearning=window.studio.onLearningProgress(event=>{
       setLearningProgress(event);
+      setLearningEtaReceivedAt(Date.now());
     });
     const unsubscribeIssue=window.studio.onIssueProgress(event=>{
       if(Number.isSafeInteger(event.issueNumber)&&event.issueNumber>0)
@@ -283,6 +286,7 @@ function App(): React.JSX.Element {
     if(learningGenerating||!learningInput.trim())return;
     setLearningGenerating(true);setLearningError('');setLearningMessage('');
     setLearningProgress(null);setLearningModalError('');
+    setLearningEtaReceivedAt(0);
     setLearningStartedAt(Date.now());setLearningModalOpen(true);
     try{
       const result=await window.studio.deepLearningBook(learningInput.trim(),learningProvider,
@@ -1263,9 +1267,8 @@ function App(): React.JSX.Element {
             ?Math.round(100*learningProgress.completed/learningProgress.total):0)+'%'}}/>
         </div>
         <p>Schritt {learningProgress?.completed??0} von {learningProgress?.total||'?'} ·
-          Laufzeit: {Math.max(0,Math.floor((clock-(learningProgress?.startedAt??learningStartedAt))/1000))} s ·
-          ETA: {learningProgress?.etaSeconds===null||learningProgress?.etaSeconds===undefined
-            ?'noch nicht messbar':learningProgress.etaSeconds+' s'}</p>
+          Laufzeit: <time className="mono" aria-label="Laufzeit in Stunden Minuten Sekunden">{formatLearningDuration(Math.max(0,(clock-(learningProgress?.startedAt??learningStartedAt))/1000))}</time> ·
+          ETA: <time className="mono" aria-label="Verbleibende Zeit in Stunden Minuten Sekunden">{formatRemainingEta(learningProgress?.etaSeconds,learningEtaReceivedAt,clock)}</time></p>
         <p>Modell: {learningProgress?.model??(learningProvider==='kilo'?'kilo-auto/free':'qwen2.5-coder:3b')} ·
           {learningProvider==='kilo'
             ?' Kilo Cloud · Quellcode wird extern verarbeitet · Freikontingent nicht garantiert'
