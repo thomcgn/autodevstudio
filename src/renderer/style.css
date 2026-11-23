@@ -509,3 +509,18 @@ html,body,#root{max-width:100%;overflow:hidden}
  border-radius:8px;padding:11px;font-size:12px;line-height:1.5}
 @media(max-width:850px){.learning-progress-modal{max-height:95vh;padding:13px}
  .learning-progress-preview pre{max-height:30vh}}
+
+/* Learning assessment stays compact and independently scrollable on 10-inch displays. */
+.learning-assessment{border:1px solid #34465f;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.learning-assessment-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.learning-assessment-heading h3{margin:0 0 4px;font-size:14px}
+.learning-assessment-heading p,.learning-quiz p{margin:0;font-size:12px;color:#b4c6dd;line-height:1.5}
+.learning-skill-summary{display:flex;flex-wrap:wrap;gap:6px;font-size:11px}
+.learning-skill-summary span{background:#1e3048;border:1px solid #394f6e;padding:5px 8px;border-radius:8px}
+.learning-quiz{display:flex;flex-direction:column;gap:10px;max-height:min(48vh,420px);overflow-y:auto;padding-right:5px}
+.learning-quiz fieldset{border:1px solid #34465f;border-radius:8px;padding:9px 10px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.learning-quiz legend{font-size:12px;font-weight:600;padding:0 5px;max-width:100%;white-space:normal}
+.learning-quiz legend small{font-weight:400;color:#9bb4d0}
+.learning-quiz label{font-size:12px;display:flex;gap:9px;align-items:flex-start;line-height:1.45;cursor:pointer}
+.learning-quiz input[type=radio]{flex:none;accent-color:#74a9f5;margin-top:2px}
+@media(max-width:850px){.learning-assessment-heading{align-items:stretch;flex-direction:column}.learning-quiz{max-height:38vh}}

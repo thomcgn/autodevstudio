@@ -1,6 +1,9 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {parsePublicRepository} from './public-history.ts';
+import {learningInstructions,validateLearningProfile,type LearningProfile} from './learning-assessment.ts';
+import {reviewBeginnerLesson} from './learning-pedagogical-review.ts';
+import {buildTextbookCurriculum,renderTextbookCurriculum} from './repository-textbook-curriculum.ts';
 
 const exec=promisify(execFile);
 const SHA=/^[0-9a-f]{40}$/i;
@@ -112,7 +115,7 @@ export function localOllamaModel(model=MODEL,fetcher:typeof fetch=fetch):LocalMo
    method:'POST',redirect:'error',signal,
    headers:{'Content-Type':'application/json'},
    body:JSON.stringify({model,stream:true,format:'json',think:false,keep_alive:'5m',
-    options:{num_predict:1400,num_ctx:8192,temperature:0},
+    options:{num_predict:3000,num_ctx:8192,temperature:0.2},
     messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
   });
   if(!response.ok)throw Error('Ollama HTTP '+response.status);
@@ -185,22 +188,21 @@ function parseLesson(json:string):Lesson{
  */
 export async function requestValidatedLesson(
  model:LocalModel,system:string,prompt:string,signal:AbortSignal,
- onPulse?:(fragments:number)=>void,
+ onPulse?:(fragments:number)=>void,enforceBeginnerReview=false,
 ):Promise<Lesson>{
  const reminder='\n\nANTWORTFORMAT VERBINDLICH: Genau ein valides JSON-Objekt, keine Markdown-Fences. '+
   'Jedes der elf String-Felder muss mindestens zwölf Zeichen besitzen: '+
   fields.join(', ')+'. Auch bei Unsicherheit jeden Abschnitt mit Quellenlage füllen.';
+ let pedagogicalFeedback='';
  for(let attempt=0;attempt<2;attempt++){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const concise=attempt===1
-   ?'\n\nWICHTIG: Antworte SEHR KURZ. Genau elf JSON-Stringfelder, maximal '+
-    'zwei kurze Sätze pro Feld und ein kurzes Codebeispiel. Keine Einleitung, '+
-    'kein Markdown, keine langen Überlegungen. '+reminder
-   :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern; '+
-    'pro Feld maximal zwei kurze Sätze, damit die Ausgabe vollständig bleibt.';
+   ?'\n\nWICHTIG: SEHR KURZ bei der Formatkorrektur. Alle elf JSON-Stringfelder ausfüllen. Formuliere konkret, kurz und ohne Floskeln. '+reminder
+   :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern. Problem und walkthrough sollen nachvollziehbare Einsteigererklärungen enthalten; Fachbegriffe vorher definieren.';
   let answer:string;
+  const evaluatedPrompt=prompt+concise+(pedagogicalFeedback?'\n\nÜBERARBEITUNG ERFORDERLICH: '+pedagogicalFeedback:'');
   try{
-   answer=await model(system,prompt+concise,signal,onPulse);
+   answer=await model(system,evaluatedPrompt,signal,onPulse);
   }catch(error){
    // A bounded text completion that hit the Kilo token cap is recoverable.
    // Network failures, rate limits, permissions and tool calls are not.
@@ -208,7 +210,15 @@ export async function requestValidatedLesson(
      error.message==='Kilo completion truncated at token limit')continue;
    throw error;
   }
-  try{return parseLesson(answer)}
+  try{
+   const lesson=parseLesson(answer);
+   if(enforceBeginnerReview){
+    const review=reviewBeginnerLesson(lesson);
+    if(!review.passed){pedagogicalFeedback=review.findings.join('; ');
+      throw Error('Didactic quality gate failed: '+pedagogicalFeedback);}
+   }
+   return lesson;
+  }
   catch(error){
    if(attempt===1)throw Error('KI-Antwort nach erneuter Formatprüfung ungültig: '+
     (error instanceof Error?error.message:'unbekannter Formatfehler'));
@@ -220,22 +230,24 @@ function escape(text:string):string{
  return text.replace(/[\r\n]+/g,' ').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/[*_\[\]]/g,' ').slice(0,3500);
 }
-function renderLesson(lesson:Lesson,files:readonly SourceFile[],n:number){
+function renderLesson(lesson:Lesson,files:readonly SourceFile[],n:number,profile?:LearningProfile){
  const source=files.map(f=>'- '+escape(f.path)+' (Git blob '+f.sha.slice(0,12)+')').join('\n');
  const title=escape(lesson.title);
  return {
   book:['## Kapitel '+n+': '+title,'',
-   '### Was ist das Problem?',escape(lesson.problem),
-   '','### Wie funktioniert der echte Code?',escape(lesson.implementation),
-   '','### Warum kann diese Lösung sinnvoll sein?',escape(lesson.reasoning),
-   '','### Welche Alternativen gibt es?',escape(lesson.alternatives),
-   '','### Nachteile, Sicherheit und Grenzfälle',escape(lesson.tradeoffs),
-   '','### Umsetzung von Hand',escape(lesson.walkthrough),
-   '','### Vereinfachtes Beispiel','~~~text',
+   '### Aus dem Alltag: Welches Problem lösen wir?',escape(lesson.problem),
+   '','### Was passiert dabei? Schritt für Schritt',escape(lesson.walkthrough),
+   '','### Verständliches Codebeispiel','~~~text',
    lesson.codeExample.replace(/~~~/g,'').slice(0,1800),'~~~',
    '','### Übung',escape(lesson.exercise),
+   '','### Technische Vertiefung',
+   '#### Wie funktioniert der echte Code?',escape(lesson.implementation),
+   '','#### Warum kann diese Lösung sinnvoll sein?',escape(lesson.reasoning),
+   '','#### Welche Alternativen gibt es?',escape(lesson.alternatives),
+   '','#### Nachteile, Sicherheit und Grenzfälle',escape(lesson.tradeoffs),
    '','### Belege versus Interpretation',escape(lesson.uncertainty),
-   '','### Untersuchte Dateien',source].join('\n'),
+   '','### Untersuchte Dateien',source,
+   ...(profile?['','**Lernstand:** individuell angepasst; neue Fachbegriffe werden vor ihrer Verwendung erklärt.']:[])].join('\n'),
   solution:['## Kapitel '+n+': '+title,'',escape(lesson.solution)].join('\n'),
   report:['## Kapitel '+n+': '+title,'',source,
    'Die technische Einordnung ist nicht mit nachgewiesenen Gedanken der Entwickler gleichzusetzen.'].join('\n'),
@@ -250,6 +262,12 @@ const SYSTEM=[
  'Erkläre die Vorteile und plausiblen Alternativen, kennzeichne Hypothesen klar.',
  'Schreibe zuerst verständlich für Klassen 7 bis 10 und danach präzise technisch.',
  'Liefere eine Übung mit getrennter Musterlösung.',
+ 'Schreibe ausnahmslos auf Deutsch, auch wenn Quellcode und Kommentare Englisch sind.',
+ 'Beginne jedes Kapitel mit einer konkreten Alltagssituation und erkläre sie ohne Fachjargon.',
+ 'Führe neue Fachbegriffe vor der ersten Verwendung in einfachen Worten ein.',
+ 'Nutze ein schrittweises Beispiel mit Eingabe, Verarbeitung und Ausgabe.',
+ 'Die Implementierung muss auch für Anfänger verständlich und quellcodegetreu sein.',
+ 'Verwende technische Fachbegriffe in der Vertiefung und kennzeichne unbekannte Zusammenhänge.',
  'Gib ausschließlich ein JSON-Objekt mit STRING-Feldern title,problem,implementation,reasoning,alternatives,tradeoffs,walkthrough,codeExample,exercise,solution,uncertainty.',
 ].join('\n');
 export async function analyzeSourceWithOllama(
@@ -258,11 +276,13 @@ export async function analyzeSourceWithOllama(
  deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
   history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[];
   offset?:number;chapterOffset?:number;modelName?:string;
-  resumeChapter?:number;resumeContext?:string;
+  resumeChapter?:number;resumeContext?:string;learningProfile?:LearningProfile;
   onChapter?:(chapter:{book:string;solution:string;report:string},
     completed:number,filesTotal:number,skipped:number)=>void;}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
+ const learningProfile=deps.learningProfile?validateLearningProfile(deps.learningProfile):undefined;
+ const pedagogicalSystem=SYSTEM+(learningProfile?'\nINDIVIDUELLES LERNPROFIL: '+learningInstructions(learningProfile):'\nBeginnerprofil: keine Programmierkenntnisse voraussetzen.');
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
   throw Error('Invalid learning run identity');
  const read=deps.read??readSourceGitHub;
@@ -313,6 +333,10 @@ export async function analyzeSourceWithOllama(
   send('loading',sources.length,selectedFiles.length,
    'Quelldatei '+sources.length+'/'+eligibleFiles.length+': '+item.path,'',null);
  }
+ const curriculum=buildTextbookCurriculum(sources);
+ const curriculumMarkdown=renderTextbookCurriculum(curriculum,repository,head);
+ const learningContext=curriculum.concepts.map(c=>c.title+': '+c.explanation+
+  '; Dokumentation: '+c.documentation).join('\n');
  const total=Math.ceil(chunks.length/chapterGroupSize)+1;
  const resumeChapter=deps.resumeChapter??0;
  if(!Number.isSafeInteger(resumeChapter)||resumeChapter<0||
@@ -342,16 +366,17 @@ export async function analyzeSourceWithOllama(
   ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
   'Nutze die folgende Übersicht analysierter Quelldateien (Auszug, übrige Dateien folgen in Einzelkapiteln):\n'+overviewPaths+
   '\nDokumentierte Änderungsschritte aus Git (keine Gedanken der Entwickler):\n'+historyText+
+  '\nErkannte Lernkonzepte:\n'+learningContext.slice(0,1800)+
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
    'DATEI '+f.path+'\n'+f.content.slice(0,overviewSnippetChars)).join('\n\n');
  const architectureStarted=Date.now();
  const overview=resumeChapter>0
   ?{implementation:deps.resumeContext??'',reasoning:''}
-  :await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
+  :await requestValidatedLesson(model,pedagogicalSystem,architecturePrompt,signal,fragments=>
     send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
-     fragments+' Antwortteile empfangen','',null));
+     fragments+' Antwortteile empfangen','',null),Boolean(learningProfile));
  if(resumeChapter===0){
-  const first=renderLesson(overview as Lesson,overviewFiles,chapterOffset+1);
+  const first=renderLesson(overview as Lesson,overviewFiles,chapterOffset+1,learningProfile);
   chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
   deps.onChapter?.(first,1,eligibleFiles.length,all.length-eligibleFiles.length);
   durations.push(Date.now()-architectureStarted);
@@ -371,15 +396,16 @@ export async function analyzeSourceWithOllama(
    'ARCHITEKTURKONTEXT AUS DER VORHERIGEN ANALYSE:\n'+
    overview.implementation.slice(0,1300)+'\n'+overview.reasoning.slice(0,1000)+
    '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,cloud?3000:4500)+
+   '\nLernbegriffe und Dokumentation:\n'+learningContext.slice(0,cloud?500:1400)+
    '\nGit-Nachweise mit Bezug zu dieser Codegruppe:\n'+sourceHistory
     .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
-  const chapterLesson=await requestValidatedLesson(model,SYSTEM,prompt,signal,fragments=>
+  const chapterLesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal,fragments=>
    send('model',n,total,providerLabel+' arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
-    avg?Math.round((total-n)*avg/1000):null));
-  const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1);
+    avg?Math.round((total-n)*avg/1000):null),Boolean(learningProfile));
+  const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1,learningProfile);
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
   reports.push(chapter.report);
@@ -402,7 +428,7 @@ export async function analyzeSourceWithOllama(
   filesTotal:eligibleFiles.length,nextOffset,
   filesSkipped:all.length-eligibleFiles.length,
   complete:nextOffset===null&&all.length===eligibleFiles.length,
-  bookMarkdown:index.join('\n')+chapters.join('\n\n')+'\n',
+  bookMarkdown:index.join('\n')+chapters.join('\n\n')+'\n\n'+curriculumMarkdown+'\n',
   solutionsMarkdown:'# Getrennte Musterlösungen – '+repository+'\n\n'+solutions.join('\n\n')+'\n',
   reportsMarkdown:'# Quellen und Einschränkungen – '+repository+'\n\n'+reports.join('\n\n')+'\n',
  };
@@ -421,7 +447,8 @@ export interface HistoricalCommitAnalysis {
 }
 export async function analyzeHistoricalCommitWithOllama(
  repositoryInput:string,sha:string,numberStart:number,signal:AbortSignal,
- deps:{read?:GitHubReader;model?:LocalModel;onProgress?:(message:string)=>void}={},
+ deps:{read?:GitHubReader;model?:LocalModel;onProgress?:(message:string)=>void;
+  learningProfile?:LearningProfile}={},
 ):Promise<HistoricalCommitAnalysis>{
  const repository=parsePublicRepository(repositoryInput);
  if(!SHA.test(sha)||!Number.isSafeInteger(numberStart)||numberStart<1)
@@ -429,6 +456,8 @@ export async function analyzeHistoricalCommitWithOllama(
  if(signal.aborted)throw Error('Historical learning cancelled');
  const read=deps.read??readGitHubPublicJsonForCommit;
  const model=deps.model??localOllamaModel();
+ const learningProfile=deps.learningProfile?validateLearningProfile(deps.learningProfile):undefined;
+ const pedagogicalSystem=SYSTEM+(learningProfile?'\nLernprofil: '+learningInstructions(learningProfile):'\nGrundlagen erklären; keine Vorkenntnisse voraussetzen.');
  const raw=object(await read('repos/'+repository+'/commits/'+sha));
  if(!raw||raw.sha!==sha||!Array.isArray(raw.files))
   throw Error('Unverified commit detail for '+sha);
@@ -477,22 +506,23 @@ export async function analyzeHistoricalCommitWithOllama(
    'Erkläre konkreten Code, plausible Gründe, Handimplementierung und Alternativen.',
    'Behaupte keine nicht belegten Tests oder Gedanken der Entwickler.',
   ].join('\n');
-  const lesson=await requestValidatedLesson(model,SYSTEM,prompt,signal);
+  const lesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal,undefined,Boolean(learningProfile));
   const n=numberStart+i;
   const evidence='https://github.com/'+repository+'/commit/'+sha;
   const title=escape(lesson.title);
   chapters.push([
    '## Kapitel '+n+': '+title,'',
    '**Git-Beleg:** '+evidence,'',
-   '### Ausgangsproblem',escape(lesson.problem),'',
-   '### Umsetzung im tatsächlichen Diff',escape(lesson.implementation),'',
-   '### Plausible technische Begründung (Interpretation)',escape(lesson.reasoning),'',
-   '### Alternativen',escape(lesson.alternatives),'',
-   '### Trade-offs und Risiken',escape(lesson.tradeoffs),'',
-   '### Von Hand nachbauen',escape(lesson.walkthrough),'',
+   '### Ausgangsproblem – einfach erklärt',escape(lesson.problem),'',
+   '### Schritt für Schritt',escape(lesson.walkthrough),'',
    '### Eigenständiges Beispiel','~~~text',
    redact(lesson.codeExample).replace(/~~~/g,'').slice(0,1800),'~~~','',
    '### Übung',escape(lesson.exercise),'',
+   '### Technische Vertiefung',
+   '#### Umsetzung im tatsächlichen Diff',escape(lesson.implementation),'',
+   '#### Plausible technische Begründung (Interpretation)',escape(lesson.reasoning),'',
+   '#### Alternativen',escape(lesson.alternatives),'',
+   '#### Trade-offs und Risiken',escape(lesson.tradeoffs),'',
    '### Quellenlage und Unsicherheit',escape(lesson.uncertainty),
   ].join('\n'));
   solutions.push('## Kapitel '+n+': '+title+'\n\n'+escape(lesson.solution));
