@@ -32,7 +32,7 @@ import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
 import {createKiloLearningModel} from '../core/kilo-learning-gateway';
-import {validateLearningProfile} from '../core/learning-assessment';
+import {validateLearningProfile,LEARNING_STACKS} from '../core/learning-assessment';
 import {readCompletePublicHistory} from '../core/history-index-cache';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
@@ -348,6 +348,8 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('learning:deep-generate',async (_event,input:unknown,provider:unknown='ollama',consent:unknown=false,profileInput:unknown=null) => {
     const learningProfile=profileInput===null?undefined:validateLearningProfile(profileInput);
+    const learnerMarker='<!-- learner-profile-v1:'+
+      (learningProfile?LEARNING_STACKS.map(stack=>learningProfile.levels[stack]).join('-'):'all-beginner')+' -->';
     if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
     if(provider!=='ollama'&&provider!=='kilo')throw Error('Invalid learning provider');
     if(provider==='kilo'&&consent!==true)
@@ -375,11 +377,12 @@ app.whenReady().then(() => {
       });
       const prior=loadHistoricalBook(app.getPath('userData'),index.repository,snapshotMode);
       const compatible=prior?.head===index.head&&
-        prior.deepSummary?.model===modelName;
+        prior.deepSummary?.model===modelName&&
+        prior.bookMarkdown.includes(learnerMarker);
       let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
       let chapterIndex=compatible?(prior?.deepCursor?.chapterIndex??0):0;
       let filesAnalyzed=compatible?(prior?.deepSummary?.filesAnalyzed??0):0;
-      let bookMarkdown=compatible?(prior?.bookMarkdown??''):'';
+      let bookMarkdown=compatible?(prior?.bookMarkdown??''):learnerMarker+'\n';
       let solutionsMarkdown=compatible?(prior?.solutionsMarkdown??''):'';
       let reportsMarkdown=compatible?(prior?.reportsMarkdown??''):'';
       let sourceComplete=compatible&&prior?.deepCursor===undefined&&
