@@ -33,6 +33,7 @@ import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
 import {createKiloLearningModel} from '../core/kilo-learning-gateway';
 import {validateLearningProfile,LEARNING_STACKS} from '../core/learning-assessment';
+import {detectRepositoryLearningStacks} from '../core/learning-stack-detection';
 import {readCompletePublicHistory} from '../core/history-index-cache';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
@@ -345,6 +346,10 @@ app.whenReady().then(() => {
     if(active||startingLegacyRun)return {busy:true,kind:'legacy-run',
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
+  });
+  ipcMain.handle('learning:detect-stacks',async (_event,input:unknown,head:unknown)=>{
+    if(typeof input!=='string'||input.length>250||typeof head!=='string')throw Error('Invalid stack scan request');
+    return detectRepositoryLearningStacks(input,head);
   });
   ipcMain.handle('learning:deep-generate',async (_event,input:unknown,provider:unknown='ollama',consent:unknown=false,profileInput:unknown=null) => {
     const learningProfile=profileInput===null?undefined:validateLearningProfile(profileInput);
