@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('studio', {
   studioStatus: (id: string) => ipcRenderer.invoke('core:status', id),
   publicRepoHistory: (input: string, limit: number) => ipcRenderer.invoke('learning:public-history', input, limit),
   generateLearningBook: (input:string,page=1,pinnedHead?:string) => ipcRenderer.invoke('learning:generate', input,page,pinnedHead),
+  detectLearningStacks: (input:string,head:string) => ipcRenderer.invoke('learning:detect-stacks',input,head),
   deepLearningBook: (input:string,provider:'ollama'|'kilo'='ollama',consent=false,profile?:LearningProfile) =>
     ipcRenderer.invoke('learning:deep-generate',input,provider,consent,profile??null),
   cancelDeepLearning: () => ipcRenderer.invoke('learning:deep-cancel'),
