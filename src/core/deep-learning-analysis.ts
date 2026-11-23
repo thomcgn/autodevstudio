@@ -114,7 +114,7 @@ export function localOllamaModel(model=MODEL,fetcher:typeof fetch=fetch):LocalMo
    method:'POST',redirect:'error',signal,
    headers:{'Content-Type':'application/json'},
    body:JSON.stringify({model,stream:true,format:'json',think:false,keep_alive:'5m',
-    options:{num_predict:1400,num_ctx:8192,temperature:0},
+    options:{num_predict:3000,num_ctx:8192,temperature:0.2},
     messages:[{role:'system',content:system},{role:'user',content:prompt}]}),
   });
   if(!response.ok)throw Error('Ollama HTTP '+response.status);
@@ -195,11 +195,8 @@ export async function requestValidatedLesson(
  for(let attempt=0;attempt<2;attempt++){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const concise=attempt===1
-   ?'\n\nWICHTIG: Antworte SEHR KURZ. Genau elf JSON-Stringfelder, maximal '+
-    'zwei kurze Sätze pro Feld und ein kurzes Codebeispiel. Keine Einleitung, '+
-    'kein Markdown, keine langen Überlegungen. '+reminder
-   :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern; '+
-    'pro Feld maximal zwei kurze Sätze, damit die Ausgabe vollständig bleibt.';
+   ?'\n\nWICHTIG: Alle elf JSON-Stringfelder ausfüllen. Formuliere konkret, kurz und ohne Floskeln. '+reminder
+   :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern. Problem und walkthrough sollen nachvollziehbare Einsteigererklärungen enthalten; Fachbegriffe vorher definieren.';
   let answer:string;
   try{
    answer=await model(system,prompt+concise,signal,onPulse);
@@ -229,16 +226,17 @@ function renderLesson(lesson:Lesson,files:readonly SourceFile[],n:number,profile
   book:['## Kapitel '+n+': '+title,'',
    '### Aus dem Alltag: Welches Problem lösen wir?',escape(lesson.problem),
    '','### Was passiert dabei? Schritt für Schritt',escape(lesson.walkthrough),
-   '','### Wie funktioniert der echte Code?',escape(lesson.implementation),
-   '','### Warum kann diese Lösung sinnvoll sein?',escape(lesson.reasoning),
-   '','### Welche Alternativen gibt es?',escape(lesson.alternatives),
-   '','### Nachteile, Sicherheit und Grenzfälle',escape(lesson.tradeoffs),
    '','### Verständliches Codebeispiel','~~~text',
    lesson.codeExample.replace(/~~~/g,'').slice(0,1800),'~~~',
    '','### Übung',escape(lesson.exercise),
+   '','### Technische Vertiefung',
+   '#### Wie funktioniert der echte Code?',escape(lesson.implementation),
+   '','#### Warum kann diese Lösung sinnvoll sein?',escape(lesson.reasoning),
+   '','#### Welche Alternativen gibt es?',escape(lesson.alternatives),
+   '','#### Nachteile, Sicherheit und Grenzfälle',escape(lesson.tradeoffs),
    '','### Belege versus Interpretation',escape(lesson.uncertainty),
    '','### Untersuchte Dateien',source,
-   ...(profile?['','**Lernniveau:** '+learningInstructions(profile)]:[])].join('\n'),
+   ...(profile?['','**Lernstand:** individuell angepasst; neue Fachbegriffe werden vor ihrer Verwendung erklärt.']:[])].join('\n'),
   solution:['## Kapitel '+n+': '+title,'',escape(lesson.solution)].join('\n'),
   report:['## Kapitel '+n+': '+title,'',source,
    'Die technische Einordnung ist nicht mit nachgewiesenen Gedanken der Entwickler gleichzusetzen.'].join('\n'),
