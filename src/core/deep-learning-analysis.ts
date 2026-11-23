@@ -195,7 +195,7 @@ export async function requestValidatedLesson(
  for(let attempt=0;attempt<2;attempt++){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const concise=attempt===1
-   ?'\n\nWICHTIG: Alle elf JSON-Stringfelder ausfüllen. Formuliere konkret, kurz und ohne Floskeln. '+reminder
+   ?'\n\nWICHTIG: SEHR KURZ bei der Formatkorrektur. Alle elf JSON-Stringfelder ausfüllen. Formuliere konkret, kurz und ohne Floskeln. '+reminder
    :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern. Problem und walkthrough sollen nachvollziehbare Einsteigererklärungen enthalten; Fachbegriffe vorher definieren.';
   let answer:string;
   try{
