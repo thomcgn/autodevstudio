@@ -28,20 +28,25 @@ export const LEARNING_QUESTIONS:readonly LearningQuestion[]=[
  {id:'sql-2',stack:'sql',prompt:'Was macht SELECT in SQL?',answers:['Datensätze abfragen','Eine React-App starten','Eine Java-Klasse erzeugen'],correct:0,explanation:'SELECT liest ausgewählte Daten aus einer Datenbank.'},
 ];
 export const LEARNING_STACKS:readonly LearningStack[]=['fundamentals','java','spring','typescript','react','sql'];
-export function evaluateLearningProfile(answers:readonly LearningAnswer[],now:number):LearningProfile {
+export function evaluateLearningProfile(answers:readonly LearningAnswer[],now:number,
+ activeStacks:readonly LearningStack[]=LEARNING_STACKS):LearningProfile {
+ if(activeStacks.length===0||activeStacks.some(stack=>!LEARNING_STACKS.includes(stack))||
+  new Set(activeStacks).size!==activeStacks.length)throw Error('Invalid assessment scope');
+ const questionsForScope=LEARNING_QUESTIONS.filter(q=>activeStacks.includes(q.stack));
  if(!Number.isSafeInteger(now)||now<0)throw Error('Invalid assessment timestamp');
  const given=new Map<string,number>();
  for(const answer of answers){
-  const question=LEARNING_QUESTIONS.find(q=>q.id===answer.questionId);
+  const question=questionsForScope.find(q=>q.id===answer.questionId);
   if(!question||!Number.isInteger(answer.choice)||answer.choice<0||answer.choice>=question.answers.length||
     given.has(question.id))throw Error('Invalid assessment answer');
   given.set(question.id,answer.choice);
  }
- if(given.size!==LEARNING_QUESTIONS.length)throw Error('Incomplete assessment');
+ if(given.size!==questionsForScope.length)throw Error('Incomplete assessment');
  const scores={} as Record<LearningStack,number>;
  const levels={} as Record<LearningStack,LearningLevel>;
  for(const stack of LEARNING_STACKS){
-  const questions=LEARNING_QUESTIONS.filter(q=>q.stack===stack);
+  const questions=questionsForScope.filter(q=>q.stack===stack);
+  if(questions.length===0){scores[stack]=0;levels[stack]='beginner';continue;}
   const correct=questions.filter(q=>given.get(q.id)===q.correct).length;
   const percent=Math.round(correct*100/questions.length);
   scores[stack]=percent;
