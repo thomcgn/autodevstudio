@@ -149,7 +149,7 @@ declare global {
     studioStatus(id: string): Promise<StandaloneStatus>;
     publicRepoHistory(input: string, limit: number): Promise<PublicHistoryIndex>;
     generateLearningBook(input:string,page?:number,pinnedHead?:string):Promise<LearningBookPreview>;
-    deepLearningBook(input:string,provider?:'ollama'|'kilo',consent?:boolean):Promise<LearningBookPreview>;
+    deepLearningBook(input:string,provider?:'ollama'|'kilo',consent?:boolean,profile?:import('../core/learning-assessment').LearningProfile):Promise<LearningBookPreview>;
     cancelDeepLearning():Promise<boolean>;
     onLearningProgress(callback:(value:DeepLearningProgress)=>void):()=>void;
     loadLearningBook(repo:string,provider?:'ollama'|'kilo'):Promise<LearningBookPreview|null>;
