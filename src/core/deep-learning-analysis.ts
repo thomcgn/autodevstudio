@@ -1,6 +1,7 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {parsePublicRepository} from './public-history.ts';
+import {buildTextbookCurriculum,renderTextbookCurriculum} from './repository-textbook-curriculum.ts';
 
 const exec=promisify(execFile);
 const SHA=/^[0-9a-f]{40}$/i;
@@ -313,6 +314,10 @@ export async function analyzeSourceWithOllama(
   send('loading',sources.length,selectedFiles.length,
    'Quelldatei '+sources.length+'/'+eligibleFiles.length+': '+item.path,'',null);
  }
+ const curriculum=buildTextbookCurriculum(sources);
+ const curriculumMarkdown=renderTextbookCurriculum(curriculum,repository,head);
+ const learningContext=curriculum.concepts.map(c=>c.title+': '+c.explanation+
+  '; Dokumentation: '+c.documentation).join('\n');
  const total=Math.ceil(chunks.length/chapterGroupSize)+1;
  const resumeChapter=deps.resumeChapter??0;
  if(!Number.isSafeInteger(resumeChapter)||resumeChapter<0||
@@ -342,6 +347,7 @@ export async function analyzeSourceWithOllama(
   ' Abhängigkeiten, mögliche Designgründe und Nachteile der Codebasis an. '+
   'Nutze die folgende Übersicht analysierter Quelldateien (Auszug, übrige Dateien folgen in Einzelkapiteln):\n'+overviewPaths+
   '\nDokumentierte Änderungsschritte aus Git (keine Gedanken der Entwickler):\n'+historyText+
+  '\nErkannte Lernkonzepte:\n'+learningContext.slice(0,1800)+
   '\nEinstiegsdateien (Ausschnitte):\n'+overviewFiles.map(f=>
    'DATEI '+f.path+'\n'+f.content.slice(0,overviewSnippetChars)).join('\n\n');
  const architectureStarted=Date.now();
@@ -371,6 +377,7 @@ export async function analyzeSourceWithOllama(
    'ARCHITEKTURKONTEXT AUS DER VORHERIGEN ANALYSE:\n'+
    overview.implementation.slice(0,1300)+'\n'+overview.reasoning.slice(0,1000)+
    '\nRelevante Dateien im Projekt:\n'+allPaths.slice(0,cloud?3000:4500)+
+   '\nLernbegriffe und Dokumentation:\n'+learningContext.slice(0,cloud?500:1400)+
    '\nGit-Nachweise mit Bezug zu dieser Codegruppe:\n'+sourceHistory
     .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
@@ -402,7 +409,7 @@ export async function analyzeSourceWithOllama(
   filesTotal:eligibleFiles.length,nextOffset,
   filesSkipped:all.length-eligibleFiles.length,
   complete:nextOffset===null&&all.length===eligibleFiles.length,
-  bookMarkdown:index.join('\n')+chapters.join('\n\n')+'\n',
+  bookMarkdown:index.join('\n')+chapters.join('\n\n')+'\n\n'+curriculumMarkdown+'\n',
   solutionsMarkdown:'# Getrennte Musterlösungen – '+repository+'\n\n'+solutions.join('\n\n')+'\n',
   reportsMarkdown:'# Quellen und Einschränkungen – '+repository+'\n\n'+reports.join('\n\n')+'\n',
  };
