@@ -273,7 +273,7 @@ export async function analyzeSourceWithOllama(
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
  const learningProfile=deps.learningProfile?validateLearningProfile(deps.learningProfile):undefined;
- const pedagogicalSystem=SYSTEM.join('\n')+(learningProfile?'\nINDIVIDUELLES LERNPROFIL: '+learningInstructions(learningProfile):'\nBeginnerprofil: keine Programmierkenntnisse voraussetzen.');
+ const pedagogicalSystem=SYSTEM+(learningProfile?'\nINDIVIDUELLES LERNPROFIL: '+learningInstructions(learningProfile):'\nBeginnerprofil: keine Programmierkenntnisse voraussetzen.');
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
   throw Error('Invalid learning run identity');
  const read=deps.read??readSourceGitHub;
