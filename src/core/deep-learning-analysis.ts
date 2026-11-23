@@ -2,6 +2,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {parsePublicRepository} from './public-history.ts';
 import {learningInstructions,validateLearningProfile,type LearningProfile} from './learning-assessment.ts';
+import {reviewBeginnerLesson} from './learning-pedagogical-review.ts';
 import {buildTextbookCurriculum,renderTextbookCurriculum} from './repository-textbook-curriculum.ts';
 
 const exec=promisify(execFile);
@@ -187,19 +188,21 @@ function parseLesson(json:string):Lesson{
  */
 export async function requestValidatedLesson(
  model:LocalModel,system:string,prompt:string,signal:AbortSignal,
- onPulse?:(fragments:number)=>void,
+ onPulse?:(fragments:number)=>void,enforceBeginnerReview=false,
 ):Promise<Lesson>{
  const reminder='\n\nANTWORTFORMAT VERBINDLICH: Genau ein valides JSON-Objekt, keine Markdown-Fences. '+
   'Jedes der elf String-Felder muss mindestens zwölf Zeichen besitzen: '+
   fields.join(', ')+'. Auch bei Unsicherheit jeden Abschnitt mit Quellenlage füllen.';
+ let pedagogicalFeedback='';
  for(let attempt=0;attempt<2;attempt++){
   if(signal.aborted)throw Error('Learning analysis cancelled');
   const concise=attempt===1
    ?'\n\nWICHTIG: SEHR KURZ bei der Formatkorrektur. Alle elf JSON-Stringfelder ausfüllen. Formuliere konkret, kurz und ohne Floskeln. '+reminder
    :'\nAntworte ausschließlich mit den elf JSON-Stringfeldern. Problem und walkthrough sollen nachvollziehbare Einsteigererklärungen enthalten; Fachbegriffe vorher definieren.';
   let answer:string;
+  const evaluatedPrompt=prompt+concise+(pedagogicalFeedback?'\n\nÜBERARBEITUNG ERFORDERLICH: '+pedagogicalFeedback:'');
   try{
-   answer=await model(system,prompt+concise,signal,onPulse);
+   answer=await model(system,evaluatedPrompt,signal,onPulse);
   }catch(error){
    // A bounded text completion that hit the Kilo token cap is recoverable.
    // Network failures, rate limits, permissions and tool calls are not.
@@ -207,7 +210,15 @@ export async function requestValidatedLesson(
      error.message==='Kilo completion truncated at token limit')continue;
    throw error;
   }
-  try{return parseLesson(answer)}
+  try{
+   const lesson=parseLesson(answer);
+   if(enforceBeginnerReview){
+    const review=reviewBeginnerLesson(lesson);
+    if(!review.passed){pedagogicalFeedback=review.findings.join('; ');
+      throw Error('Didactic quality gate failed: '+pedagogicalFeedback);}
+   }
+   return lesson;
+  }
   catch(error){
    if(attempt===1)throw Error('KI-Antwort nach erneuter Formatprüfung ungültig: '+
     (error instanceof Error?error.message:'unbekannter Formatfehler'));
