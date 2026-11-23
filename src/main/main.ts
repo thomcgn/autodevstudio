@@ -382,7 +382,7 @@ app.whenReady().then(() => {
       let offset=compatible?(prior?.deepCursor?.nextOffset??0):0;
       let chapterIndex=compatible?(prior?.deepCursor?.chapterIndex??0):0;
       let filesAnalyzed=compatible?(prior?.deepSummary?.filesAnalyzed??0):0;
-      let bookMarkdown=compatible?(prior?.bookMarkdown??''):learnerMarker+'\n';
+      let bookMarkdown=compatible?(prior?.bookMarkdown??''):learnerMarker+'\n# Code-Lehrbuch: '+index.repository+'\n\n';
       let solutionsMarkdown=compatible?(prior?.solutionsMarkdown??''):'';
       let reportsMarkdown=compatible?(prior?.reportsMarkdown??''):'';
       let sourceComplete=compatible&&prior?.deepCursor===undefined&&
