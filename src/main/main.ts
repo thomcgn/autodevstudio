@@ -468,7 +468,7 @@ app.whenReady().then(() => {
         });
         const history=await analyzeHistoricalCommitWithOllama(
           index.repository,commit.sha,chapterNumber()+1,controller.signal,
-          cloudModel?{model:cloudModel}:{});
+          cloudModel?{model:cloudModel,learningProfile}:{learningProfile});
         if(controller.signal.aborted)throw Error('Learning analysis cancelled');
         if(history.bookMarkdown)
           bookMarkdown+='\n\n'+history.bookMarkdown;
