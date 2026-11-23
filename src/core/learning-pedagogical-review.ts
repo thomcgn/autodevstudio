@@ -19,7 +19,9 @@ export function reviewBeginnerLesson(lesson:ReviewableLesson):PedagogicalReview 
   if(terms(text,englishMarkers)>=3)findings.push(section+': überwiegend englische Erklärung statt Deutsch');
  }
  const opening=lesson.problem.split(/[.!?]\s/).slice(0,2).join(' ');
- if(terms(opening,technicalTerms)>=2)
+  // Also inspect the first walkthrough sentences: beginners read these before expert content.
+ const openingDetails=opening+' '+lesson.walkthrough.split(/[.!?]\\s/).slice(0,2).join(' ');
+ if(terms(openingDetails,technicalTerms)>=2)
   findings.push('problem: mehrere unerklärte Fachbegriffe direkt am Kapitelanfang');
  if(lesson.title.trim().length<8)findings.push('title: Überschrift ist nicht aussagekräftig');
  return {passed:findings.length===0,findings};
