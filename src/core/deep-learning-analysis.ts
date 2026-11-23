@@ -1,6 +1,7 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {parsePublicRepository} from './public-history.ts';
+import {learningInstructions,validateLearningProfile,type LearningProfile} from './learning-assessment.ts';
 import {buildTextbookCurriculum,renderTextbookCurriculum} from './repository-textbook-curriculum.ts';
 
 const exec=promisify(execFile);
@@ -221,22 +222,23 @@ function escape(text:string):string{
  return text.replace(/[\r\n]+/g,' ').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/[*_\[\]]/g,' ').slice(0,3500);
 }
-function renderLesson(lesson:Lesson,files:readonly SourceFile[],n:number){
+function renderLesson(lesson:Lesson,files:readonly SourceFile[],n:number,profile?:LearningProfile){
  const source=files.map(f=>'- '+escape(f.path)+' (Git blob '+f.sha.slice(0,12)+')').join('\n');
  const title=escape(lesson.title);
  return {
   book:['## Kapitel '+n+': '+title,'',
-   '### Was ist das Problem?',escape(lesson.problem),
+   '### Aus dem Alltag: Welches Problem lösen wir?',escape(lesson.problem),
+   '','### Was passiert dabei? Schritt für Schritt',escape(lesson.walkthrough),
    '','### Wie funktioniert der echte Code?',escape(lesson.implementation),
    '','### Warum kann diese Lösung sinnvoll sein?',escape(lesson.reasoning),
    '','### Welche Alternativen gibt es?',escape(lesson.alternatives),
    '','### Nachteile, Sicherheit und Grenzfälle',escape(lesson.tradeoffs),
-   '','### Umsetzung von Hand',escape(lesson.walkthrough),
-   '','### Vereinfachtes Beispiel','~~~text',
+   '','### Verständliches Codebeispiel','~~~text',
    lesson.codeExample.replace(/~~~/g,'').slice(0,1800),'~~~',
    '','### Übung',escape(lesson.exercise),
    '','### Belege versus Interpretation',escape(lesson.uncertainty),
-   '','### Untersuchte Dateien',source].join('\n'),
+   '','### Untersuchte Dateien',source,
+   ...(profile?['','**Lernniveau:** '+learningInstructions(profile)]:[])].join('\n'),
   solution:['## Kapitel '+n+': '+title,'',escape(lesson.solution)].join('\n'),
   report:['## Kapitel '+n+': '+title,'',source,
    'Die technische Einordnung ist nicht mit nachgewiesenen Gedanken der Entwickler gleichzusetzen.'].join('\n'),
@@ -251,6 +253,12 @@ const SYSTEM=[
  'Erkläre die Vorteile und plausiblen Alternativen, kennzeichne Hypothesen klar.',
  'Schreibe zuerst verständlich für Klassen 7 bis 10 und danach präzise technisch.',
  'Liefere eine Übung mit getrennter Musterlösung.',
+ 'Schreibe ausnahmslos auf Deutsch, auch wenn Quellcode und Kommentare Englisch sind.',
+ 'Beginne jedes Kapitel mit einer konkreten Alltagssituation und erkläre sie ohne Fachjargon.',
+ 'Führe neue Fachbegriffe vor der ersten Verwendung in einfachen Worten ein.',
+ 'Nutze ein schrittweises Beispiel mit Eingabe, Verarbeitung und Ausgabe.',
+ 'Die Implementierung muss auch für Anfänger verständlich und quellcodegetreu sein.',
+ 'Verwende technische Fachbegriffe in der Vertiefung und kennzeichne unbekannte Zusammenhänge.',
  'Gib ausschließlich ein JSON-Objekt mit STRING-Feldern title,problem,implementation,reasoning,alternatives,tradeoffs,walkthrough,codeExample,exercise,solution,uncertainty.',
 ].join('\n');
 export async function analyzeSourceWithOllama(
@@ -259,11 +267,13 @@ export async function analyzeSourceWithOllama(
  deps:{read?:GitHubReader;model?:LocalModel;preflight?:()=>Promise<void>;
   history?:readonly {sha:string;title:string;changedPaths:readonly string[]}[];
   offset?:number;chapterOffset?:number;modelName?:string;
-  resumeChapter?:number;resumeContext?:string;
+  resumeChapter?:number;resumeContext?:string;learningProfile?:LearningProfile;
   onChapter?:(chapter:{book:string;solution:string;report:string},
     completed:number,filesTotal:number,skipped:number)=>void;}={},
 ):Promise<DeepLearningResult>{
  const repository=parsePublicRepository(input);
+ const learningProfile=deps.learningProfile?validateLearningProfile(deps.learningProfile):undefined;
+ const pedagogicalSystem=SYSTEM.join('\n')+(learningProfile?'\nINDIVIDUELLES LERNPROFIL: '+learningInstructions(learningProfile):'\nBeginnerprofil: keine Programmierkenntnisse voraussetzen.');
  if(!SHA.test(head)||!/^[A-Za-z0-9-]{8,80}$/.test(runId))
   throw Error('Invalid learning run identity');
  const read=deps.read??readSourceGitHub;
@@ -353,11 +363,11 @@ export async function analyzeSourceWithOllama(
  const architectureStarted=Date.now();
  const overview=resumeChapter>0
   ?{implementation:deps.resumeContext??'',reasoning:''}
-  :await requestValidatedLesson(model,SYSTEM,architecturePrompt,signal,fragments=>
+  :await requestValidatedLesson(model,pedagogicalSystem,architecturePrompt,signal,fragments=>
     send('architecture',0,total,providerLabel+' erstellt die Architekturübersicht · '+
      fragments+' Antwortteile empfangen','',null));
  if(resumeChapter===0){
-  const first=renderLesson(overview as Lesson,overviewFiles,chapterOffset+1);
+  const first=renderLesson(overview as Lesson,overviewFiles,chapterOffset+1,learningProfile);
   chapters.push(first.book);solutions.push(first.solution);reports.push(first.report);
   deps.onChapter?.(first,1,eligibleFiles.length,all.length-eligibleFiles.length);
   durations.push(Date.now()-architectureStarted);
@@ -382,11 +392,11 @@ export async function analyzeSourceWithOllama(
     .filter(h=>h.changedPaths.some(path=>part.some(f=>f.path.startsWith(path))))
     .slice(0,12).map(h=>h.sha.slice(0,12)+' '+h.title).join('\n')+'\n'+
    part.map(f=>'DATEI '+f.path+' (blob '+f.sha+'):\n'+f.content).join('\n\n');
-  const chapterLesson=await requestValidatedLesson(model,SYSTEM,prompt,signal,fragments=>
+  const chapterLesson=await requestValidatedLesson(model,pedagogicalSystem,prompt,signal,fragments=>
    send('model',n,total,providerLabel+' arbeitet an Kapitel '+(n+1)+' · '+
     fragments+' Antwortteile empfangen',chapters.slice(-1).join('\n').slice(-2600),
     avg?Math.round((total-n)*avg/1000):null));
-  const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1);
+  const chapter=renderLesson(chapterLesson,part,chapterOffset+n+1,learningProfile);
   chapters.push(chapter.book);
   solutions.push(chapter.solution);
   reports.push(chapter.report);
