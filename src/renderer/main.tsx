@@ -7,6 +7,7 @@ import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
 import {formatLearningDuration,formatRemainingEta} from './learning-time';
+import {isLearningCancellation} from './learning-cancellation';
 import {LEARNING_QUESTIONS,evaluateLearningProfile,validateLearningProfile,type LearningProfile,type LearningStack} from '../core/learning-assessment';
 import {explainIssueHold} from './issue-hold-explanation';
 
@@ -42,6 +43,7 @@ function App(): React.JSX.Element {
   const [learningStartedAt,setLearningStartedAt] = useState(0);
   const [learningEtaReceivedAt,setLearningEtaReceivedAt] = useState(0);
   const [learningModalError,setLearningModalError] = useState('');
+  const [learningCancelled,setLearningCancelled] = useState(false);
   const [learningExporting,setLearningExporting] = useState(false);
   const [learningMessage,setLearningMessage] = useState('');
   const [learningLoading, setLearningLoading] = useState(false);
@@ -295,7 +297,7 @@ function App(): React.JSX.Element {
   const generateLearning = async ():Promise<void>=>{
     if(learningGenerating||!learningInput.trim())return;
     setLearningGenerating(true);setLearningError('');setLearningMessage('');
-    setLearningProgress(null);setLearningModalError('');
+    setLearningProgress(null);setLearningModalError('');setLearningCancelled(false);
     setLearningEtaReceivedAt(0);
     setLearningStartedAt(Date.now());setLearningModalOpen(true);
     try{
@@ -307,18 +309,26 @@ function App(): React.JSX.Element {
     }catch(error){
       const raw=error instanceof Error?error.message:'Unbekannter Analysefehler';
       const message=raw.replace(/^Error invoking remote method '[^']+':\\s*(?:Error:\\s*)?/,'');
-      setLearningModalError(message);
-      setLearningError('KI-Analyse fehlgeschlagen: '+message);
+      const cancelled=isLearningCancellation(error);
+      if(cancelled){
+        setLearningCancelled(true);
+        setLearningModalError('');
+        setLearningError('');
+        setLearningMessage('Analyse abgebrochen. Bereits gespeicherte Kapitel bleiben erhalten.');
+      }else{
+        setLearningModalError(message);
+        setLearningError('KI-Analyse fehlgeschlagen: '+message);
+      }
       // Never hide already verified, locally saved partial chapters on failure.
       try{
         const repo=learningInput.trim().replace(/^https:\/\/github\.com\//,'').replace(/\/$/,'');
         const saved=await window.studio.loadLearningBook(repo,learningProvider);
         if(saved?.deepAnalysis){
           setLearningBook(saved);
-          setLearningMessage('Gesicherter Zwischenstand verfügbar: '+
+          if(!cancelled)setLearningMessage('Gesicherter Zwischenstand verfügbar: '+
             'Fertige Kapitel sind lokal gespeichert. Ein erneuter Start setzt fort.');
         }
-      }catch{ /* the original model error remains visible */ }
+      }catch{ /* Preserve the existing cancellation or error status. */ }
     }finally{setLearningGenerating(false);}
   };
   const quickLearning=async():Promise<void>=>{
@@ -1309,9 +1319,9 @@ function App(): React.JSX.Element {
             onClick={()=>setLearningModalOpen(false)}>Schließen</button>}
         </div>
         <p><strong>{learningModalError?'Fehlgeschlagen':learningGenerating
-          ?'Analyse läuft':'Analyse abgeschlossen'}</strong> ·
+          ?'Analyse läuft':learningCancelled?'Abgebrochen':'Analyse abgeschlossen'}</strong> ·
           {' '+(learningProgress?.repository??learningInput)}</p>
-        <p role="status">{learningProgress?.current??'GitHub-Historie wird geprüft …'}</p>
+        <p role="status">{learningCancelled?'Analyse auf Wunsch beendet.':learningProgress?.current??'GitHub-Historie wird geprüft …'}</p>
         <div className="learning-progress-track" role="progressbar"
           aria-label="Analysefortschritt" aria-valuemin={0} aria-valuemax={100}
           aria-valuenow={learningProgress?.total
@@ -1337,9 +1347,9 @@ function App(): React.JSX.Element {
           Analyse abbrechen
         </button>}
         {!learningGenerating&&!learningModalError&&<p role="status">
-          Verarbeitung abgeschlossen. {learningBook?.deepAnalysis&&!learningBook.deepAnalysis.complete
+          {learningCancelled?'Abbruch bestätigt. Bereits gespeicherte Kapitel sind weiterhin verfügbar.':<>Verarbeitung abgeschlossen. {learningBook?.deepAnalysis&&!learningBook.deepAnalysis.complete
             ?'Einige Dateien wurden ausgeschlossen; die Abdeckung wird im Buch ausgewiesen. '
-            :''}Das Markdown ist lokal gespeichert und kann als PDF exportiert werden.
+            :''}Das Markdown ist lokal gespeichert und kann als PDF exportiert werden.</>}
         </p>}
       </div>
     </div>}
