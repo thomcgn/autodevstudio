@@ -32,6 +32,7 @@ import { saveHistoricalBook, loadHistoricalBook } from '../core/learning-store';
 import { markdownToPrintHtml } from '../core/learning-pdf-html';
 import {analyzeSourceWithOllama,analyzeHistoricalCommitWithOllama} from '../core/deep-learning-analysis';
 import {createKiloLearningModel} from '../core/kilo-learning-gateway';
+import {validateLearningProfile} from '../core/learning-assessment';
 import {readCompletePublicHistory} from '../core/history-index-cache';
 import { documentFinishedIssue } from '../core/learning-live';
 import { probeBubblewrap } from '../core/bwrap-probe';
@@ -345,7 +346,8 @@ app.whenReady().then(() => {
       projectId:activeInfo?.projectId??null,issueNumber:null} as const;
     return {busy:false,kind:null,projectId:null,issueNumber:null} as const;
   });
-  ipcMain.handle('learning:deep-generate',async (_event,input:unknown,provider:unknown='ollama',consent:unknown=false) => {
+  ipcMain.handle('learning:deep-generate',async (_event,input:unknown,provider:unknown='ollama',consent:unknown=false,profileInput:unknown=null) => {
+    const learningProfile=profileInput===null?undefined:validateLearningProfile(profileInput);
     if(typeof input!=='string'||input.length>250)throw Error('Invalid learning source');
     if(provider!=='ollama'&&provider!=='kilo')throw Error('Invalid learning provider');
     if(provider==='kilo'&&consent!==true)
@@ -410,7 +412,7 @@ app.whenReady().then(() => {
           runId,startedAt,event=>send('learning:progress',{
             ...event,current:'Quelldateien ab '+(batchOffset+1)+' · '+event.current,
           }),controller.signal,{
-            offset,resumeChapter:chapterIndex,resumeContext,
+            offset,resumeChapter:chapterIndex,resumeContext,learningProfile,
             chapterOffset:chapterNumber()-chapterIndex,
             onChapter:(chapter,completed,total,skipped)=>{
               if(controller.signal.aborted)throw Error('Learning analysis cancelled');
