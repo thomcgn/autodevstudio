@@ -7,6 +7,7 @@ import './style.css';
 import {ScrollJumpControls} from './scroll-jump-controls';
 import {formatIssueFailure} from './issue-error-diagnostics';
 import {formatLearningDuration,formatRemainingEta} from './learning-time';
+import {LEARNING_QUESTIONS,evaluateLearningProfile,validateLearningProfile,type LearningProfile} from '../core/learning-assessment';
 import {explainIssueHold} from './issue-hold-explanation';
 
 type Tab = 'overview' | 'agents' | 'logs' | 'history' | 'issues' | 'learning';
@@ -23,6 +24,13 @@ function App(): React.JSX.Element {
   const [history, setHistory] = useState<RunRecord[]>([]);
   const [issues, setIssues] = useState<StudioIssue[]>([]);
   const [learningInput, setLearningInput] = useState('');
+  const [learningAnswers,setLearningAnswers] = useState<Record<string,number>>({});
+  const [learningAssessmentOpen,setLearningAssessmentOpen] = useState(false);
+  const [learningProfile,setLearningProfile] = useState<LearningProfile|null>(()=>{
+    try {const raw=localStorage.getItem('autodev:learning-profile:v1');
+      return raw?validateLearningProfile(JSON.parse(raw) as unknown):null;
+    }catch{return null;}
+  });
   const [learningHistory, setLearningHistory] = useState<PublicHistoryIndex | null>(null);
   const [learningBook, setLearningBook] = useState<LearningBookPreview|null>(null);
   const [learningGenerating,setLearningGenerating] = useState(false);
@@ -290,7 +298,7 @@ function App(): React.JSX.Element {
     setLearningStartedAt(Date.now());setLearningModalOpen(true);
     try{
       const result=await window.studio.deepLearningBook(learningInput.trim(),learningProvider,
-        learningProvider==='kilo'&&learningCloudConsent);
+        learningProvider==='kilo'&&learningCloudConsent,learningProfile??undefined);
       setLearningBook(result);
       setLearningMessage('Code-Lehrbuch lokal gespeichert: '+
         (result.deepAnalysis?.filesAnalyzed??result.lessons)+' Quelldateien untersucht.');
@@ -1155,6 +1163,44 @@ function App(): React.JSX.Element {
               }).catch(()=>setLearningError('Zwischenstand konnte nicht geladen werden.'))}>
             Gespeicherten Zwischenstand für dieses Repository öffnen
           </button>
+          <section className="learning-assessment" aria-label="Programmierkenntnisse einstufen">
+            <div className="learning-assessment-heading">
+              <div><h3>Dein Lernstand</h3><p>{learningProfile
+                ?'Persönliches Lernprofil gespeichert – Kapitel werden daran angepasst.'
+                :'Vor der ersten Bucherstellung Programmierkenntnisse einschätzen. Ohne Test gilt Anfängerniveau.'}</p></div>
+              <button type="button" className="quiet" disabled={learningGenerating}
+                onClick={()=>setLearningAssessmentOpen(open=>!open)}>
+                {learningAssessmentOpen?'Test einklappen':learningProfile?'Einstufung wiederholen':'Einstufung starten'}
+              </button>
+            </div>
+            {learningProfile&&!learningAssessmentOpen&&<div className="learning-skill-summary">
+              {Object.entries(learningProfile.levels).map(([stack,level])=><span key={stack}>
+                <strong>{stack}</strong> · {level==='beginner'?'Einstieg':level==='foundation'?'Grundlagen':'Fortgeschritten'}
+              </span>)}
+            </div>}
+            {learningAssessmentOpen&&<form className="learning-quiz" onSubmit={event=>{
+              event.preventDefault();
+              try {const answers=LEARNING_QUESTIONS.map(q=>({questionId:q.id,choice:learningAnswers[q.id]}));
+                const profile=evaluateLearningProfile(answers,Date.now());
+                localStorage.setItem('autodev:learning-profile:v1',JSON.stringify(profile));
+                setLearningProfile(profile);setLearningAssessmentOpen(false);setLearningMessage('Lernprofil aktualisiert. Neue Kapitel berücksichtigen die Einstufung.');
+              }catch{setLearningError('Bitte alle Einstufungsfragen beantworten.');}
+            }}>
+              <p>Kurzer Wissenstest zu Programmierung, Java, Spring, TypeScript, React und SQL.
+                Für unbekannte Technologien wird immer beim Einstieg begonnen.</p>
+              {LEARNING_QUESTIONS.map((question,index)=><fieldset key={question.id}>
+                <legend>{index+1}. {question.prompt} <small>· {question.stack}</small></legend>
+                {question.answers.map((answer,choice)=><label key={choice}>
+                  <input type="radio" name={question.id} checked={learningAnswers[question.id]===choice}
+                    onChange={()=>setLearningAnswers(previous=>({...previous,[question.id]:choice}))}/>
+                  {answer}
+                </label>)}
+              </fieldset>)}
+              <button type="submit" disabled={LEARNING_QUESTIONS.some(q=>learningAnswers[q.id]===undefined)}>
+                Lernprofil auswerten und speichern
+              </button>
+            </form>}
+          </section>
           <div className="learning-provider-options" role="group" aria-label="KI-Anbieter für das Lehrbuch">
             <label><input type="radio" name="learning-provider" value="ollama"
               checked={learningProvider==='ollama'} disabled={learningGenerating}
